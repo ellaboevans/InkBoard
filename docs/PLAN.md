@@ -126,11 +126,30 @@ auth or private content.
   - If the email fails to send, the editor still sees "code sent"; the failure is logged server-side and the editor can press resend.
   - Never deploy with `NODE_ENV=development` and no `RESEND_API_KEY`: codes would go to the logs.
 
-### Phase 2: Admin dashboard and poem management (R2, R3, R4, N5, N6)
-- Dashboard shell (sidebar, my-poems table with status/visibility badges).
-- Create/edit form: title, body (plain text, whitespace preserved), visibility toggle; password field required for private, optional "change password".
-- Draft/publish, delete with confirmation, slug generation.
+### Phase 2: Admin dashboard and poem management (R2, R3, R4, N5, N6) ✅
+- Dashboard: the editor's poems in a table with status and access badges, newest edit first.
+- Editor form (`/admin/poems/new`, `/admin/poems/[id]`):
+  - Title and body. The body is plain text: line breaks and indentation are kept, line endings are normalised, and outer blank space is trimmed.
+  - "Password protected" switch with a password field (min 6 characters). Leave it blank when editing to keep the current password.
+  - Save draft / Publish / Save changes / Unpublish; ⌘S saves.
+  - Unsaved-changes indicator and a warning before closing the tab.
+  - Delete, behind a confirmation dialog.
+- Rules (in `src/server/poems.ts`, tested):
+  - Every query is scoped to the signed-in editor, so another editor's poem id just looks "not found".
+  - Password hashes never leave the server; the UI only gets `hasPassword`.
+  - Passwords are hashed with scrypt.
+  - A new password bumps `password_version`, which will revoke reader unlocks in Phase 4.
+  - Making a poem public removes its password; making it private again requires a new one.
+  - Slugs are unique per editor. A draft's slug follows its title, but stays fixed once the poem has been published so links don't break.
+  - `publishedAt` is set on first publish only.
+- Admin mutations already call `updateTag("board")` and `updateTag("poem:<id>")` (`src/server/cache-tags.ts`) for the Phase 3 board cache.
 - **Accept:** an editor can CRUD only their own poems (tested by trying another editor's id); making a poem private without a password is rejected client- and server-side; changing a password bumps `password_version`.
+- **Security review (done):** an independent review found no cross-editor access, no password hashes reaching the browser, and no validation bypass. It found three issues, plus a fourth during the fixes. All are fixed, each with a test that failed before the fix:
+  1. Pressing Enter in a text field published a draft, because the browser submits with the form's first button ("Publish"). The form's default button now saves without changing the status.
+  2. Concurrent saves (e.g. two tabs) could leave a public poem with a stale password, or crash with a constraint error. Password rules are now applied inside the UPDATE, based on the row at write time.
+  3. A malformed stored hash (empty key) would accept any password. `verifyPassword` now only accepts the exact parameters and lengths we issue, caps the input length, and never throws.
+  4. Found while fixing: signing out kept earlier admin pages, including private poem text, hidden in the tab (Next's `<Activity>`). Sign-out now does a full page reload.
+- **Not in this phase:** `/admin/profile` (changing pen name or bio, managing sessions). It moves to Phase 6, unless it's wanted sooner.
 
 ### Phase 3: Public canvas board (R1, R9, N7, N8)
 - Board data query (published poems grouped by author; private ones expose title only).
@@ -159,11 +178,11 @@ auth or private content.
 | Req | Phase | Status |
 | --- | ----- | ------ |
 | R1 Canvas board | 3 | ⏳ |
-| R2 Poem CRUD | 2 | ⏳ |
-| R3 Public/private + password | 2, 4 | ⏳ |
-| R4 Admin dashboard | 1 (shell), 2 | ⏳ |
+| R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
+| R3 Public/private + password | 2, 4 | 🟡 editor side done; reader unlock in Phase 4 |
+| R4 Admin dashboard | 1 (shell), 2 | ✅ |
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
-| R6 shadcn/ui, custom theme | 0 → all | 🟡 theme and auth screens done |
+| R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth and admin screens done |
 | R7 Email OTP, passwordless | 1 | ✅ |
 | R8 Visitor read/unlock | 4 | ⏳ |
 | R9 Author sections | 1 (pen name), 3 | 🟡 pen name captured |
@@ -172,16 +191,20 @@ auth or private content.
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | 🟡 OTP request/verify (per email, IP, global) done; unlock pending |
 | N4 Sessions | 1 | ✅ tested |
-| N5 Server-side authorisation | 1, 2 | 🟡 DAL in place |
-| N6 Poem password hashing/revocation | 2, 4 | ⏳ |
+| N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
+| N6 Poem password hashing/revocation | 2, 4 | 🟡 scrypt + version bump done; unlock cookies in Phase 4 |
 | N7 Accessibility | 3, 4 | ⏳ |
 | N8 Board caching | 3 | ⏳ |
 | N9 No user enumeration | 1 | ✅ tested |
 
-## 6. Open questions (current assumptions in brackets)
+## 6. Decisions and open questions
 
-1. **Who may become an editor?** [Anyone who verifies an email, unless `EDITOR_ALLOWLIST` is set to specific emails / `@domains`.]
-2. **Do private poems show their title on the board?** [Yes: title, author and a lock badge. The body stays hidden.]
+Decided:
+- **Who may become an editor?** Anyone who verifies their email. `EDITOR_ALLOWLIST` stays empty by default and remains available if you ever want to restrict sign-ups.
+- **Do private poems show their title on the board?** Yes: title, author and a lock badge. The text stays hidden until the reader enters the password.
+
+Open (current assumptions in brackets):
+
 3. **Poem formatting?** [Plain text with line breaks and indentation preserved. Light Markdown (italics/bold) could come later.]
 4. **How long does an unlock last?** [12 hours per browser, or until the editor changes the password.]
 5. **Email provider / sending domain?** [Resend. A verified sending domain is needed for production.]

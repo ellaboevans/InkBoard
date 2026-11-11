@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { editors } from "@/db/schema";
-import { setPenName, slugify } from "@/server/auth/profile";
+import { slugify } from "@/lib/slug";
+import { setPenName } from "@/server/auth/profile";
 
 const db = getDb();
 
@@ -12,7 +13,9 @@ describe("slugify", () => {
     ["José Martí!!", "jose-marti"],
     ["李白", "author"],
     ["---", "author"],
-  ])("%p -> %p", (input, slug) => expect(slugify(input)).toBe(slug));
+  ])("%p -> %p", (input, slug) => expect(slugify(input, "author")).toBe(slug));
+
+  it("uses the given fallback", () => expect(slugify("!!!")).toBe("untitled"));
 
   it("caps length without a trailing dash", () => {
     const s = slugify("a".repeat(47) + " bcd");

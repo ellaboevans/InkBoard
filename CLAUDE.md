@@ -25,7 +25,9 @@ pnpm next typegen               # regenerate route types (LayoutProps<"/x"> etc.
 
 Use Node 22+ (`.nvmrc`). On Node 20, Vitest 5 crashes while printing failures (`Map.groupBy`), which hides which test failed.
 
-Local setup needs a Postgres on localhost with three databases: `poemhub_dev` (from `.env.local`), `poemhub_test` (Vitest) and `poemhub_e2e` (Playwright). Create them with `createdb`. Test and E2E setup apply migrations and truncate automatically, and refuse to run against a database whose name doesn't contain `test`/`e2e`. Override the URLs with `TEST_DATABASE_URL` / `E2E_DATABASE_URL`. Playwright uses the installed Chrome (`PW_CHANNEL` to change).
+Local setup needs a Postgres on localhost with three databases: `poemhub_dev` (from `.env.local`), `poemhub_test` (Vitest) and `poemhub_e2e` (Playwright). Create them with `createdb`. Test and E2E setup apply migrations and truncate automatically, and refuse to run against a database whose name doesn't contain `test`/`e2e`. Playwright uses the installed Chrome (`PW_CHANNEL` to change).
+
+Several worktrees of this repo may be checked out side by side, and each test run truncates its database. Use databases and a port dedicated to your worktree, e.g. `TEST_DATABASE_URL=postgresql://localhost:5432/poemhub_test_<name> E2E_DATABASE_URL=…/poemhub_e2e_<name> E2E_PORT=3170` (create them with `createdb` first). The E2E dev server builds into `.next-e2e` (`NEXT_DIST_DIR`), so it can run alongside a normal `pnpm dev`. Next allows only one dev server per build directory, and each `next dev` points `next-env.d.ts` at its own one (the file is gitignored and harmless). E2E specs clear `rate_limits` in `beforeEach`, because every local request shares the client IP `::1`.
 
 Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-nova` style). Generated components import `cn` from the npm package `cn` (shadcn's clsx + tailwind-merge replacement), which is expected.
 
@@ -46,6 +48,20 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - An editor with `pen_name` null hasn't onboarded yet. The pen name is the author's section label on the board, and the slug is used in public URLs.
 
 **Client IP** comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` entries from the right (`src/server/auth/ip.ts`); entries further left are client-controlled. Requests with no IP share an `unknown` bucket. OTP emails are sent in `after()` so response timing doesn't reveal allowlist membership. Tests mock `after` from `next/server` to run the task immediately.
+
+**Poems** (`src/server/poems.ts`) follow the same pattern as `otp.ts`: framework-free functions that take the DAL-resolved `editorId` and scope **every** query by it. Another editor's poem id behaves like a missing one, and malformed ids are rejected before reaching SQL. Reads return `hasPassword` and never `password_hash`/`password_version`; keep it that way, since the editor UI gets these objects as props.
+- Passwords: scrypt (`src/server/passwords.ts`, format `scrypt$N$r$p$salt$hash`, NFKC-normalised). Every password change or removal bumps `password_version`.
+- Slugs: unique per editor. A draft's slug follows its title; once the poem is published the slug stays fixed.
+- Limits: shared with the client in `src/lib/poem-limits.ts`.
+- Server Actions (`src/app/admin/poems/actions.ts`) re-authorize, then call `updateTag(BOARD_TAG)` / `updateTag(poemTag(id))` from `src/server/cache-tags.ts`. Any new mutation that changes what readers see must do the same.
+
+**Client patterns.**
+- Forms use `useActionState` with controlled inputs, because React resets uncontrolled fields after an action and that would wipe a poem on a validation error.
+- Don't show toasts or other one-shot side effects from `useEffect` on action state: effects re-run under StrictMode and when Next re-shows a route kept in `<Activity>`. Fire them from the action wrapper, or for redirect flashes (`?created=1`) use `useOnceToast` (`src/hooks/use-once-toast.ts`).
+- Next keeps recently visited routes mounted but hidden (`<Activity>`, `display: none`). So anything that must not outlive the session (sign-out) has to do a full page load, not a router navigation: see `src/app/admin/sign-out-button.tsx`.
+- A form's first submit button is what Enter triggers. Multi-button forms put a hidden "keep current status" button first (`poem-form.tsx`).
+- In E2E tests, use `getByRole` (it skips hidden Activity routes). For password inputs, which have no role, use `getByLabel(…).filter({ visible: true })`. Plain `getByLabel`/`getByPlaceholder` can match a hidden copy of the page and fail in strict mode.
+- Lint forbids `setState` inside effects. Adjust state during render instead (the `seenState !== state` pattern in `poem-form.tsx` and `sign-in-form.tsx`).
 
 **Rate limiting** (`src/server/rate-limit.ts`) is a single atomic Postgres upsert per call into `rate_limits` (fixed window). Keys look like `otp:req:email:<sha256>`, `otp:cooldown:<sha256>`, `otp:req:ip:<ip>`, `otp:verify:email:{h,d}:<sha256>`. About 1% of calls also prune rows older than 2 days. Tests clear rows by key prefix to skip cooldowns.
 

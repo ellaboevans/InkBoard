@@ -30,7 +30,7 @@ export async function sql(query: string) {
 
 export async function requestCode(page: Page, email: string) {
   await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
+  await page.getByRole("textbox", { name: "Email" }).fill(email);
   await page.getByRole("button", { name: "Email me a sign-in code" }).click();
   await expect(page.getByText(`We sent a 6-digit code to`)).toBeVisible();
 }
@@ -38,4 +38,14 @@ export async function requestCode(page: Page, email: string) {
 export async function typeCode(page: Page, code: string) {
   // input-otp renders a single real <input>; typing fills all slots.
   await page.locator('input[name="code"]').fill(code);
+}
+
+/** Full sign-in + onboarding for a brand-new editor; ends on /admin. */
+export async function signUpAs(page: Page, email: string, penName: string) {
+  await requestCode(page, email);
+  await typeCode(page, await latestCode(email));
+  await expect(page).toHaveURL(/\/admin\/onboarding$/);
+  await page.getByRole("textbox", { name: "Pen name" }).fill(penName);
+  await page.getByRole("button", { name: "Continue to dashboard" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
 }

@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { latestCode, requestCode, sql, typeCode } from "./helpers";
 
-const EMAIL = `poet-${Date.now()}@example.com`;
+// All local requests share one client IP (::1), so per-IP sign-in limits
+// would trip across tests. Rate limiting itself is covered by unit tests.
+test.beforeEach(() => sql("DELETE FROM rate_limits"));
+
 
 test("admin is not reachable while signed out", async ({ page }) => {
   await page.goto("/admin");
@@ -12,6 +15,7 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   page,
   context,
 }) => {
+  const EMAIL = `poet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
   // 1. Request and enter a code → new account → onboarding
   await requestCode(page, EMAIL);
   await typeCode(page, await latestCode(EMAIL));
@@ -23,10 +27,11 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   expect(cookie?.sameSite).toBe("Lax");
 
   // 2. Choose a pen name → dashboard
-  await page.getByLabel("Pen name").fill("Ada Verse");
+  await page.getByRole("textbox", { name: "Pen name" }).fill("Ada Verse");
   await page.getByRole("button", { name: "Continue to dashboard" }).click();
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Verse" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your poems" })).toBeVisible();
+  await expect(page.getByText("under “Ada Verse”")).toBeVisible();
   // The shared header picks up the new pen name without a reload.
   await expect(page.locator("header")).toContainText("Ada Verse");
 
@@ -39,7 +44,9 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/sign-in$/);
-  const { rows } = await sql("SELECT count(*)::int AS n FROM sessions");
+  const { rows } = await sql(
+    `SELECT count(*)::int AS n FROM sessions s JOIN editors e ON e.id = s.editor_id WHERE e.email = '${EMAIL}'`,
+  );
   expect(rows[0].n).toBe(0);
 
   // 4. Return visit: a *new* code signs into the *same* account
@@ -49,7 +56,7 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await expect.poll(() => latestCode(EMAIL)).not.toBe(firstCode);
   await typeCode(page, await latestCode(EMAIL));
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByRole("heading", { name: "Welcome, Ada Verse" })).toBeVisible();
+  await expect(page.locator("header")).toContainText("Ada Verse");
 
   const editors = await sql(`SELECT count(*)::int AS n FROM editors WHERE email = '${EMAIL}'`);
   expect(editors.rows[0].n).toBe(1);

@@ -1,9 +1,8 @@
-import { FeatherIcon, LogOutIcon } from "lucide-react";
+import { FeatherIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Button } from "@/components/ui/button";
 import { getCurrentEditor } from "@/server/auth/dal";
-import { signOutAction } from "./actions";
+import { SignOutButton } from "./sign-out-button";
 
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
@@ -35,12 +34,7 @@ async function EditorMenu() {
       <span className="hidden text-muted-foreground sm:inline">
         {editor.penName ?? editor.email}
       </span>
-      <form action={signOutAction}>
-        <Button type="submit" variant="ghost" size="sm">
-          <LogOutIcon />
-          Sign out
-        </Button>
-      </form>
+      <SignOutButton />
     </div>
   );
 }

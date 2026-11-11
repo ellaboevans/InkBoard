@@ -5,9 +5,14 @@ import { redirect } from "next/navigation";
 import { endSession, requireEditor } from "@/server/auth/dal";
 import { setPenName } from "@/server/auth/profile";
 
+/**
+ * Ends the session. Deliberately does *not* redirect: the client then does a
+ * full page load (see sign-out-button.tsx), because a client-side navigation
+ * would leave earlier admin pages, including private poem text, mounted but
+ * hidden in <Activity>, readable by the next person at a shared computer.
+ */
 export async function signOutAction(): Promise<void> {
   await endSession();
-  redirect("/sign-in");
 }
 
 export type OnboardingState = { error?: string; penName?: string };

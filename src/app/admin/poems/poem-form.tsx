@@ -1,0 +1,416 @@
+"use client";
+
+import {
+  ArrowLeftIcon,
+  EyeIcon,
+  EyeOffIcon,
+  Loader2Icon,
+  LockIcon,
+  Trash2Icon,
+} from "lucide-react";
+import Link from "next/link";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { toast } from "sonner";
+import { StatusBadge } from "@/components/poem-badges";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { BODY_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
+import type { PoemErrors } from "@/server/poems";
+import { useOnceToast } from "@/hooks/use-once-toast";
+import type { PoemFormState } from "./actions";
+
+export type PoemFormPoem = {
+  id: string;
+  title: string;
+  body: string;
+  visibility: "public" | "private";
+  status: "draft" | "published";
+  hasPassword: boolean;
+};
+
+type Props = {
+  action: (prev: PoemFormState, formData: FormData) => Promise<PoemFormState>;
+  /** Present when editing; absent when creating. */
+  poem?: PoemFormPoem;
+  deleteAction?: () => Promise<void>;
+  justCreated?: boolean;
+};
+
+export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
+  // Toast from the action's result rather than an effect, so it fires exactly
+  // once per save (effects re-run under StrictMode and when Next re-shows a
+  // route kept alive in <Activity>).
+  const [state, formAction, pending] = useActionState(
+    async (prev: PoemFormState, formData: FormData) => {
+      const next = await action(prev, formData);
+      if (next.savedAt) {
+        toast.success(next.status === "published" ? "Saved and published" : "Draft saved");
+      }
+      return next;
+    },
+    {},
+  );
+  const formRef = useRef<HTMLFormElement>(null);
+  // Default submit: saves without changing the publish status (⌘S, Enter).
+  const keepStatusRef = useRef<HTMLButtonElement>(null);
+
+  // Controlled fields: React resets uncontrolled inputs after a form action,
+  // which would wipe a poem on a validation error.
+  const [title, setTitle] = useState(poem?.title ?? "");
+  const [body, setBody] = useState(poem?.body ?? "");
+  const [isPrivate, setIsPrivate] = useState(poem?.visibility === "private");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [hasPassword, setHasPassword] = useState(poem?.hasPassword ?? false);
+  const [saved, setSaved] = useState({
+    title: poem?.title ?? "",
+    body: poem?.body ?? "",
+    isPrivate: poem?.visibility === "private",
+  });
+
+  // After a successful save, the current values become the "saved" snapshot.
+  const [seenState, setSeenState] = useState(state);
+  if (seenState !== state) {
+    setSeenState(state);
+    if (state.savedAt) {
+      setSaved({ title, body, isPrivate });
+      setPassword("");
+      setHasPassword(state.visibility === "private");
+    }
+  }
+
+  const status = state.status ?? poem?.status ?? "draft";
+  const dirty =
+    title !== saved.title ||
+    body !== saved.body ||
+    isPrivate !== saved.isPrivate ||
+    password !== "";
+  // Client-side checks give instant feedback; the server re-validates everything.
+  const [clientErrors, setClientErrors] = useState<PoemErrors | null>(null);
+  const errors = clientErrors ?? state.errors ?? {};
+
+  function validate(e: React.FormEvent<HTMLFormElement>) {
+    const found: PoemErrors = {};
+    if (!title.trim()) found.title = "Give your poem a title";
+    if (!body.trim()) found.body = "The poem is empty";
+    if (isPrivate && !hasPassword && !password) {
+      found.password = "Private poems need a password readers can use";
+    } else if (isPrivate && password && password.length < PASSWORD_MIN) {
+      found.password = `Use at least ${PASSWORD_MIN} characters`;
+    }
+    if (Object.keys(found).length > 0) {
+      e.preventDefault();
+      setClientErrors(found);
+      const first = Object.keys(found)[0];
+      document.getElementById(first === "password" ? "password" : first)?.focus();
+    } else {
+      setClientErrors(null);
+    }
+  }
+
+  useOnceToast(justCreated ? "Poem created" : null, "created");
+
+  // Warn before closing the tab with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // ⌘S / Ctrl+S saves without changing the publish status.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        formRef.current?.requestSubmit(keepStatusRef.current);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <div className="grid gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link href="/admin">
+            <ArrowLeftIcon />
+            All poems
+          </Link>
+        </Button>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          {dirty && <span role="status">Unsaved changes</span>}
+          <StatusBadge status={status} />
+        </div>
+      </div>
+
+      <form
+        ref={formRef}
+        action={formAction}
+        onSubmit={validate}
+        className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]"
+        noValidate
+      >
+        {/*
+          Pressing Enter in a text field submits with the form's *first* submit
+          button. Make that one "keep the current status", so Enter can never
+          publish a draft (or unpublish a poem) by accident.
+        */}
+        <button
+          ref={keepStatusRef}
+          type="submit"
+          name="status"
+          value={status}
+          disabled={pending}
+          tabIndex={-1}
+          aria-hidden
+          className="sr-only"
+        />
+        <input type="hidden" name="visibility" value={isPrivate ? "private" : "public"} />
+
+        <div className="grid content-start gap-4">
+          {errors.form && (
+            <Alert variant="destructive">
+              <AlertDescription>{errors.form}</AlertDescription>
+            </Alert>
+          )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="title" className="sr-only">
+              Title
+            </Label>
+            <Input
+              id="title"
+              name="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Title"
+              maxLength={TITLE_MAX}
+              aria-invalid={errors.title ? true : undefined}
+              aria-describedby={errors.title ? "title-error" : undefined}
+              autoFocus={!poem}
+              className="h-auto border-0 bg-transparent px-0 py-1 font-serif text-3xl shadow-none focus-visible:ring-0 md:text-4xl dark:bg-transparent"
+            />
+            <FieldError id="title-error" message={errors.title} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="body" className="sr-only">
+              Poem
+            </Label>
+            <Textarea
+              id="body"
+              name="body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={"Begin here…\n\nLine breaks and indentation are kept exactly as you type them."}
+              maxLength={BODY_MAX}
+              spellCheck
+              aria-invalid={errors.body ? true : undefined}
+              aria-describedby={errors.body ? "body-error body-count" : "body-count"}
+              className="min-h-[60vh] resize-y bg-card p-5 font-serif text-lg leading-relaxed"
+            />
+            <div className="flex justify-between gap-4">
+              <FieldError id="body-error" message={errors.body} />
+              <p id="body-count" className="ml-auto text-xs text-muted-foreground tabular-nums">
+                {body.length.toLocaleString("en")} / {BODY_MAX.toLocaleString("en")}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <aside className="grid content-start gap-4">
+          <section className="grid gap-3 rounded-xl border bg-card p-4">
+            <h2 className="text-sm font-medium">Publishing</h2>
+            <p className="text-sm text-muted-foreground">
+              {status === "published"
+                ? "This poem is on the board. Saving updates it right away."
+                : "Drafts are only visible to you."}
+            </p>
+            <div className="grid gap-2">
+              {status === "published" ? (
+                <>
+                  <SubmitButton status="published" pending={pending}>
+                    Save changes
+                  </SubmitButton>
+                  <SubmitButton status="draft" pending={pending} variant="outline">
+                    Unpublish
+                  </SubmitButton>
+                </>
+              ) : (
+                <>
+                  <SubmitButton status="published" pending={pending}>
+                    Publish to board
+                  </SubmitButton>
+                  <SubmitButton status="draft" pending={pending} variant="outline">
+                    Save draft
+                  </SubmitButton>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Tip: <kbd className="font-sans">⌘S</kbd> / <kbd className="font-sans">Ctrl S</kbd> saves.
+            </p>
+          </section>
+
+          <section className="grid gap-3 rounded-xl border bg-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="grid gap-1">
+                <Label htmlFor="private" className="flex items-center gap-1.5">
+                  <LockIcon className="size-3.5" aria-hidden />
+                  Password protected
+                </Label>
+                <p id="private-help" className="text-sm text-muted-foreground">
+                  {isPrivate
+                    ? "Readers see the title on the board but need the password to read it."
+                    : "Anyone can read this poem."}
+                </p>
+              </div>
+              <Switch
+                id="private"
+                checked={isPrivate}
+                onCheckedChange={setIsPrivate}
+                aria-describedby="private-help"
+              />
+            </div>
+
+            {isPrivate && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="password">
+                  {hasPassword ? "New password" : "Password"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    placeholder={hasPassword ? "Leave blank to keep current" : `At least ${PASSWORD_MIN} characters`}
+                    aria-required={!hasPassword}
+                    aria-invalid={errors.password ? true : undefined}
+                    aria-describedby={errors.password ? "password-error password-help" : "password-help"}
+                    className="pr-9"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="absolute top-1/2 right-1 -translate-y-1/2"
+                    onClick={() => setShowPassword((s) => !s)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </Button>
+                </div>
+                <FieldError id="password-error" message={errors.password} />
+                <p id="password-help" className="text-xs text-muted-foreground">
+                  {hasPassword
+                    ? "Changing it locks out readers who used the old one."
+                    : "Share it with the readers you want to let in."}
+                </p>
+              </div>
+            )}
+            {!isPrivate && saved.isPrivate && (
+              <p className="text-xs text-muted-foreground">
+                Saving will remove the current password.
+              </p>
+            )}
+          </section>
+
+          {poem && deleteAction && <DeletePoem title={saved.title} action={deleteAction} />}
+        </aside>
+      </form>
+    </div>
+  );
+}
+
+function SubmitButton({
+  status,
+  pending,
+  variant,
+  children,
+}: {
+  status: "draft" | "published";
+  pending: boolean;
+  variant?: "outline";
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="submit"
+      name="status"
+      value={status}
+      variant={variant}
+      size="lg"
+      disabled={pending}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} role="alert" className="text-sm text-destructive">
+      {message}
+    </p>
+  );
+}
+
+function DeletePoem({ title, action }: { title: string; action: () => Promise<void> }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="ghost" className="justify-start text-destructive hover:text-destructive">
+          <Trash2Icon />
+          Delete poem
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete &ldquo;{title || "Untitled"}&rdquo;?</AlertDialogTitle>
+          <AlertDialogDescription>
+            It will be removed from the board and can&apos;t be recovered.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {/* A separate form: the dialog is portalled outside the poem form. */}
+        <form action={action}>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
+            <ConfirmDelete />
+          </AlertDialogFooter>
+        </form>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function ConfirmDelete() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" variant="destructive" disabled={pending}>
+      {pending && <Loader2Icon className="animate-spin" />}
+      Delete poem
+    </Button>
+  );
+}

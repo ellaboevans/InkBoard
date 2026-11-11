@@ -3,6 +3,7 @@ import { and, eq, like, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { editors } from "@/db/schema";
+import { firstFreeSlug, isUniqueViolation, slugify } from "@/lib/slug";
 
 export const penNameSchema = z
   .string()
@@ -10,19 +11,6 @@ export const penNameSchema = z
   .min(2, "Pen name must be at least 2 characters")
   .max(60, "Pen name must be at most 60 characters")
   .regex(/\p{L}/u, "Pen name must contain at least one letter");
-
-export function slugify(value: string): string {
-  return (
-    value
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // strip accents
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 48)
-      .replace(/-+$/g, "") || "author"
-  );
-}
 
 /** Find a slug not used by another editor: `rumi`, `rumi-2`, `rumi-3`, … */
 async function uniqueEditorSlug(base: string, editorId: string) {
@@ -35,11 +23,7 @@ async function uniqueEditorSlug(base: string, editorId: string) {
         or(eq(editors.slug, base), like(editors.slug, `${base}-%`)),
       ),
     );
-  const used = new Set(taken.map((t) => t.slug));
-  if (!used.has(base)) return base;
-  for (let n = 2; ; n++) {
-    if (!used.has(`${base}-${n}`)) return `${base}-${n}`;
-  }
+  return firstFreeSlug(base, taken.map((t) => t.slug));
 }
 
 export type SetPenNameResult =
@@ -58,7 +42,7 @@ export async function setPenName(
 
   // Retry if another editor grabbed the same slug concurrently.
   for (let attempt = 0; attempt < 3; attempt++) {
-    const slug = await uniqueEditorSlug(slugify(penName), editorId);
+    const slug = await uniqueEditorSlug(slugify(penName, "author"), editorId);
     try {
       await getDb()
         .update(editors)
@@ -71,9 +55,4 @@ export async function setPenName(
     }
   }
   return { ok: false, error: "Could not save pen name, please try again" };
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  const e = err as { code?: string; cause?: { code?: string } };
-  return e?.code === "23505" || e?.cause?.code === "23505";
 }

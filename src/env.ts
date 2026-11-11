@@ -1,0 +1,58 @@
+import "server-only";
+import { z } from "zod";
+
+const schema = z
+  .object({
+    NODE_ENV: z
+      .enum(["development", "test", "production"])
+      .default("development"),
+    DATABASE_URL: z.url(),
+    AUTH_SECRET: z
+      .string()
+      .min(32, "AUTH_SECRET must be at least 32 characters"),
+    EDITOR_ALLOWLIST: z.string().optional().default(""),
+    RESEND_API_KEY: z.string().optional().default(""),
+    EMAIL_FROM: z.string().optional().default("PoemHub <onboarding@resend.dev>"),
+    APP_URL: z.url().default("http://localhost:3000"),
+    /**
+     * How many proxies in front of the app append to X-Forwarded-For.
+     * The client IP is taken that many entries from the right, because
+     * everything further left is client-controlled. Vercel: 1.
+     */
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(10).default(1),
+  })
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV === "production" && !env.RESEND_API_KEY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["RESEND_API_KEY"],
+        message: "RESEND_API_KEY is required in production",
+      });
+    }
+  });
+
+export type Env = z.infer<typeof schema>;
+
+let cached: Env | undefined;
+
+/**
+ * Validated server environment. Parsed lazily so that `next build` does not
+ * require runtime secrets, but any request that needs them fails loudly.
+ */
+export function env(): Env {
+  if (cached) return cached;
+  const parsed = schema.safeParse(process.env);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
+    throw new Error(`Invalid environment configuration:\n${issues}`);
+  }
+  cached = parsed.data;
+  return cached;
+}
+
+/** Test helper: re-read process.env on the next env() call. */
+export function resetEnvCache(): void {
+  cached = undefined;
+}

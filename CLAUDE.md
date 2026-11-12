@@ -75,6 +75,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - World elements are absolutely positioned inside a 0×0 container, so give them explicit widths. Shrink-to-fit would truncate them.
 - Pointer capture is taken only once a drag passes 4px, so a plain click still reaches the card's link.
 - In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
+- The author page (`/a/[author]`, `loadAuthorPage`) follows the same rules as the board: published only, `CASE WHEN visibility = 'public'` for excerpts, never the email. Anything that changes it (profile save, pin) must `updateTag(BOARD_TAG)`.
+- Board cards, the author page and the editor preview all render `PoemCardFace` (`src/components/board/poem-card-face.tsx`); excerpts come from `cardExcerpt` (`src/lib/poem-text.ts`), which mirrors the SQL. Change both together (a test compares them).
 - Poem cards are stretched links: the `<Link>` wraps only the title (named by it, carrying `data-poem-id`/`data-rect`), and its `::after` covers the `[data-card]` div. Don't put `aria-label` on cards. Highlights and in-view checks target the `[data-card]` div.
 - `next dev` compiles routes on first request. globalSetup warms every route (including the intercepted overlay, via RSC + Next-Url headers); add new routes there. Server Actions can't be warmed, hence the long test and expect timeouts in `playwright.config.ts`.
 - Playwright starts the web server *before* globalSetup runs the migrations. That's why its readiness URL is `/sign-in`, which doesn't touch the DB.

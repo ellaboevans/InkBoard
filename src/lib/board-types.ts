@@ -30,3 +30,17 @@ export type ReaderPoem = {
   sharedPassword: boolean;
   publishedAt: string | null;
 };
+
+/** An author's public page (/a/[author]). Never includes the email. */
+export type AuthorPage = {
+  penName: string;
+  slug: string;
+  /** For the stable default avatar when none is chosen. */
+  editorId: string;
+  avatar: string | null;
+  tagline: string | null;
+  bio: string | null;
+  links: string[];
+  /** Published poems, newest first; the pinned one (if still published) is first. */
+  poems: (BoardPoem & { pinned: boolean; publishedAt: string | null })[];
+};

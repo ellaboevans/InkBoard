@@ -161,6 +161,9 @@ test("board, list view, search and reading", async ({ page }) => {
   await page.getByRole("button", { name: "Unlock poem" }).click();
   await expect(page.locator("article")).toContainText("secret");
   await scan(page, "poem page: unlocked");
+  await page.getByRole("main").getByRole("link", { name: pen }).click();
+  await expect(page.getByRole("heading", { level: 1, name: pen })).toBeVisible();
+  await scan(page, "author page");
 
   await page.goto("/p/nobody/nothing");
   await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();

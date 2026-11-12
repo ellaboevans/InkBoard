@@ -1,4 +1,6 @@
-import { LaptopIcon } from "lucide-react";
+import { ExternalLinkIcon, LaptopIcon } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireOnboardedSession } from "@/server/auth/dal";
@@ -19,11 +21,16 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-10">
       <section className="grid gap-6" aria-labelledby="profile-heading">
-        <div>
-          <h1 id="profile-heading" className="font-serif text-3xl">
-            Profile
-          </h1>
-          <p className="mt-1 text-muted-foreground">How you appear to readers, and your writing so far.</p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 id="profile-heading" className="font-serif text-3xl">
+              Profile
+            </h1>
+            <p className="mt-1 text-muted-foreground">How you appear to readers, and your writing so far.</p>
+          </div>
+          <Suspense fallback={null}>
+            <PublicPageLink />
+          </Suspense>
         </div>
         <Suspense fallback={<div className="h-[40rem] animate-pulse rounded-xl bg-muted" />}>
           <Profile />
@@ -44,6 +51,18 @@ export default function ProfilePage() {
         </Suspense>
       </section>
     </div>
+  );
+}
+
+async function PublicPageLink() {
+  const { editor } = await requireOnboardedSession();
+  return (
+    <Button asChild variant="outline">
+      <Link href={`/a/${editor.slug}`}>
+        <ExternalLinkIcon />
+        View public page
+      </Link>
+    </Button>
   );
 }
 

@@ -1,4 +1,5 @@
 import { LockOpenIcon } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DialogTitle } from "@/components/ui/dialog";
@@ -38,7 +39,10 @@ export async function PoemReader({
       <header className="mb-8 sm:mb-10">
         <PoemTitle inDialog={inDialog}>{poem.title}</PoemTitle>
         <p className="mt-3 text-muted-foreground">
-          by <span className="text-foreground">{poem.penName}</span>
+          by{" "}
+          <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">
+            {poem.penName}
+          </Link>
           {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
         </p>
       </header>

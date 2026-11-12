@@ -223,7 +223,7 @@ export function ProfileForm({
           <FieldDescription id="pinned-help">
             {publishedPoems.length === 0
               ? "Publish a poem to pin it here."
-              : "The poem you'd most like readers to start with. You can also pin from the poems list."}
+              : "Shown first on your public page. You can also pin from the poems list."}
           </FieldDescription>
           {errorFor("pinnedPoemId") && <FieldError>{errorFor("pinnedPoemId")}</FieldError>}
         </Field>

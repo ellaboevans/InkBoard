@@ -97,6 +97,7 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 ```
 /                      Public canvas board (R1, R9) + search (R10)
 /p/[author]/[poem]     Reading view; password gate for private poems (R8)
+/a/[author]            Author's public page: avatar, tagline, bio, links, poems (pinned first)
 /sign-in               Email → OTP (R7)
 /admin                 Dashboard: my poems (R4)
 /admin/onboarding      First sign-in: choose pen name (the section label)
@@ -275,14 +276,21 @@ To do:
 - **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 
 ### Phase 7: Editor dashboard redesign ✅
-Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-in, **Navii** avatars via `@usenavii/core`, **light mode only**. The public author page is deferred to a later phase.
+Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-in, **Navii** avatars via `@usenavii/core`, **light mode only**. The public author page followed in Phase 8.
 - **Shell** (`src/app/admin/(dashboard)/layout.tsx`): inset sidebar that collapses to icons (⌘B / Ctrl+B) and becomes a drawer on phones. It has a "New poem" button, Poems / Profile / Settings, "View the board", and an account menu (avatar, pen name, email → Profile, Settings, Sign out) with breadcrumbs in the top bar. This fixes the old header, where Sign out was pushed off-screen on phones.
 - **Dashboard home:** stat cards with real counts only (published, drafts, private, last/first published; no reader analytics, so no charts), and a poems table with All / Published / Drafts / Private tabs, title search and a row menu (Edit, View on the board, Copy link, Pin to profile, Delete with confirmation). Phones get a card list.
 - **Sign-in and onboarding** (`src/components/auth/auth-shell.tsx`): two columns, with the form on the left and a typographic panel on the dotted canvas (an original poem) on the right, large screens only. No images, no social buttons.
 - **Avatars** (`src/lib/avatars.ts`, `src/server/avatar-svg.ts`, `/avatars/[id]`): 36 curated Navii mascots (fixed seeds, 12 muted palettes, hue drift off, paper tile), rendered on our server, so there is no third-party request or CSP change. Editors who haven't chosen get a stable default derived from their id.
-- **Profile:** avatar picker, tagline (≤ 80), bio, up to 4 links (https only, no credentials, normalised), pinned poem (only the editor's own published poems, checked server-side), and a summary with stats. Tagline, links and the pinned poem are stored for the public author page and not yet shown to readers.
+- **Profile:** avatar picker, tagline (≤ 80), bio, up to 4 links (https only, no credentials, normalised), pinned poem (only the editor's own published poems, checked server-side), and a summary with stats. Tagline, links and the pinned poem appear on the public author page (Phase 8).
 - **Light only:** the dormant dark theme was removed; `color-scheme: light`.
 - **Tests:** unit tests for links, tagline, avatar ids, pin ownership (incl. another editor's poem and FK unpin on delete), stats and avatar rendering. E2E covers the rich profile, dashboard filters/search, the phone drawer and sign-out. axe covers the new screens (row menu, phone view, drawer).
+
+### Phase 8: Public author page ✅
+- **`/a/[author]`** (`src/app/a/[author]/page.tsx`): avatar, pen name, tagline, bio, links (open in a new tab with `rel="me nofollow ugc noopener noreferrer"`), poem count and "on PoemHub since". Then the author's published poems as board cards, pinned poem first, then newest first. Unknown or not-yet-onboarded authors get "Author not found".
+- **Data** (`loadAuthorPage` in `src/server/board.ts`, cached as `getAuthorPage` with `BOARD_TAG`): published poems only; private poems are title-only cards (bodies cut in SQL, N1). The email is never selected. A pinned poem that has since been unpublished is ignored.
+- **Links in:** the "by …" byline on every poem (full page and overlay), and "View public page" on the editor's profile. Pinning from the poems list now invalidates the cache, so the page updates at once.
+- Also this phase: the editor's live card preview (shared `PoemCardFace` and `cardExcerpt`, tested against the board SQL), and the blooming poem stack on the sign-in page.
+- **Tests:** loader integration tests (no private text or email in the payload, drafts excluded, pinned first and dropped when unpublished, unknown authors). E2E for the whole flow, and an axe scan of the page.
 
 ## 5. Requirements traceability
 

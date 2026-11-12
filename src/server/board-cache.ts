@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { BoardSection, ReaderPoem } from "@/lib/board-types";
-import { loadBoardSections, loadReaderPoem } from "./board";
+import type { AuthorPage, BoardSection, ReaderPoem } from "@/lib/board-types";
+import { loadAuthorPage, loadBoardSections, loadReaderPoem } from "./board";
 import { BOARD_TAG } from "./cache-tags";
 
 /*
@@ -26,4 +26,11 @@ export async function getReaderPoem(
   cacheTag(BOARD_TAG);
   cacheLife("hours");
   return loadReaderPoem(authorSlug, poemSlug);
+}
+
+export async function getAuthorPage(authorSlug: string): Promise<AuthorPage | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadAuthorPage(authorSlug);
 }

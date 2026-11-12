@@ -44,3 +44,26 @@ describe("clientIpFromForwardedFor", () => {
     expect(clientIpFromForwardedFor(null)).toBeNull();
   });
 });
+
+import { ipBucket } from "@/server/auth/ip";
+
+describe("ipBucket", () => {
+  it("groups IPv6 addresses by /64, however they're written", () => {
+    const a = ipBucket("2001:db8:abcd:12:1111:2222:3333:4444");
+    expect(a).toBe("2001:db8:abcd:12::/64");
+    expect(ipBucket("2001:0db8:abcd:0012::1")).toBe(a);
+    expect(ipBucket("[2001:db8:abcd:12::ffff]")).toBe(a);
+    expect(ipBucket("2001:DB8:ABCD:12:9::")).toBe(a);
+    expect(ipBucket("2001:db8:abcd:13::1")).not.toBe(a);
+    expect(ipBucket("fe80::1%eth0")).toBe("fe80:0:0:0::/64");
+    expect(ipBucket("::1")).toBe("0:0:0:0::/64");
+  });
+  it("keeps IPv4 per address, including IPv4-mapped IPv6", () => {
+    expect(ipBucket("203.0.113.5")).toBe("203.0.113.5");
+    expect(ipBucket("::ffff:203.0.113.5")).toBe("203.0.113.5");
+  });
+  it("buckets missing IPs together", () => {
+    expect(ipBucket(null)).toBe("unknown");
+    expect(ipBucket("")).toBe("unknown");
+  });
+});

@@ -20,6 +20,10 @@ pnpm dev
 
 Open http://localhost:3000/sign-in. Without `RESEND_API_KEY`, sign-in codes are printed in the dev server log.
 
+### Deploying
+
+See [`docs/DEPLOY.md`](docs/DEPLOY.md): Neon (with a database branch per preview), Vercel (migrations on every build, daily cleanup cron), and Resend.
+
 ### Using Neon
 
 Create a project at https://console.neon.tech, copy the **pooled** connection string into `DATABASE_URL`, and run `pnpm db:migrate`. The app switches to Neon's serverless driver automatically for `*.neon.tech` hosts.

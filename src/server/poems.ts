@@ -243,7 +243,7 @@ export async function updatePoem(
       getDb().transaction(async (tx) => {
         const shared = (await lockPasswordMode(tx, editorId)) === "shared";
         const [current] = await tx
-          .select({ title: poems.title, publishedAt: poems.publishedAt, passwordHash: poems.passwordHash })
+          .select({ title: poems.title, status: poems.status, publishedAt: poems.publishedAt, passwordHash: poems.passwordHash })
           .from(poems)
           .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
           .for("update");
@@ -272,6 +272,14 @@ export async function updatePoem(
         // Keep URLs stable once a poem has been published; drafts follow their title.
         const retitledDraft = !current.publishedAt && data.title !== current.title;
 
+        // Unpublishing withdraws access: readers who unlocked the poem must
+        // enter the password again if it's republished. (Shared-mode grants
+        // cover the author as a whole and are revoked from Settings.)
+        const unpublishing = current.status === "published" && data.status === "draft";
+        const revoke = unpublishing && !password?.passwordVersion
+          ? { passwordVersion: sql`${poems.passwordVersion} + 1` }
+          : undefined;
+
         const [poem] = await tx
           .update(poems)
           .set({
@@ -284,6 +292,7 @@ export async function updatePoem(
               publishedAt: sql`COALESCE(${poems.publishedAt}, now())`,
             }),
             ...password,
+            ...revoke,
           })
           .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
           .returning({ id: poems.id, slug: poems.slug, status: poems.status });

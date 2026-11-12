@@ -171,3 +171,45 @@ async function getId(slug: string) {
   return rows[0]?.id;
 }
 
+
+describe("guessing from many IPs", () => {
+  it("rotating IPv6 addresses inside one /64 shares a limit", async () => {
+    const a = await create("Alpha", { password: "alpha-pass" });
+    for (let i = 0; i < 10; i++) {
+      await attemptUnlock({ authorSlug: "una", poemSlug: a.slug, password: "nope", ip: `2001:db8:1:2::${i + 1}`, grants: [] });
+    }
+    expect(
+      await attemptUnlock({ authorSlug: "una", poemSlug: a.slug, password: "alpha-pass", ip: "2001:db8:1:2::99", grants: [] }),
+    ).toMatchObject({ ok: false, error: "rate_limited" });
+  });
+
+  it("caps guesses per poem across all clients", async () => {
+    const a = await create("Alpha", { password: "alpha-pass" });
+    await getDb().execute(sql`
+      INSERT INTO rate_limits (key, window_start, count)
+      SELECT 'unlock:p:' || id || ':all', now(), 300 FROM poems WHERE slug = ${a.slug}
+    `);
+    expect(
+      await attemptUnlock({ authorSlug: "una", poemSlug: a.slug, password: "alpha-pass", ip: "198.51.100.200", grants: [] }),
+    ).toMatchObject({ ok: false, error: "rate_limited" });
+  });
+});
+
+describe("unpublishing", () => {
+  it("revokes per-poem unlocks, so a republished poem asks again", async () => {
+    const a = await create("Alpha", { password: "alpha-pass" });
+    const grants = await unlockOk(a.slug, "alpha-pass");
+    const id = (await getId(a.slug))!;
+    await updatePoem(ed, id, poemInput("Alpha", { status: "draft" }));
+    await updatePoem(ed, id, poemInput("Alpha", { status: "published", body: "revised secret" }));
+    expect(await readUnlockedBody("una", a.slug, grants)).toBeNull();
+    expect(await readUnlockedBody("una", a.slug, await unlockOk(a.slug, "alpha-pass"))).toBe("revised secret");
+  });
+
+  it("ordinary edits of a published poem keep unlocks", async () => {
+    const a = await create("Alpha", { password: "alpha-pass" });
+    const grants = await unlockOk(a.slug, "alpha-pass");
+    await updatePoem(ed, (await getId(a.slug))!, poemInput("Alpha", { body: "typo fixed" }));
+    expect(await readUnlockedBody("una", a.slug, grants)).toBe("typo fixed");
+  });
+});

@@ -211,10 +211,31 @@ Done:
   - Picking an author moves the board to their section and focuses its label. Picking a poem moves to its card, highlights it and focuses it, so Enter opens it in the overlay.
 - **Accept:** prefix ("ros" → "Rose"), multi-word and slightly misspelt queries match; poem bodies never match. Covered by unit tests (including a mutation check that the text test fails if bodies become searchable) and E2E.
 
-### Phase 6: Hardening and launch
-- Security review of the full app, CSP/security headers, stale row cleanup (OTPs, sessions, rate limits) via cron.
-- E2E tests (Playwright) for the sign-in, publish, board, unlock and search flows.
-- Neon production branch + preview branches per PR; deploy (e.g. Vercel) with env setup docs.
+### Phase 6: Hardening and launch 🟡
+Done:
+- **Security headers** (`next.config.ts`, all routes):
+  - The CSP allows only our own origin, with no framing, no plugins, and forms posting only to us. Scripts have `'unsafe-inline'` and no nonces, because nonces would disable prerendering; no user HTML is ever rendered.
+  - Also HSTS (production only), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP and `X-Frame-Options`. The `X-Powered-By` header is removed.
+  - Verified on a production build: the board, search, overlay, unlock, toasts and sign-in all run with zero CSP violations.
+- **Cleanup cron** (`src/server/maintenance.ts`, `GET /api/cron/cleanup`, `vercel.json`):
+  - Runs daily and deletes expired sign-in codes, expired sessions and stale rate-limit rows, after a grace period.
+  - Requires `Authorization: Bearer $CRON_SECRET` (constant-time compare). It returns 503 if the secret isn't set and 401 for any other caller.
+- **Deploy guide** (`docs/DEPLOY.md`):
+  - Neon via Vercel's integration, with a database branch per preview deployment.
+  - Migrations run on every build (`pnpm db:migrate && pnpm build`) over `DATABASE_URL_UNPOOLED`.
+  - The env var table, Resend domain verification, and a post-deploy checklist.
+- **E2E coverage** for sign-in, publish, board, overlay, unlock (both password modes) and search: 24 tests.
+
+- **Full-app security review (done):**
+  - No high-severity issues, and no path for private poem text to reach a browser without a valid grant. This covered RSC payloads, the cache, the overlay, error pages, search and metadata.
+  - Four smaller findings, all fixed with tests:
+    1. *(Medium)* Wrong-guess limits could be dodged by rotating IPs. Every rate limit now groups IPv6 addresses by /64 (`ipBucket`), and unlocks have an extra cap of 300 per hour per poem (or per author in shared mode) across all clients.
+    2. Unpublishing a poem now revokes its unlocks.
+    3. Settings now says that a shared-password unlock also covers poems made private later.
+    4. `CRON_SECRET` must be 32+ characters when set.
+
+To do:
+- **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 
 ## 5. Requirements traceability
 

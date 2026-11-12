@@ -63,7 +63,9 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - **Lock order:** always the editor row first, then poem rows. Poem saves take `FOR NO KEY UPDATE` on the editor, which also makes an editor's own slug allocation race-free. Keep this order in any new write that touches both, or saves and mode switches will deadlock.
 - Reader unlock grants are scoped `p:<poemId>:<password_version>` or `a:<editorId>:<shared_password_version>`. Any change that should lock readers out must bump the matching version.
 - Reading the unlock cookie checks expiry against the clock, so it calls `connection()`.
-- Wrong-guess rate-limit keys: `unlock:<p|a>:<id>:ip:<ip>` and `unlock:ip:<ip>`.
+- Wrong-guess rate-limit keys: `unlock:<p|a>:<id>:ip:<bucket>`, `unlock:ip:<bucket>`, and `unlock:<p|a>:<id>:all` (all clients combined).
+- Always key rate limits on `ipBucket(ip)` (`src/server/auth/ip.ts`, which groups IPv6 by /64), never on the raw IP.
+- Unpublishing bumps `password_version`, which revokes unlocks.
 
 **Board (reader side).** `src/server/board.ts` holds the uncached, tested loaders; `board-cache.ts` wraps them in `"use cache"` + `cacheTag(BOARD_TAG)`. Keep that split, because `next/cache` functions can't run under Vitest.
 - Never select `poems.body` for readers without `CASE WHEN visibility = 'public'` (N1). The tests check that the JSON contains no private text.
@@ -100,6 +102,10 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - In E2E tests, use `getByRole` (it skips hidden Activity routes). For password inputs, which have no role, use `getByLabel(…).filter({ visible: true })`. Plain `getByLabel`/`getByPlaceholder` can match a hidden copy of the page and fail in strict mode.
 - Don't start function names with `use` unless they're hooks: the hooks lint rule flags them (hence `switchToPerPoemPasswords`).
 - Lint forbids `setState` inside effects. Adjust state during render instead (the `seenState !== state` pattern in `poem-form.tsx` and `sign-in-form.tsx`).
+
+**Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
+
+**Cleanup cron:** `GET /api/cron/cleanup` (`vercel.json`, daily) calls `cleanupExpiredRows()` in `src/server/maintenance.ts`. It needs `Authorization: Bearer $CRON_SECRET`. Deployment steps are in `docs/DEPLOY.md`.
 
 **Rate limiting** (`src/server/rate-limit.ts`) is a single atomic Postgres upsert per call into `rate_limits` (fixed window). Keys look like `otp:req:email:<sha256>`, `otp:cooldown:<sha256>`, `otp:req:ip:<ip>`, `otp:verify:email:{h,d}:<sha256>`. About 1% of calls also prune rows older than 2 days. Tests clear rows by key prefix to skip cooldowns.
 

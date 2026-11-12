@@ -4,6 +4,7 @@ import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
 import { hmac, safeEqual } from "./crypto";
 import { verifyPassword } from "./passwords";
+import { ipBucket } from "./auth/ip";
 import { rateLimit } from "./rate-limit";
 
 /*
@@ -25,6 +26,7 @@ const MAX_GRANTS = 40;
 // the author, so guesses spread across their poems still count together.
 const GUESSES_PER_TARGET = 10; // per 15 minutes
 const GUESSES_PER_IP = 60; // per hour, across all poems
+const GUESSES_PER_TARGET_ALL_IPS = 300; // per hour, all clients combined
 
 export type Grant = { s: string; e: number };
 
@@ -98,10 +100,14 @@ export async function attemptUnlock(input: {
   const lock = await loadLock(input.authorSlug, input.poemSlug);
   if (!lock) return { ok: false, error: "not_found" };
 
-  const ip = input.ip || "unknown";
+  const ip = ipBucket(input.ip);
   const limits = await Promise.all([
     rateLimit(`unlock:${lock.target}:ip:${ip}`, GUESSES_PER_TARGET, 15 * 60),
     rateLimit(`unlock:ip:${ip}`, GUESSES_PER_IP, 60 * 60),
+    // Across *all* clients: rotating IPs (a botnet, many IPv6 /64s) can't
+    // brute-force one poem's (or one author's) password indefinitely. Under
+    // such an attack real readers wait too; that's the intended trade-off.
+    rateLimit(`unlock:${lock.target}:all`, GUESSES_PER_TARGET_ALL_IPS, 60 * 60),
   ]);
   const blocked = limits.find((l) => !l.allowed);
   if (blocked) return { ok: false, error: "rate_limited", retryAfter: blocked.retryAfter };

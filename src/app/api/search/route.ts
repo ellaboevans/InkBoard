@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { env } from "@/env";
-import { clientIpFromForwardedFor } from "@/server/auth/ip";
+import { clientIpFromForwardedFor, ipBucket } from "@/server/auth/ip";
 import { rateLimit } from "@/server/rate-limit";
 import { searchBoard } from "@/server/search";
 
@@ -10,9 +10,9 @@ import { searchBoard } from "@/server/search";
  */
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q") ?? "";
-  const ip =
-    clientIpFromForwardedFor(request.headers.get("x-forwarded-for"), env().TRUSTED_PROXY_HOPS) ??
-    "unknown";
+  const ip = ipBucket(
+    clientIpFromForwardedFor(request.headers.get("x-forwarded-for"), env().TRUSTED_PROXY_HOPS),
+  );
 
   // Generous: one request per debounced keystroke is normal.
   const limit = await rateLimit(`search:ip:${ip}`, 120, 60);

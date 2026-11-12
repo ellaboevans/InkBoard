@@ -78,7 +78,7 @@ export function PasswordSettingsForm({
             current={savedMode === "shared"}
             icon={<KeyRoundIcon className="size-4" aria-hidden />}
             title="One password for all my private poems"
-            description="Set it once here. A reader who enters it can read every private poem of yours, including ones you add later."
+            description="Set it once here. A reader who enters it can read every private poem of yours, including ones you add or make private later, until you change the password."
           />
         </RadioGroup>
       </fieldset>

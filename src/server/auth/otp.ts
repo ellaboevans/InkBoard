@@ -14,6 +14,7 @@ import {
 import { sendOtpEmail } from "@/server/email";
 import { rateLimit } from "@/server/rate-limit";
 import { isEmailAllowed, normalizeEmail } from "./email";
+import { ipBucket } from "./ip";
 
 export const OTP_TTL_SECONDS = 10 * 60;
 export const OTP_MAX_ATTEMPTS = 5;
@@ -31,8 +32,8 @@ const REQUESTS_GLOBAL_PER_HOUR = 500;
 const VERIFICATIONS_PER_EMAIL_PER_HOUR = 10;
 const VERIFICATIONS_PER_EMAIL_PER_DAY = 30;
 
-/** Requests with no known client IP share one bucket instead of skipping limits. */
-const ipKey = (ip: string | null | undefined) => ip || "unknown";
+/** Per-client bucket: IPv6 grouped by /64; no known IP -> one shared bucket. */
+const ipKey = ipBucket;
 
 const hashCode = (email: string, code: string) =>
   hmac("email-otp", `${email}:${code}`);

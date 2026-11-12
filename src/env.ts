@@ -19,6 +19,11 @@ const schema = z
      * The client IP is taken that many entries from the right, because
      * everything further left is client-controlled. Vercel: 1.
      */
+    /** Shared secret for /api/cron/cleanup (Vercel Cron sends it as a Bearer token). */
+    CRON_SECRET: z
+      .union([z.literal(""), z.string().min(32, "CRON_SECRET must be at least 32 characters")])
+      .optional()
+      .default(""),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(10).default(1),
   })
   .superRefine((env, ctx) => {

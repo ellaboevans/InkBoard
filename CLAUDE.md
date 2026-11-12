@@ -75,12 +75,14 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - World elements are absolutely positioned inside a 0×0 container, so give them explicit widths. Shrink-to-fit would truncate them.
 - Pointer capture is taken only once a drag passes 4px, so a plain click still reaches the card's link.
 - In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
+- Poem cards are stretched links: the `<Link>` wraps only the title (named by it, carrying `data-poem-id`/`data-rect`), and its `::after` covers the `[data-card]` div. Don't put `aria-label` on cards. Highlights and in-view checks target the `[data-card]` div.
 - `next dev` compiles routes on first request. globalSetup warms every route (including the intercepted overlay, via RSC + Next-Url headers); add new routes there. Server Actions can't be warmed, hence the long test and expect timeouts in `playwright.config.ts`.
 - Playwright starts the web server *before* globalSetup runs the migrations. That's why its readiness URL is `/sign-in`, which doesn't touch the DB.
 - The dev database may also be shared with sibling worktrees, and their seeds overwrite yours. For visual checks use a database of your own (e.g. `poemhub_dev_<name>`).
 
 **Poem overlay.** `src/app/@modal` is a parallel slot rendered by the root layout.
 - `(.)p/[author]/[poem]` intercepts soft navigations from the board and shows `PoemReader` in `PoemModal`. Hard loads render `src/app/p/[author]/[poem]/page.tsx`, which uses the same reader.
+- The overlay's name comes from the poem title rendered as a Radix `DialogTitle` (`PoemReader inDialog`). Never use a fixed id for it: Next keeps the previous overlay mounted but hidden, so a fixed id resolves to the old poem.
 - `@modal/default.tsx`, `@modal/page.tsx` and `@modal/[...catchAll]/page.tsx` all return null, so the overlay clears when navigating anywhere else. Keep them.
 - Client components in the slot can't call `usePathname()` outside Suspense (a build error under Cache Components), so URL-dependent bits are rendered on the server and passed in (`toolbar`).
 
@@ -103,6 +105,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - In E2E tests, use `getByRole` (it skips hidden Activity routes). For password inputs, which have no role, use `getByLabel(…).filter({ visible: true })`. Plain `getByLabel`/`getByPlaceholder` can match a hidden copy of the page and fail in strict mode.
 - Don't start function names with `use` unless they're hooks: the hooks lint rule flags them (hence `switchToPerPoemPasswords`).
 - Lint forbids `setState` inside effects. Adjust state during render instead (the `seenState !== state` pattern in `poem-form.tsx` and `sign-in-form.tsx`).
+
+**Accessibility.** `e2e/a11y.spec.ts` runs axe (WCAG 2.2 A/AA) on every screen in light and dark. Add new screens or states there. Error text uses `--destructive`, tuned to ≥4.5:1 on paper and on its own tint in both themes, so check contrast if you change it. ARIA lets a listbox contain only options and groups, so put palette messages outside `CommandList`.
 
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
 

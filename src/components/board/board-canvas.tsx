@@ -422,7 +422,7 @@ export function BoardCanvas({
       moveTo({ k, x: vp.clientWidth / 2 - (card.x + card.w / 2) * k, y: vp.clientHeight / 2 - (card.y + card.h / 2) * k });
     }
     const el = worldRef.current?.querySelector<HTMLElement>(`[data-poem-id="${poem.id}"]`) ?? null;
-    highlight(el);
+    highlight(el?.closest("[data-card]") ?? null);
     // Focus the card (Enter then opens it) once the camera has arrived.
     setTimeout(() => el?.focus({ preventScroll: true }), 380);
   };
@@ -623,22 +623,35 @@ function World({
 
 function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: string; rect: Rect }) {
   const isPrivate = poem.visibility === "private";
+  // Stretched link: only the title is the link (its ::after covers the card,
+  // so the whole card is clickable and is one tab stop). The accessible name
+  // is the visible title (WCAG 2.5.3), and the excerpt stays readable as
+  // plain text for screen readers instead of being hidden behind aria-label.
   return (
-    <Link
-      href={`/p/${authorSlug}/${poem.slug}`}
-      draggable={false}
+    <div
       data-card=""
-      data-poem-id={poem.id}
-      data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
-      aria-label={isPrivate ? `${poem.title} (password protected)` : poem.title}
-      className="absolute flex flex-col overflow-hidden rounded-2xl border bg-card p-4 text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06),0_4px_16px_-8px_oklch(0_0_0/0.12)] transition-[opacity,box-shadow,translate] duration-200 outline-none hover:-translate-y-0.5 hover:shadow-[0_2px_4px_oklch(0_0_0/0.08),0_12px_28px_-12px_oklch(0_0_0/0.25)] focus-visible:ring-3 focus-visible:ring-ring group-data-[lod=overview]/world:opacity-25"
+      className="absolute flex flex-col overflow-hidden rounded-2xl border bg-card p-4 text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06),0_4px_16px_-8px_oklch(0_0_0/0.12)] transition-[opacity,box-shadow,translate] duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_oklch(0_0_0/0.08),0_12px_28px_-12px_oklch(0_0_0/0.25)] has-[a:focus-visible]:ring-3 has-[a:focus-visible]:ring-ring group-data-[lod=overview]/world:opacity-25"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="line-clamp-2 font-serif text-[19px] leading-snug">{poem.title}</h3>
+        <h3 className="min-w-0 font-serif text-[19px] leading-snug">
+          <Link
+            href={`/p/${authorSlug}/${poem.slug}`}
+            draggable={false}
+            data-poem-id={poem.id}
+            data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
+            className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-2xl"
+          >
+            {poem.title}
+            {isPrivate && <span className="sr-only"> (password protected)</span>}
+          </Link>
+        </h3>
         {isPrivate && (
-          <span className="mt-0.5 flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">
-            <LockIcon className="size-3" aria-hidden />
+          <span
+            className="mt-0.5 flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
+            aria-hidden
+          >
+            <LockIcon className="size-3" />
             Private
           </span>
         )}
@@ -659,7 +672,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
           {poem.hasMore && "\n…"}
         </p>
       )}
-    </Link>
+    </div>
   );
 }
 

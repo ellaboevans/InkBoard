@@ -255,8 +255,17 @@ Done:
   - Limits are checked in tiers. A client that is over its own budget never counts against the shared one, so a single attacker can't lock an editor out. It now takes 4+ clients a day. Tested, including a check that the test fails without the tiering.
   - Still possible: an attacker with many IPs can exhaust the backstop, and anyone can use up the 5-requests-per-15-minutes limit on sending codes to one email. Both are bounded and short-lived. A magic link in the email (a long random token, which can't be guessed and so can skip guess limits) would remove the first entirely, and is the follow-up if this becomes a problem.
 
+- **Automated accessibility checks (N7)** (`e2e/a11y.spec.ts`, axe-core, WCAG 2.2 A/AA):
+  - Covers 24 screens and states in both themes: sign-in steps, onboarding, dashboard, poem editor (incl. validation errors and the delete dialog), settings, profile, board, list view, search palette (empty, results, no results), overlay (public, locked, wrong password), and the full poem page (locked, unlocked, not found).
+  - Fixed what it found:
+    1. Error text was below 4.5:1 contrast (4.42:1 on paper, 4.1:1 on its tint, 3.92:1 in the dark theme). The `--destructive` token was darkened in light mode and lightened in dark mode.
+    2. Board cards were links whose `aria-label` hid their visible text (WCAG 2.5.3), so screen readers couldn't read excerpts. Cards are now stretched title links: the title is the link and its name, and the excerpt is plain text.
+    3. The search palette rendered an empty `listbox` before any results (an ARIA error). Status messages now sit outside it, and it's hidden until there are results.
+    4. Found while scanning: after closing one poem's overlay and opening another, the dialog kept the old poem's name, because the overlay used a fixed id and Next keeps the previous overlay mounted but hidden. The poem's title is now the Radix `DialogTitle`, whose id is unique to each dialog.
+  - Note: the dark "night ink" theme is defined and passes these checks, but nothing in the app switches it on yet.
+
 To do:
-- **Accessibility pass (N7):** check the admin forms, the poem overlay and the search palette with a screen reader and an automated checker (e.g. axe). The board itself is done.
+- **Manual screen-reader pass (N7):** automated checks catch only part of what matters. Try VoiceOver or NVDA on sign-in, the poem editor, the board, the overlay and the search palette.
 - **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 
 ## 5. Requirements traceability
@@ -280,7 +289,7 @@ To do:
 | N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
-| N7 Accessibility | 3, 4, 6 | 🟡 board done (links, focus pan, list view); admin, overlay and palette not yet audited |
+| N7 Accessibility | 3, 4, 6 | 🟡 board done (links, focus pan, list view); axe passes on every screen in both themes (E2E); manual screen-reader pass still to do |
 | N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
 | N9 No user enumeration | 1 | ✅ tested |
 

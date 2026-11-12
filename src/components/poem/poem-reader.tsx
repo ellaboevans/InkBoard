@@ -1,6 +1,7 @@
 import { LockOpenIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { DialogTitle } from "@/components/ui/dialog";
 import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
 import { unlockPoemAction } from "./unlock-actions";
@@ -17,11 +18,15 @@ const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "long" });
 
 export async function PoemReader({
   params,
-  headingId,
+  inDialog = false,
 }: {
   params: Promise<{ author: string; poem: string }>;
-  /** Lets a dialog point aria-labelledby at the poem title. */
-  headingId?: string;
+  /**
+   * In the board overlay, the poem title is the dialog's title. Radix gives
+   * it an id unique to this dialog instance, so a previous overlay kept
+   * hidden in <Activity> can't lend the dialog its (stale) name.
+   */
+  inDialog?: boolean;
 }) {
   const { author, poem: slug } = await params;
   const poem = await getReaderPoem(author, slug);
@@ -30,9 +35,7 @@ export async function PoemReader({
   return (
     <article>
       <header className="mb-8 sm:mb-10">
-        <h1 id={headingId} className="font-serif text-3xl leading-tight tracking-tight sm:text-5xl">
-          {poem.title}
-        </h1>
+        <PoemTitle inDialog={inDialog}>{poem.title}</PoemTitle>
         <p className="mt-3 text-muted-foreground">
           by <span className="text-foreground">{poem.penName}</span>
           {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
@@ -50,9 +53,16 @@ export async function PoemReader({
   );
 }
 
-export function PoemReaderSkeleton() {
+function PoemTitle({ inDialog, children }: { inDialog: boolean; children: React.ReactNode }) {
+  const h1 = <h1 className="font-serif text-3xl leading-tight tracking-tight sm:text-5xl">{children}</h1>;
+  return inDialog ? <DialogTitle asChild>{h1}</DialogTitle> : h1;
+}
+
+export function PoemReaderSkeleton({ inDialog = false }: { inDialog?: boolean }) {
   return (
     <div className="grid animate-pulse gap-4" aria-busy>
+      {/* Radix needs a title while the poem loads; replaced by the real one. */}
+      {inDialog && <DialogTitle className="sr-only">Loading poem</DialogTitle>}
       <div className="h-10 w-2/3 rounded-md bg-muted" />
       <div className="h-4 w-40 rounded bg-muted" />
       <div className="mt-6 h-48 rounded-xl bg-muted" />

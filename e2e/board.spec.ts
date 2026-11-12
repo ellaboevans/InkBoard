@@ -44,8 +44,12 @@ test("published poems appear in their author's section; private text never reach
   await page.goto("/");
   const section = page.getByRole("region", { name: `${pen}, 2 poems` });
   await expect(section).toBeAttached();
-  await expect(section.getByRole("link", { name: `Open ${id}` })).toContainText(`first line ${id}`);
-  await expect(section.getByRole("link", { name: `Locked ${id} (password protected)` })).toContainText("Private");
+  // Cards are stretched title links: the link is named by the title, and the
+  // excerpt is plain text in the card around it.
+  const card = (name: string) =>
+    section.locator("[data-card]").filter({ has: page.getByRole("link", { name, exact: true }) });
+  await expect(card(`Open ${id}`)).toContainText(`first line ${id}`);
+  await expect(card(`Locked ${id} (password protected)`)).toContainText("Private");
   await expect(page.getByText(`Draft ${id}`)).toHaveCount(0);
 
   const html = await page.content();
@@ -123,7 +127,8 @@ test("keyboard: zoom keys, and tabbing brings cards into view", async ({ page })
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Tab");
   await expect(card).toBeFocused();
-  await expect(card).toBeInViewport({ ratio: 1 });
+  // The whole card (the title link is stretched over it) is panned into view.
+  await expect(card.locator("xpath=ancestor::div[@data-card]")).toBeInViewport({ ratio: 1 });
 });
 
 test("list view shows the same catalogue", async ({ page }) => {

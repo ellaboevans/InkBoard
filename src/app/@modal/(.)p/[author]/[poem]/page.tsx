@@ -19,8 +19,8 @@ export default function PoemOverlay({ params }: PageProps<"/p/[author]/[poem]">)
         </Suspense>
       }
     >
-      <Suspense fallback={<PoemReaderSkeleton />}>
-        <PoemReader params={params} headingId="poem-overlay-title" />
+      <Suspense fallback={<PoemReaderSkeleton inDialog />}>
+        <PoemReader params={params} inDialog />
       </Suspense>
     </PoemModal>
   );

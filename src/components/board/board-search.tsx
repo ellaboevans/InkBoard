@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -109,25 +108,29 @@ export function BoardSearch({
           placeholder="Search authors and poem titles…"
           aria-describedby="board-search-hint"
         />
-        <CommandList className="max-h-[min(60vh,24rem)]">
-          {trimmed.length < MIN && (
-            <p id="board-search-hint" className="px-4 py-6 text-center text-sm text-muted-foreground">
-              Type at least {MIN} letters. Poem text isn&apos;t searched, only titles and author names.
-            </p>
-          )}
-          {loading && (
-            <p role="status" className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-              <Loader2Icon className="size-4 animate-spin" aria-hidden />
-              Searching…
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="px-4 py-6 text-center text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          {empty && <CommandEmpty>No authors or poems match &ldquo;{trimmed}&rdquo;.</CommandEmpty>}
-
+        {/* Messages sit outside the listbox: ARIA lets a listbox contain only options/groups. */}
+        {trimmed.length < MIN && (
+          <p id="board-search-hint" className="px-4 py-6 text-center text-sm text-muted-foreground">
+            Type at least {MIN} letters. Poem text isn&apos;t searched, only titles and author names.
+          </p>
+        )}
+        {loading && (
+          <p role="status" className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin" aria-hidden />
+            Searching…
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="px-4 py-6 text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        {empty && (
+          <p role="status" className="px-4 py-6 text-center text-sm text-muted-foreground">
+            No authors or poems match &ldquo;{trimmed}&rdquo;.
+          </p>
+        )}
+        <CommandList className="max-h-[min(60vh,24rem)]" hidden={!results || empty ? true : undefined}>
           {results && results.authors.length > 0 && (
             <CommandGroup heading="Authors">
               {results.authors.map((a) => (

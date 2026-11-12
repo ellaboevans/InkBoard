@@ -24,7 +24,9 @@ export type ReaderPoem = {
   penName: string;
   authorSlug: string;
   visibility: "public" | "private";
-  /** Full text of a public poem; null for private ones until unlocked (Phase 4). */
+  /** Full text of a public poem; always null for private ones (see unlock.ts). */
   body: string | null;
+  /** Private poems: true when the author uses one password for all of them. */
+  sharedPassword: boolean;
   publishedAt: string | null;
 };

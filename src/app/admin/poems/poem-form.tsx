@@ -4,6 +4,7 @@ import {
   ArrowLeftIcon,
   EyeIcon,
   EyeOffIcon,
+  KeyRoundIcon,
   Loader2Icon,
   LockIcon,
   Trash2Icon,
@@ -49,9 +50,12 @@ type Props = {
   poem?: PoemFormPoem;
   deleteAction?: () => Promise<void>;
   justCreated?: boolean;
+  /** The author's choice in Settings; "shared" hides the per-poem password. */
+  passwordMode: "per_poem" | "shared";
 };
 
-export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
+export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode }: Props) {
+  const shared = passwordMode === "shared";
   // Toast from the action's result rather than an effect, so it fires exactly
   // once per save (effects re-run under StrictMode and when Next re-shows a
   // route kept alive in <Activity>).
@@ -108,7 +112,9 @@ export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
     const found: PoemErrors = {};
     if (!title.trim()) found.title = "Give your poem a title";
     if (!body.trim()) found.body = "The poem is empty";
-    if (isPrivate && !hasPassword && !password) {
+    if (shared) {
+      // The shared password from Settings covers it.
+    } else if (isPrivate && !hasPassword && !password) {
       found.password = "Private poems need a password readers can use";
     } else if (isPrivate && password && password.length < PASSWORD_MIN) {
       found.password = `Use at least ${PASSWORD_MIN} characters`;
@@ -277,9 +283,11 @@ export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
                   Password protected
                 </Label>
                 <p id="private-help" className="text-sm text-muted-foreground">
-                  {isPrivate
-                    ? "Readers see the title on the board but need the password to read it."
-                    : "Anyone can read this poem."}
+                  {!isPrivate
+                    ? "Anyone can read this poem."
+                    : shared
+                      ? "Readers see the title on the board and unlock it with your shared password."
+                      : "Readers see the title on the board but need the password to read it."}
                 </p>
               </div>
               <Switch
@@ -290,7 +298,18 @@ export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
               />
             </div>
 
-            {isPrivate && (
+            {isPrivate && shared && (
+              <p className="flex items-start gap-1.5 rounded-lg bg-secondary/60 p-3 text-xs text-secondary-foreground">
+                <KeyRoundIcon className="mt-px size-3.5 shrink-0" aria-hidden />
+                <span>
+                  Uses your shared password for all private poems.{" "}
+                  <Link href="/admin/settings" className="underline underline-offset-2">
+                    Change in Settings
+                  </Link>
+                </span>
+              </p>
+            )}
+            {isPrivate && !shared && (
               <div className="grid gap-1.5">
                 <Label htmlFor="password">
                   {hasPassword ? "New password" : "Password"}
@@ -329,7 +348,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated }: Props) {
                 </p>
               </div>
             )}
-            {!isPrivate && saved.isPrivate && (
+            {!isPrivate && saved.isPrivate && !shared && (
               <p className="text-xs text-muted-foreground">
                 Saving will remove the current password.
               </p>

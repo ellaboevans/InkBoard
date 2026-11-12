@@ -1,9 +1,13 @@
 /**
  * Demo content for `pnpm db:seed`. All authors are fictional and all poems
- * were written for this project. Private poems use SEED_PASSWORD.
+ * were written for this project. Private poems use SEED_PASSWORD (each poem
+ * has its own copy), except authors with `sharedPassword`, whose private
+ * poems all open with SEED_SHARED_PASSWORD.
  */
 
 export const SEED_PASSWORD = "moonlight";
+/** Authors with `sharedPassword: true` use one password for all private poems. */
+export const SEED_SHARED_PASSWORD = "lanternlight";
 
 export type SeedPoem = {
   title: string;
@@ -14,7 +18,13 @@ export type SeedPoem = {
   daysAgo?: number;
 };
 
-export type SeedAuthor = { penName: string; bio?: string; poems: SeedPoem[] };
+export type SeedAuthor = {
+  penName: string;
+  bio?: string;
+  /** One password (SEED_SHARED_PASSWORD) for all of this author's private poems. */
+  sharedPassword?: boolean;
+  poems: SeedPoem[];
+};
 
 export const SEED_AUTHORS: SeedAuthor[] = [
   {
@@ -270,6 +280,7 @@ saying goodbye to everyone.`,
   {
     penName: "Amara Nwosu-Bell",
     bio: "Letters, mostly unsent.",
+    sharedPassword: true,
     poems: [
       {
         title: "Letter Folded Into Thirds",

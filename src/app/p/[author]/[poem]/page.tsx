@@ -1,10 +1,13 @@
-import { ArrowLeftIcon, LockIcon } from "lucide-react";
+import { ArrowLeftIcon, LockOpenIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { getReaderPoem } from "@/server/board-cache";
+import { getUnlockedBody } from "@/server/unlock-cookie";
+import { unlockPoemAction } from "./actions";
+import { UnlockForm } from "./unlock-form";
 
 type Props = PageProps<"/p/[author]/[poem]">;
 
@@ -33,6 +36,42 @@ export default function PoemPage(props: Props) {
   );
 }
 
+function PoemBody({ body }: { body: string }) {
+  return <div className="font-serif text-xl leading-relaxed whitespace-pre-wrap">{body}</div>;
+}
+
+async function PrivatePoem({
+  author,
+  slug,
+  penName,
+  sharedPassword,
+}: {
+  author: string;
+  slug: string;
+  penName: string;
+  sharedPassword: boolean;
+}) {
+  const body = await getUnlockedBody(author, slug);
+  if (body !== null) {
+    return (
+      <>
+        <p className="mb-6 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <LockOpenIcon className="size-3.5" aria-hidden />
+          Unlocked on this device
+        </p>
+        <PoemBody body={body} />
+      </>
+    );
+  }
+  return (
+    <UnlockForm
+      action={unlockPoemAction.bind(null, author, slug)}
+      penName={penName}
+      sharedPassword={sharedPassword}
+    />
+  );
+}
+
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "long" });
 
 async function Poem({ params }: Props) {
@@ -49,16 +88,13 @@ async function Poem({ params }: Props) {
           {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
         </p>
       </header>
-      {poem.body !== null ? (
-        <div className="font-serif text-xl leading-relaxed whitespace-pre-wrap">{poem.body}</div>
+      {poem.visibility === "public" ? (
+        <PoemBody body={poem.body ?? ""} />
       ) : (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed bg-card px-6 py-14 text-center">
-          <LockIcon className="size-7 text-muted-foreground" aria-hidden />
-          <p className="font-serif text-xl">This poem is password protected</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Unlocking with a password arrives in the next release.
-          </p>
-        </div>
+        // Per-reader: reads the unlock cookie, so it streams in separately.
+        <Suspense fallback={<div className="h-48 animate-pulse rounded-2xl bg-muted" />}>
+          <PrivatePoem author={author} slug={slug} penName={poem.penName} sharedPassword={poem.sharedPassword} />
+        </Suspense>
       )}
     </article>
   );

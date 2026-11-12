@@ -90,6 +90,7 @@ export async function loadReaderPoem(
       authorSlug: editors.slug,
       visibility: poems.visibility,
       body: sql<string | null>`CASE WHEN ${isPublic} THEN ${poems.body} END`,
+      sharedPassword: sql<boolean>`${editors.passwordMode} = 'shared'`,
       publishedAt: poems.publishedAt,
     })
     .from(poems)

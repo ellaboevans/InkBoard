@@ -1,10 +1,10 @@
 import "server-only";
-import { and, desc, eq, isNotNull, like, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { poems } from "@/db/schema";
+import { editors, poems } from "@/db/schema";
 import { BODY_MAX, PASSWORD_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
-import { firstFreeSlug, isUniqueViolation, slugify } from "@/lib/slug";
+import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/lib/slug";
 import { hashPassword } from "./passwords";
 
 /*
@@ -73,6 +73,23 @@ function parse(raw: unknown) {
 }
 
 const PRIVATE_NEEDS_PASSWORD = "Private poems need a password readers can use";
+const SETTINGS_CHANGED =
+  "Your password settings changed while saving. Please review and save again.";
+
+/**
+ * Run a write; if the DB's password invariant rejects it (an editor switched
+ * password mode in another tab mid-save), report it instead of crashing.
+ */
+async function guardPasswordInvariant<T>(
+  write: () => Promise<T>,
+): Promise<T | { ok: false; errors: PoemErrors }> {
+  try {
+    return await write();
+  } catch (err) {
+    if (isCheckViolation(err)) return { ok: false, errors: { form: SETTINGS_CHANGED } };
+    throw err;
+  }
+}
 
 /** Columns that are safe to send to the editor's browser (no hash). */
 const summaryColumns = {
@@ -124,10 +141,12 @@ export async function getEditorPoem(
   return row ?? null;
 }
 
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
 /** First free `slug`, `slug-2`, … among this editor's other poems. */
-async function uniquePoemSlug(editorId: string, title: string, exceptId?: string) {
+async function uniquePoemSlug(tx: Tx, editorId: string, title: string, exceptId?: string) {
   const base = slugify(title, "untitled");
-  const taken = await getDb()
+  const taken = await tx
     .select({ slug: poems.slug })
     .from(poems)
     .where(
@@ -152,35 +171,59 @@ async function withSlugRetry<T>(write: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Lock order is always editor row -> poem rows (mode switches in
+ * password-settings.ts do the same), so poem saves and mode switches can't
+ * deadlock, and the mode read here can't change before this write commits.
+ * NO KEY UPDATE also queues one editor's own saves behind each other, which
+ * makes slug allocation race-free; other editors are unaffected, and foreign
+ * key checks (KEY SHARE) don't conflict with it.
+ */
+async function lockPasswordMode(tx: Tx, editorId: string) {
+  const [row] = await tx
+    .select({ mode: editors.passwordMode })
+    .from(editors)
+    .where(eq(editors.id, editorId))
+    .for("no key update");
+  return row?.mode ?? "per_poem";
+}
+
 export async function createPoem(
   editorId: string,
   raw: unknown,
 ): Promise<PoemMutationResult> {
   const { data, errors } = parse(raw);
   if (errors) return { ok: false, errors };
-  if (data.visibility === "private" && !data.password) {
-    return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
-  }
+  // Hash outside the transaction (it's slow); it's discarded in shared mode.
+  const typedHash =
+    data.visibility === "private" && data.password ? await hashPassword(data.password) : null;
 
-  const passwordHash =
-    data.visibility === "private" ? await hashPassword(data.password!) : null;
-
-  const [poem] = await withSlugRetry(async () =>
-    getDb()
-      .insert(poems)
-      .values({
-        editorId,
-        title: data.title,
-        slug: await uniquePoemSlug(editorId, data.title),
-        body: data.body,
-        visibility: data.visibility,
-        passwordHash,
-        status: data.status,
-        publishedAt: data.status === "published" ? sql`now()` : null,
-      })
-      .returning({ id: poems.id, slug: poems.slug, status: poems.status }),
+  return guardPasswordInvariant(() =>
+    withSlugRetry(() =>
+      getDb().transaction(async (tx): Promise<PoemMutationResult> => {
+        // Shared mode: the author's one password protects the poem; any
+        // password typed into the poem form is ignored.
+        const shared = (await lockPasswordMode(tx, editorId)) === "shared";
+        if (data.visibility === "private" && !shared && !typedHash) {
+          return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
+        }
+        const [poem] = await tx
+          .insert(poems)
+          .values({
+            editorId,
+            title: data.title,
+            slug: await uniquePoemSlug(tx, editorId, data.title),
+            body: data.body,
+            visibility: data.visibility,
+            passwordHash: data.visibility === "private" && !shared ? typedHash : null,
+            status: data.status,
+            publishedAt: data.status === "published" ? sql`now()` : null,
+          })
+          .returning({ id: poems.id, slug: poems.slug, status: poems.status });
+        return { ok: true, poem };
+      }),
+    ),
   );
-  return { ok: true, poem };
 }
 
 export async function updatePoem(
@@ -192,81 +235,62 @@ export async function updatePoem(
 
   const { data, errors } = parse(raw);
   if (errors) return { ok: false, errors };
+  const typedHash =
+    data.visibility === "private" && data.password ? await hashPassword(data.password) : null;
 
-  const [current] = await getDb()
-    .select({ title: poems.title, publishedAt: poems.publishedAt })
-    .from(poems)
-    .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
-    .limit(1);
-  if (!current) return { ok: false, notFound: true };
+  return guardPasswordInvariant(() =>
+    withSlugRetry(() =>
+      getDb().transaction(async (tx) => {
+        const shared = (await lockPasswordMode(tx, editorId)) === "shared";
+        const [current] = await tx
+          .select({ title: poems.title, publishedAt: poems.publishedAt, passwordHash: poems.passwordHash })
+          .from(poems)
+          .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
+          .for("update");
+        if (!current) return { ok: false as const, notFound: true as const };
 
-  // Password rules are applied *inside* the UPDATE, from the row's state at
-  // write time, never from the read above, so concurrent saves (two tabs)
-  // can't leave a public poem with a stale hash or a private one without.
-  //   - public: drop any password; bump the version if there was one.
-  //   - private + new password: replace it and bump the version, which
-  //     revokes every reader's existing unlock (N6).
-  //   - private + blank: keep the current password, but only if one exists.
-  let password: { passwordHash: string | null; passwordVersion: SQL } | undefined;
-  let requireExistingPassword = false;
-  if (data.visibility === "public") {
-    password = {
-      passwordHash: null,
-      passwordVersion: sql`${poems.passwordVersion} + (${poems.passwordHash} IS NOT NULL)::int`,
-    };
-  } else if (data.password) {
-    password = {
-      passwordHash: await hashPassword(data.password),
-      passwordVersion: sql`${poems.passwordVersion} + 1`,
-    };
-  } else {
-    requireExistingPassword = true;
-  }
+        // Password rules (the row is locked, so `current` is authoritative):
+        //   - shared mode, private: the poem has no password of its own.
+        //   - public: drop any password; bump the version if there was one.
+        //   - private + new password: replace it and bump the version, which
+        //     revokes every reader's existing unlock (N6).
+        //   - private + blank: keep the current password, if there is one.
+        let password: { passwordHash: string | null; passwordVersion?: SQL } | undefined;
+        if (data.visibility === "private" && shared) {
+          password = { passwordHash: null };
+        } else if (data.visibility === "public") {
+          password = {
+            passwordHash: null,
+            passwordVersion: sql`${poems.passwordVersion} + (${poems.passwordHash} IS NOT NULL)::int`,
+          };
+        } else if (typedHash) {
+          password = { passwordHash: typedHash, passwordVersion: sql`${poems.passwordVersion} + 1` };
+        } else if (!current.passwordHash) {
+          return { ok: false as const, errors: { password: PRIVATE_NEEDS_PASSWORD } };
+        }
 
-  // Keep URLs stable once a poem has been published; drafts follow their title.
-  // (Slug uniqueness is enforced by the DB index; a race here is harmless.)
-  const retitledDraft = !current.publishedAt && data.title !== current.title;
+        // Keep URLs stable once a poem has been published; drafts follow their title.
+        const retitledDraft = !current.publishedAt && data.title !== current.title;
 
-  const [poem] = await withSlugRetry(async () =>
-    getDb()
-      .update(poems)
-      .set({
-        title: data.title,
-        body: data.body,
-        visibility: data.visibility,
-        status: data.status,
-        ...(retitledDraft && { slug: await uniquePoemSlug(editorId, data.title, poemId) }),
-        // First publish only, decided at write time.
-        ...(data.status === "published" && {
-          publishedAt: sql`COALESCE(${poems.publishedAt}, now())`,
-        }),
-        ...password,
-      })
-      .where(
-        and(
-          eq(poems.id, poemId),
-          eq(poems.editorId, editorId),
-          requireExistingPassword ? isNotNull(poems.passwordHash) : undefined,
-        ),
-      )
-      .returning({ id: poems.id, slug: poems.slug, status: poems.status }),
+        const [poem] = await tx
+          .update(poems)
+          .set({
+            title: data.title,
+            body: data.body,
+            visibility: data.visibility,
+            status: data.status,
+            ...(retitledDraft && { slug: await uniquePoemSlug(tx, editorId, data.title, poemId) }),
+            ...(data.status === "published" && {
+              publishedAt: sql`COALESCE(${poems.publishedAt}, now())`,
+            }),
+            ...password,
+          })
+          .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
+          .returning({ id: poems.id, slug: poems.slug, status: poems.status });
+        return { ok: true as const, poem };
+      }),
+    ),
   );
-  if (poem) return { ok: true, poem };
-
-  // Nothing updated: either the poem is gone, or it has no password to keep.
-  if (requireExistingPassword && (await poemExists(editorId, poemId))) {
-    return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
-  }
-  return { ok: false, notFound: true };
-}
-
-async function poemExists(editorId: string, poemId: string): Promise<boolean> {
-  const rows = await getDb()
-    .select({ id: poems.id })
-    .from(poems)
-    .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
-    .limit(1);
-  return rows.length > 0;
 }
 
 export async function deletePoem(editorId: string, poemId: string): Promise<boolean> {

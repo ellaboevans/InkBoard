@@ -17,7 +17,7 @@ import pg from "pg";
 import { editors, poems } from "@/db/schema";
 import { firstFreeSlug, slugify } from "@/lib/slug";
 import { hashPassword } from "@/server/passwords";
-import { SEED_AUTHORS, SEED_PASSWORD } from "./seed-data";
+import { SEED_AUTHORS, SEED_PASSWORD, SEED_SHARED_PASSWORD } from "./seed-data";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
@@ -47,6 +47,7 @@ async function main() {
 
       const taken = (await tx.select({ slug: editors.slug }).from(editors)).map((r) => r.slug);
       const passwordHash = await hashPassword(SEED_PASSWORD);
+      const sharedHash = await hashPassword(SEED_SHARED_PASSWORD);
       let published = 0;
       let privateCount = 0;
       let drafts = 0;
@@ -61,6 +62,10 @@ async function main() {
             penName: author.penName,
             slug,
             bio: author.bio ?? null,
+            ...(author.sharedPassword && {
+              passwordMode: "shared" as const,
+              sharedPasswordHash: sharedHash,
+            }),
           })
           .returning({ id: editors.id });
 
@@ -79,7 +84,8 @@ async function main() {
               slug: poemSlug,
               body: p.body,
               visibility: p.private ? ("private" as const) : ("public" as const),
-              passwordHash: p.private ? passwordHash : null,
+              // Shared-mode authors' poems have no password of their own.
+              passwordHash: p.private && !author.sharedPassword ? passwordHash : null,
               status: p.draft ? ("draft" as const) : ("published" as const),
               publishedAt: p.draft ? null : at,
               createdAt: at,
@@ -93,7 +99,11 @@ async function main() {
         `Seeded ${SEED_AUTHORS.length} authors: ${published} published poems ` +
           `(${privateCount} private), ${drafts} drafts (not on the board).`,
       );
-      console.log(`Password for every private demo poem: "${SEED_PASSWORD}"`);
+      const sharedNames = SEED_AUTHORS.filter((a) => a.sharedPassword).map((a) => a.penName);
+      console.log(`Private demo poems: password "${SEED_PASSWORD}" (one per poem).`);
+      if (sharedNames.length) {
+        console.log(`  ${sharedNames.join(", ")}: one shared password "${SEED_SHARED_PASSWORD}" for all.`);
+      }
     });
   } finally {
     await pool.end();

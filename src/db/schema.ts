@@ -21,6 +21,13 @@ const timestamps = {
     .$onUpdate(() => new Date()),
 };
 
+/**
+ * How an editor's private poems are protected:
+ * - per_poem: each private poem has its own password (poems.password_hash).
+ * - shared:   one password (editors.shared_password_hash) opens all of them.
+ */
+export const passwordMode = pgEnum("password_mode", ["per_poem", "shared"]);
+
 /** People who write and manage poems. Created on first verified OTP. */
 export const editors = pgTable(
   "editors",
@@ -33,12 +40,21 @@ export const editors = pgTable(
     /** URL-safe handle derived from pen name, used in /p/[author]/[poem]. */
     slug: text("slug"),
     bio: text("bio"),
+    passwordMode: passwordMode("password_mode").notNull().default("per_poem"),
+    /** scrypt hash of the shared password; required when password_mode = 'shared'. */
+    sharedPasswordHash: text("shared_password_hash"),
+    /** Bumped whenever the shared password (or mode) changes, revoking reader unlocks. */
+    sharedPasswordVersion: integer("shared_password_version").notNull().default(0),
     lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
     uniqueIndex("editors_email_key").on(t.email),
     uniqueIndex("editors_slug_key").on(t.slug),
+    check(
+      "editors_shared_mode_requires_password",
+      sql`${t.passwordMode} = 'per_poem' OR ${t.sharedPasswordHash} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -97,7 +113,11 @@ export const poems = pgTable(
     /** Plain text; whitespace and line breaks are significant. */
     body: text("body").notNull(),
     visibility: poemVisibility("visibility").notNull().default("public"),
-    /** scrypt hash; required when visibility = 'private'. */
+    /**
+     * scrypt hash. Required for private poems whose author is in per_poem mode;
+     * null (unused) in shared mode. Enforced by triggers, see
+     * drizzle/0002_password_mode_triggers.sql (a CHECK can't see the editor).
+     */
     passwordHash: text("password_hash"),
     /** Bumped on every password change so outstanding unlock cookies stop working. */
     passwordVersion: integer("password_version").notNull().default(0),
@@ -109,10 +129,6 @@ export const poems = pgTable(
     uniqueIndex("poems_editor_slug_key").on(t.editorId, t.slug),
     index("poems_editor_idx").on(t.editorId),
     index("poems_status_published_idx").on(t.status, t.publishedAt),
-    check(
-      "poems_private_requires_password",
-      sql`${t.visibility} = 'public' OR ${t.passwordHash} IS NOT NULL`,
-    ),
   ],
 );
 

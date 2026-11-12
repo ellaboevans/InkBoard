@@ -8,6 +8,20 @@
       "when": 1794429847186,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794445791010,
+      "tag": "0001_password_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794445791590,
+      "tag": "0002_password_mode_triggers",
+      "breakpoints": true
     }
   ]
 }

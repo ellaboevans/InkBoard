@@ -56,6 +56,14 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Limits: shared with the client in `src/lib/poem-limits.ts`.
 - Server Actions (`src/app/admin/poems/actions.ts`) re-authorize, then call `updateTag(BOARD_TAG)` / `updateTag(poemTag(id))` from `src/server/cache-tags.ts`. Any new mutation that changes what readers see must do the same.
 
+**Private-poem passwords** have two modes per editor (`editors.password_mode`): `per_poem` (`poems.password_hash`) or `shared` (`editors.shared_password_hash`, with poem hashes null).
+- Switching is handled in `src/server/password-settings.ts`, the reader side in `src/server/unlock.ts`.
+- The rule "a private poem is always readable with some password" is enforced in the DB by triggers (`drizzle/0002_password_mode_triggers.sql`), which raise `check_violation` (23514); `guardPasswordInvariant` in `poems.ts` turns that into a form error.
+- **Lock order:** always the editor row first, then poem rows. Poem saves take `FOR NO KEY UPDATE` on the editor, which also makes an editor's own slug allocation race-free. Keep this order in any new write that touches both, or saves and mode switches will deadlock.
+- Reader unlock grants are scoped `p:<poemId>:<password_version>` or `a:<editorId>:<shared_password_version>`. Any change that should lock readers out must bump the matching version.
+- Reading the unlock cookie checks expiry against the clock, so it calls `connection()`.
+- Wrong-guess rate-limit keys: `unlock:<p|a>:<id>:ip:<ip>` and `unlock:ip:<ip>`.
+
 **Board (reader side).** `src/server/board.ts` holds the uncached, tested loaders; `board-cache.ts` wraps them in `"use cache"` + `cacheTag(BOARD_TAG)`. Keep that split, because `next/cache` functions can't run under Vitest.
 - Never select `poems.body` for readers without `CASE WHEN visibility = 'public'` (N1). The tests check that the JSON contains no private text.
 - `/` is prerendered at build time, so `pnpm build` needs a reachable `DATABASE_URL`. Data written outside the app (the seed) shows up after the hourly revalidation or a server restart.
@@ -72,11 +80,12 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Next keeps recently visited routes mounted but hidden (`<Activity>`, `display: none`). So anything that must not outlive the session (sign-out) has to do a full page load, not a router navigation: see `src/app/admin/sign-out-button.tsx`.
 - A form's first submit button is what Enter triggers. Multi-button forms put a hidden "keep current status" button first (`poem-form.tsx`).
 - In E2E tests, use `getByRole` (it skips hidden Activity routes). For password inputs, which have no role, use `getByLabel(…).filter({ visible: true })`. Plain `getByLabel`/`getByPlaceholder` can match a hidden copy of the page and fail in strict mode.
+- Don't start function names with `use` unless they're hooks: the hooks lint rule flags them (hence `switchToPerPoemPasswords`).
 - Lint forbids `setState` inside effects. Adjust state during render instead (the `seenState !== state` pattern in `poem-form.tsx` and `sign-in-form.tsx`).
 
 **Rate limiting** (`src/server/rate-limit.ts`) is a single atomic Postgres upsert per call into `rate_limits` (fixed window). Keys look like `otp:req:email:<sha256>`, `otp:cooldown:<sha256>`, `otp:req:ip:<ip>`, `otp:verify:email:{h,d}:<sha256>`. About 1% of calls also prune rows older than 2 days. Tests clear rows by key prefix to skip cooldowns.
 
-**Database.** Drizzle schema in `src/db/schema.ts`, SQL migrations in `drizzle/`. Always generate migrations, never hand-edit applied ones. `getDb()` (`src/db/index.ts`) picks `@neondatabase/serverless` (WebSocket pool, supports transactions) when the `DATABASE_URL` host is `*.neon.tech`, and `pg` otherwise. Both are typed as a generic `PgDatabase`, so raw `db.execute()` results must be cast to `{ rows: … }`. `poems` has a CHECK that private poems have a `password_hash`. `password_version` exists so that unlock cookies can be revoked when the password changes.
+**Database.** Drizzle schema in `src/db/schema.ts`, SQL migrations in `drizzle/`. Always generate migrations, never hand-edit applied ones. `getDb()` (`src/db/index.ts`) picks `@neondatabase/serverless` (WebSocket pool, supports transactions) when the `DATABASE_URL` host is `*.neon.tech`, and `pg` otherwise. Both are typed as a generic `PgDatabase`, so raw `db.execute()` results must be cast to `{ rows: … }`. Private poems must be readable with some password: see the password-mode triggers above. `password_version` exists so that unlock cookies can be revoked when the password changes.
 
 **Env** is validated lazily with zod via `env()` in `src/env.ts`, so the build doesn't need secrets. `resetEnvCache()` lets tests change env. Without `RESEND_API_KEY`, `sendOtpEmail` logs codes to the server console in development (and is a hard error in production). If `E2E_OTP_OUTBOX` is set and the app isn't in production, it also appends codes to that file, which is how Playwright reads them.
 

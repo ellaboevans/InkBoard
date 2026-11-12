@@ -34,6 +34,7 @@ account; every later sign-in sends a fresh code.
 | R8  | Visitors can only *view*: open a poem to read it; private poems prompt for the password first. |
 | R9  | Board groups poems by author into labelled sections (catalogue layout). |
 | R10 | Full-text search over author names (section labels) and poem titles. |
+| R11 | Each editor chooses whether their private poems each have their own password or all share one password, and sets it accordingly. |
 
 ### Non-functional (derived — needed to meet the brief safely)
 
@@ -167,10 +168,24 @@ auth or private content.
 - **Accept:** board renders N authors × M poems smoothly; tab order reaches every card; private card HTML contains no body text. All three are covered by E2E tests.
 - **Deferred:** opening a poem as a modal over the board (an intercepted route) moves to Phase 4, together with the unlock flow.
 
-### Phase 4: Reading view and private unlock (R3, R8, N1, N3, N6)
-- `/p/[author]/[poem]` reading page; opened from the board as an intercepted modal route, also directly linkable.
-- Password gate → Server Action → signed unlock cookie → full text. Rate-limited.
-- **Accept:** wrong password shows an error and never reveals the body; correct password reveals it; changing the password in admin re-locks it for readers.
+### Phase 4: Reading view and private unlock (R3, R8, N1, N3, N6, R11) 🟡
+Done:
+- **Password mode, chosen by each editor (R11)** at `/admin/settings`:
+  - **A different password for each poem** (the default): set on each private poem in the editor.
+  - **One password for all my private poems:** set once in Settings; the poem editor then hides the password field.
+  - *Per poem → shared:* the editor must enter the shared password. Poem-level passwords are cleared and stop working.
+  - *Shared → per poem:* every private poem starts with the shared password as its own, so none is left unprotected. The editor can then change them one by one.
+  - **Database guarantee:** a private poem can never be unreadable. Either it has its own password (per-poem mode) or its author has a shared one. A CHECK on `editors` plus two triggers enforce this (`drizzle/0002_password_mode_triggers.sql`).
+  - **Concurrency:** poem saves and mode switches lock the editor row first, so they can't deadlock or race. This is tested with concurrent saves and switches.
+- **Reader unlock** (`src/server/unlock.ts`):
+  - The password form on `/p/[author]/[poem]` calls a Server Action, which sets an HMAC-signed `httpOnly` cookie of grants lasting 12 hours.
+  - A grant covers one poem in per-poem mode, or all of the author's private poems in shared mode, including ones added later.
+  - Grants carry the password version, so changing a password, changing the shared password, or switching modes locks every reader out.
+- **Wrong-guess limits:** 10 per IP per poem (or per author in shared mode) per 15 minutes, and 60 per IP per hour overall.
+- **Accept:** wrong password shows an error and never reveals the body; correct password reveals it; changing the password in admin re-locks it for readers. All covered by unit and E2E tests, for both modes.
+
+Still to do:
+- Opening a poem as a modal over the board (an intercepted route), still directly linkable.
 
 ### Phase 5: Full-text search (R10)
 - Migration: generated `tsvector` columns on `editors.pen_name` and `poems.title`, GIN + trigram indexes.
@@ -188,20 +203,21 @@ auth or private content.
 | --- | ----- | ------ |
 | R1 Canvas board | 3 | ✅ pan/zoom/pinch/keyboard, minimap, list view |
 | R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
-| R3 Public/private + password | 2, 4 | 🟡 editor side done; reader unlock in Phase 4 |
+| R3 Public/private + password | 2, 4 | ✅ |
 | R4 Admin dashboard | 1 (shell), 2 | ✅ |
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
 | R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth, admin and board done |
 | R7 Email OTP, passwordless | 1 | ✅ |
-| R8 Visitor read/unlock | 4 | 🟡 public reading page done; unlock in Phase 4 |
+| R8 Visitor read/unlock | 4 | ✅ (board overlay still to do) |
 | R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ⏳ |
-| N1 Private body never leaked | 3, 4, 5 | 🟡 board + reading page tested (unit + E2E); unlock and search pending |
+| R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
+| N1 Private body never leaked | 3, 4, 5 | 🟡 board, reading page and unlock tested; search pending |
 | N2 OTP rules | 1 | ✅ tested |
-| N3 Rate limits | 1, 4 | 🟡 OTP request/verify (per email, IP, global) done; unlock pending |
+| N3 Rate limits | 1, 4 | ✅ OTP and unlock |
 | N4 Sessions | 1 | ✅ tested |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
-| N6 Poem password hashing/revocation | 2, 4 | 🟡 scrypt + version bump done; unlock cookies in Phase 4 |
+| N6 Poem password hashing/revocation | 2, 4 | ✅ |
 | N7 Accessibility | 3, 4 | 🟡 board done (links, focus pan, list view) |
 | N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
 | N9 No user enumeration | 1 | ✅ tested |
@@ -211,6 +227,7 @@ auth or private content.
 Decided:
 - **Who may become an editor?** Anyone who verifies their email. `EDITOR_ALLOWLIST` stays empty by default and remains available if you ever want to restrict sign-ups.
 - **Do private poems show their title on the board?** Yes: title, author and a lock badge. The text stays hidden until the reader enters the password.
+- **Password per poem, or one for all?** The editor decides, in Settings (R11). The default is a password per poem.
 
 Open (current assumptions in brackets):
 

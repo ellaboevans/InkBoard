@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireOnboardedEditor } from "@/server/auth/dal";
+import { getPasswordMode } from "@/server/password-settings";
 import { getEditorPoem } from "@/server/poems";
 import { deletePoemAction, updatePoemAction } from "../actions";
 import { PoemForm } from "../poem-form";
@@ -24,6 +25,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
   const poem = await getEditorPoem(editor.id, id);
   if (!poem) notFound();
   const { created } = await searchParams;
+  const passwordMode = await getPasswordMode(editor.id);
 
   return (
     <PoemForm
@@ -32,6 +34,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
       action={updatePoemAction.bind(null, poem.id)}
       deleteAction={deletePoemAction.bind(null, poem.id)}
       justCreated={created === "1"}
+      passwordMode={passwordMode}
       poem={{
         id: poem.id,
         title: poem.title,

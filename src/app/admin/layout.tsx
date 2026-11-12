@@ -1,6 +1,7 @@
-import { FeatherIcon } from "lucide-react";
+import { FeatherIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
 import { getCurrentEditor } from "@/server/auth/dal";
 import { SignOutButton } from "./sign-out-button";
 
@@ -34,6 +35,14 @@ async function EditorMenu() {
       <span className="hidden text-muted-foreground sm:inline">
         {editor.penName ?? editor.email}
       </span>
+      {editor.penName && (
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/admin/settings">
+            <SettingsIcon />
+            Settings
+          </Link>
+        </Button>
+      )}
       <SignOutButton />
     </div>
   );

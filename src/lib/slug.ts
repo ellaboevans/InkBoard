@@ -26,3 +26,9 @@ export function isUniqueViolation(err: unknown): boolean {
   const e = err as { code?: string; cause?: { code?: string } } | null;
   return e?.code === "23505" || e?.cause?.code === "23505";
 }
+
+/** Postgres check_violation (CHECK constraints and our password triggers). */
+export function isCheckViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23514" || e?.cause?.code === "23514";
+}

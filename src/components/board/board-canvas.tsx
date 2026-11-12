@@ -627,6 +627,8 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
   // so the whole card is clickable and is one tab stop). The accessible name
   // is the visible title (WCAG 2.5.3), and the excerpt stays readable as
   // plain text for screen readers instead of being hidden behind aria-label.
+  // The ::after needs z-10: the excerpt's mask and the redacted lines' opacity
+  // create stacking contexts that would otherwise paint over it and swallow clicks.
   return (
     <div
       data-card=""
@@ -640,7 +642,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
             draggable={false}
             data-poem-id={poem.id}
             data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
-            className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-2xl"
+            className="line-clamp-2 outline-none after:absolute after:inset-0 after:z-10 after:rounded-2xl"
           >
             {poem.title}
             {isPrivate && <span className="sr-only"> (password protected)</span>}

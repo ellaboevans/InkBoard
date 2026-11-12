@@ -211,3 +211,24 @@ test("poems open in an overlay over the board; Esc returns to the same spot", as
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("clicking anywhere on a card opens the poem, not just the title", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `whole-${id}@example.com`, `Whole Card Poet ${id}`);
+  await publish(page, `Whole ${id}`, "line one\nline two\nline three");
+  await publish(page, `Whole Locked ${id}`, "hidden", "whole-pass");
+  await openBoard(page);
+
+  for (const [name, title] of [[`Whole ${id}`, `Whole ${id}`], [`Whole Locked ${id} (password protected)`, `Whole Locked ${id}`]]) {
+    const card = page.locator("[data-card]").filter({ has: page.getByRole("link", { name, exact: true }) });
+    await card.scrollIntoViewIfNeeded();
+    // Middle and lower part of the card: the excerpt / redacted lines, away from the title.
+    for (const position of [{ x: 0.5, y: 0.55 }, { x: 0.5, y: 0.85 }]) {
+      const box = (await card.boundingBox())!;
+      await page.mouse.click(box.x + box.width * position.x, box.y + box.height * position.y);
+      await expect(page.getByRole("dialog", { name: title })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+    }
+  }
+});

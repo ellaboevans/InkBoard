@@ -1,4 +1,4 @@
-import { FeatherIcon, SettingsIcon } from "lucide-react";
+import { FeatherIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
@@ -36,12 +36,20 @@ async function EditorMenu() {
         {editor.penName ?? editor.email}
       </span>
       {editor.penName && (
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/admin/settings">
-            <SettingsIcon />
-            Settings
-          </Link>
-        </Button>
+        <>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/profile">
+              <UserRoundIcon />
+              Profile
+            </Link>
+          </Button>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/settings">
+              <SettingsIcon />
+              Settings
+            </Link>
+          </Button>
+        </>
       )}
       <SignOutButton />
     </div>

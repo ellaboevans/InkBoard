@@ -8,7 +8,7 @@ import { clientIpFromForwardedFor } from "./ip";
 import {
   createSession,
   revokeSessionToken,
-  validateSessionToken,
+  validateSession,
   type SessionEditor,
 } from "./sessions";
 
@@ -17,13 +17,32 @@ import {
  * Every Server Component, Server Action and Route Handler that needs auth
  * must go through here. `proxy.ts` only does an optimistic cookie check.
  */
-export const getCurrentEditor = cache(
-  async (): Promise<SessionEditor | null> => {
+const getCurrentSession = cache(
+  async (): Promise<{ editor: SessionEditor; sessionId: string } | null> => {
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (!token) return null;
-    return validateSessionToken(token);
+    return validateSession(token);
   },
 );
+
+export async function getCurrentEditor(): Promise<SessionEditor | null> {
+  return (await getCurrentSession())?.editor ?? null;
+}
+
+/**
+ * The onboarded editor plus the id of the session making this request, for
+ * the profile page's device list ("this device") and "sign out other devices".
+ * The session id is not a secret (the cookie token is); it's safe to render.
+ */
+export async function requireOnboardedSession(): Promise<{
+  editor: SessionEditor & { penName: string; slug: string };
+  sessionId: string;
+}> {
+  const editor = await requireOnboardedEditor();
+  const session = await getCurrentSession();
+  // requireOnboardedEditor already redirected if there was no session.
+  return { editor, sessionId: session!.sessionId };
+}
 
 /** Use in admin pages/actions. Redirects to sign-in when there's no session. */
 export async function requireEditor(): Promise<SessionEditor> {

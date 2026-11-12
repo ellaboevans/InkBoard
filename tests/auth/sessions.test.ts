@@ -5,8 +5,12 @@ import { editors, sessions } from "@/db/schema";
 import { resetEnvCache } from "@/env";
 import {
   createSession,
+  listSessions,
   revokeAllSessions,
+  revokeOtherSessions,
+  revokeSession,
   revokeSessionToken,
+  validateSession,
   validateSessionToken,
 } from "@/server/auth/sessions";
 
@@ -94,5 +98,68 @@ describe("allowlist changes", () => {
     process.env.EDITOR_ALLOWLIST = "@poets.org";
     resetEnvCache();
     expect(await validateSessionToken(token)).toBeNull();
+  });
+});
+
+describe("managing devices", () => {
+  async function signIn(editorId: string, userAgent = "vitest") {
+    const { token } = await createSession(editorId, { userAgent, ip: "127.0.0.1" });
+    const s = await validateSession(token);
+    return { token, id: s!.sessionId };
+  }
+
+  it("lists live sessions with the current one first, and no token hashes", async () => {
+    const editor = await makeEditor();
+    const phone = await signIn(editor.id, "phone");
+    const laptop = await signIn(editor.id, "laptop");
+    const expired = await signIn(editor.id, "old");
+    await db
+      .update(sessions)
+      .set({ expiresAt: sql`now() - interval '1 second'` })
+      .where(sql`${sessions.id} = ${expired.id}`);
+    const other = await makeEditor("other@example.com");
+    await signIn(other.id);
+
+    const list = await listSessions(editor.id, phone.id);
+    expect(list.map((s) => [s.id, s.current])).toEqual([
+      [phone.id, true],
+      [laptop.id, false],
+    ]);
+    expect(Object.keys(list[0]).sort()).toEqual(
+      ["createdAt", "current", "expiresAt", "id", "ip", "userAgent"],
+    );
+    expect(JSON.stringify(list)).not.toContain(phone.token);
+  });
+
+  it("revokes one device, scoped to its editor", async () => {
+    const editor = await makeEditor();
+    const other = await makeEditor("other@example.com");
+    const mine = await signIn(editor.id);
+    const theirs = await signIn(other.id);
+
+    // Another editor's session id, and malformed ids, behave like missing ones.
+    expect(await revokeSession(editor.id, theirs.id)).toBe(false);
+    expect(await revokeSession(editor.id, "not-a-uuid")).toBe(false);
+    expect(await revokeSession(editor.id, undefined)).toBe(false);
+    expect(await validateSessionToken(theirs.token)).not.toBeNull();
+
+    expect(await revokeSession(editor.id, mine.id)).toBe(true);
+    expect(await validateSessionToken(mine.token)).toBeNull();
+    expect(await revokeSession(editor.id, mine.id)).toBe(false);
+  });
+
+  it("signs out every other device but keeps the current one", async () => {
+    const editor = await makeEditor();
+    const other = await makeEditor("other@example.com");
+    const current = await signIn(editor.id);
+    const a = await signIn(editor.id);
+    const b = await signIn(editor.id);
+    const theirs = await signIn(other.id);
+
+    expect(await revokeOtherSessions(editor.id, current.id)).toBe(2);
+    expect(await validateSessionToken(current.token)).not.toBeNull();
+    expect(await validateSessionToken(a.token)).toBeNull();
+    expect(await validateSessionToken(b.token)).toBeNull();
+    expect(await validateSessionToken(theirs.token)).not.toBeNull();
   });
 });

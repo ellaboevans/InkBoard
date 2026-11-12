@@ -48,6 +48,7 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - `sessions.ts`: DB sessions (random token in the cookie, SHA-256 in the `sessions` table, 30-day fixed expiry). Times are computed with DB `now()`, not JS `Date`.
 - `dal.ts`: the **only** place that maps a request to an editor (`getCurrentEditor`, `requireEditor`, `requireOnboardedEditor`) and sets/clears the cookie (`startSession`/`endSession`, usable from Server Actions only). Every Server Action must re-authorize through the DAL. Never trust `useActionState`'s `prev` state for identity, because it comes from the client.
 - An editor with `pen_name` null hasn't onboarded yet. The pen name is the author's section label on the board, and the slug is used in public URLs.
+- `/admin/profile` renames via `updateProfile` (`profile.ts`), which never touches the slug: it is in every `/p/[author]/[poem]` link, so it is fixed once onboarding sets it. Device management (`listSessions`, `revokeSession`, `revokeOtherSessions` in `sessions.ts`) is scoped by editor; the current session's id comes from the DAL (`requireOnboardedSession`). Results never include `token_hash`.
 
 **Client IP** comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` entries from the right (`src/server/auth/ip.ts`); entries further left are client-controlled. Requests with no IP share an `unknown` bucket. OTP emails are sent in `after()` so response timing doesn't reveal allowlist membership. Tests mock `after` from `next/server` to run the task immediately.
 

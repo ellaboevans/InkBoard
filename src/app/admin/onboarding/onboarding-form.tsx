@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { notify, withErrorToast } from "@/lib/notify";
+import { PEN_NAME_MAX, PEN_NAME_MIN } from "@/lib/profile-limits";
 import { completeOnboardingAction, type OnboardingState } from "../actions";
 
 export function OnboardingForm() {
@@ -26,8 +27,8 @@ export function OnboardingForm() {
           name="penName"
           placeholder="e.g. Emily Dickinson"
           defaultValue={state.penName}
-          minLength={2}
-          maxLength={60}
+          minLength={PEN_NAME_MIN}
+          maxLength={PEN_NAME_MAX}
           aria-invalid={state.error ? true : undefined}
           aria-describedby={state.error ? "penName-error" : undefined}
           required

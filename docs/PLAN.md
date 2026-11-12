@@ -62,23 +62,30 @@ account; every later sign-in sends a fresh code.
 | UI | **shadcn/ui** (Radix base, Nova preset) with a custom "paper & ink" theme; serif face for poem text | R6. |
 | Board rendering | **Infinite canvas of DOM nodes in a CSS-transformed world layer** (pan/zoom via pointer, wheel, pinch, keyboard) | Behaves like Figma/Miro, but text stays crisp, selectable, translatable, screen-reader accessible and every card is a real link (N7). A raw `<canvas>` would require re-implementing text layout, hit-testing and accessibility. Virtualise off-screen sections if counts grow. |
 | Board layout | Deterministic auto-layout: author sections on a grid ("shelves"), poems as cards inside | Predictable catalogue (R9). Free-form placement by editors is a possible later feature. |
-| Search | Postgres FTS (`tsvector` generated columns + GIN) on poem **title** and author **pen name**, plus `pg_trgm` for typo-tolerant/prefix matches | R10 without an external service; bodies are excluded (N1). |
-| Private unlock | Server Action verifies password → sets a signed (HMAC) per-poem cookie bound to the poem's `password_version`, 12h expiry | Stateless, revocable on password change (N6). |
+| Search | Postgres FTS (GIN expression indexes on `to_tsvector('simple', search_normalize(…))`) on poem **title** and author **pen name**, plus `pg_trgm` for typo-tolerant matches | R10 without an external service; bodies are excluded (N1). |
+| Private unlock | Server Action verifies password → adds a grant to one signed (HMAC) cookie, 12h expiry. A grant covers one poem (`p:<poemId>:<password_version>`) or, in shared mode, all of an author's private poems (`a:<editorId>:<shared_password_version>`) | Stateless, revocable on password change (N6). |
 | Rate limiting | Fixed-window counters in a Postgres table (`rate_limits`) | Works on serverless without adding Redis; can be swapped for Upstash later. |
 
-### Data model (Phase 0)
+### Data model
 
 ```
 editors      id · email (unique, lower-cased) · pen_name · slug (unique) · bio · created_at · updated_at · last_sign_in_at
+             · password_mode(per_poem|shared) · shared_password_hash · shared_password_version      (Phase 4)
+             CHECK (password_mode = 'per_poem' OR shared_password_hash IS NOT NULL)
 email_otps   id · email · code_hash · expires_at · attempts · consumed_at · created_at · requested_ip
 sessions     id · editor_id → editors · token_hash (unique) · expires_at · created_at · user_agent · ip
 poems        id · editor_id → editors · title · slug (unique per editor) · body · visibility(public|private)
              · password_hash · password_version · status(draft|published) · published_at · created_at · updated_at
-             CHECK (visibility = 'public' OR password_hash IS NOT NULL)
 rate_limits  key (pk) · window_start · count
 ```
 
-Phase 5 adds `search` tsvector generated columns + GIN/trigram indexes.
+"A private poem is always readable with some password" (its own in per-poem mode, the
+author's shared one in shared mode) is enforced by triggers in
+`drizzle/0002_password_mode_triggers.sql`, which replaced Phase 0's
+`CHECK (visibility = 'public' OR password_hash IS NOT NULL)`.
+
+Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(pen_name)` and
+`search_normalize(title)`, in `drizzle/0003_search.sql` only (drizzle-kit doesn't model them).
 
 ### Route map
 
@@ -90,7 +97,10 @@ Phase 5 adds `search` tsvector generated columns + GIN/trigram indexes.
 /admin/onboarding      First sign-in: choose pen name (the section label)
 /admin/poems/new       Create poem (R2, R3)
 /admin/poems/[id]      Edit poem, visibility, password, publish, delete (R2, R3)
-/admin/profile         Pen name, bio, sessions / sign out
+/admin/settings        Private-poem password mode: per poem or one shared (R11)
+/admin/profile         Pen name, bio, signed-in devices
+/api/search?q=         Search authors and poem titles (R10)
+/api/cron/cleanup      Daily cleanup of expired rows (Bearer CRON_SECRET)
 ```
 
 ## 4. Delivery phases
@@ -150,7 +160,7 @@ auth or private content.
   2. Concurrent saves (e.g. two tabs) could leave a public poem with a stale password, or crash with a constraint error. Password rules are now applied inside the UPDATE, based on the row at write time.
   3. A malformed stored hash (empty key) would accept any password. `verifyPassword` now only accepts the exact parameters and lengths we issue, caps the input length, and never throws.
   4. Found while fixing: signing out kept earlier admin pages, including private poem text, hidden in the tab (Next's `<Activity>`). Sign-out now does a full page reload.
-- **Not in this phase:** `/admin/profile` (changing pen name or bio, managing sessions). It moves to Phase 6, unless it's wanted sooner.
+- **Not in this phase:** `/admin/profile` (changing pen name or bio, managing sessions). Done in Phase 6.
 
 ### Phase 3: Public canvas board (R1, R9, N7, N8) ✅
 - **Data** (`src/server/board.ts`): published poems from onboarded editors, grouped by author A–Z, newest poem first. Excerpts (first 5 lines) and bodies are computed in SQL with `CASE WHEN visibility = 'public'`, so a private poem's text never leaves the database (N1). Cached in `board-cache.ts` with `"use cache"`, `cacheTag("board")` and `cacheLife("hours")`; admin saves invalidate it immediately.
@@ -234,7 +244,15 @@ Done:
     3. Settings now says that a shared-password unlock also covers poems made private later.
     4. `CRON_SECRET` must be 32+ characters when set.
 
+- **Profile** (`/admin/profile`, linked from the admin header):
+  - Change pen name and bio (bio: plain text, up to 500 characters). Saving invalidates the board cache, so the new section label shows at once.
+  - The author slug stays fixed after onboarding, so every shared `/p/<author>/<poem>` link keeps working after a rename (same rule as published poem slugs).
+  - **Signed-in devices:** lists the editor's live sessions (browser and OS, sign-in date, IP, expiry), marks "This device", and can sign out any other device or all of them. Revoking is scoped by editor, so another editor's session id behaves like a missing one.
+  - Covered by integration tests (rename keeps slug, bio normalisation, cross-editor revoke, sign out others) and two E2E tests.
+
 To do:
+- **Sign-in lockout (#5 from the Phase 1 review):** an attacker can still lock a specific editor out of sign-in for up to a day by using up the per-email limits. Decide between per-(email, IP) budgets and a "someone is trying to sign in" email, or accept the risk for launch.
+- **Accessibility pass (N7):** check the admin forms, the poem overlay and the search palette with a screen reader and an automated checker (e.g. axe). The board itself is done.
 - **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 
 ## 5. Requirements traceability
@@ -246,7 +264,7 @@ To do:
 | R3 Public/private + password | 2, 4 | ✅ |
 | R4 Admin dashboard | 1 (shell), 2 | ✅ |
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
-| R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth, admin and board done |
+| R6 shadcn/ui, custom theme | 0 → all | ✅ every screen (sign-in, admin, settings, profile, board, overlay, search) uses the themed components |
 | R7 Email OTP, passwordless | 1 | ✅ |
 | R8 Visitor read/unlock | 4 | ✅ incl. board overlay |
 | R9 Author sections | 1 (pen name), 3 | ✅ |
@@ -255,10 +273,10 @@ To do:
 | N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
-| N4 Sessions | 1 | ✅ tested |
+| N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
-| N7 Accessibility | 3, 4 | 🟡 board done (links, focus pan, list view) |
+| N7 Accessibility | 3, 4, 6 | 🟡 board done (links, focus pan, list view); admin, overlay and palette not yet audited |
 | N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
 | N9 No user enumeration | 1 | ✅ tested |
 

@@ -2,6 +2,7 @@ import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
+export const E2E_BASE_URL = `http://localhost:${PORT}`;
 export const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql://localhost:5432/poemhub_e2e";
 export const OTP_OUTBOX = path.resolve("test-results/otp-outbox.jsonl");

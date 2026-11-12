@@ -28,5 +28,5 @@ export async function completeOnboardingAction(
   if (!res.ok) return { error: res.error, penName: String(penName ?? "") };
   // The admin layout (header shows the pen name) is shared, so re-render it too.
   refresh();
-  redirect("/admin");
+  redirect("/admin?welcome=1");
 }

@@ -2,7 +2,7 @@
 
 import { EyeIcon, EyeOffIcon, KeyRoundIcon, KeySquareIcon, Loader2Icon } from "lucide-react";
 import { useActionState, useState } from "react";
-import { toast } from "sonner";
+import { notify, withErrorToast } from "@/lib/notify";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,17 +20,19 @@ export function PasswordSettingsForm({
   privatePoemCount: number;
 }) {
   const [state, action, pending] = useActionState(
-    async (prev: PasswordSettingsState, formData: FormData) => {
+    withErrorToast(async (prev: PasswordSettingsState, formData: FormData) => {
       const next = await savePasswordSettingsAction(prev, formData);
       if (next.savedAt) {
-        toast.success(
-          next.mode === "shared"
-            ? "Shared password saved. Readers will need to enter it again."
-            : "Each private poem now has its own password.",
-        );
+        if (next.mode === "shared") {
+          notify.success("Shared password saved", "Readers will need to enter it again.");
+        } else {
+          notify.success("Each private poem now has its own password.", "Readers will need to unlock again.");
+        }
+      } else if (next.error) {
+        notify.error("Couldn't save your settings", next.error);
       }
       return next;
-    },
+    }),
     {},
   );
   const [mode, setMode] = useState<PasswordMode>(savedMode);
@@ -52,6 +54,7 @@ export function PasswordSettingsForm({
         if (mode === "shared" && password.length < PASSWORD_MIN) {
           e.preventDefault();
           setClientError(`Use at least ${PASSWORD_MIN} characters`);
+          notify.error("Couldn't save your settings", `Use at least ${PASSWORD_MIN} characters.`);
           document.getElementById("shared-password")?.focus();
         } else {
           setClientError(null);

@@ -5,11 +5,16 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { notify, withErrorToast } from "@/lib/notify";
 import { completeOnboardingAction, type OnboardingState } from "../actions";
 
 export function OnboardingForm() {
   const [state, action, pending] = useActionState<OnboardingState, FormData>(
-    completeOnboardingAction,
+    withErrorToast(async (prev: OnboardingState, formData: FormData) => {
+      const next = await completeOnboardingAction(prev, formData);
+      if (next.error) notify.error("Couldn't save your pen name", next.error);
+      return next;
+    }),
     {},
   );
   return (

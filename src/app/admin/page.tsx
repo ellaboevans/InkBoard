@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { listEditorPoems, type EditorPoemSummary } from "@/server/poems";
-import { DeletedToast } from "./deleted-toast";
+import { FlashToast } from "@/components/flash-toast";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -29,12 +29,22 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const editor = await requireOnboardedEditor();
   const poems = await listEditorPoems(editor.id);
-  const { deleted } = await searchParams;
+  const flash = await searchParams;
   const published = poems.filter((p) => p.status === "published").length;
 
   return (
     <div className="grid gap-8">
-      {deleted === "1" && <DeletedToast />}
+      {flash.deleted === "1" && <FlashToast param="deleted" title="Poem deleted" />}
+      {flash["signed-in"] === "1" && (
+        <FlashToast param="signed-in" title="Signed in" description={`Welcome back, ${editor.penName}.`} />
+      )}
+      {flash.welcome === "1" && (
+        <FlashToast
+          param="welcome"
+          title="You're all set"
+          description={`Your poems will appear on the board under “${editor.penName}”.`}
+        />
+      )}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl">Your poems</h1>

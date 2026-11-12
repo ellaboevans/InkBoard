@@ -147,3 +147,62 @@ test("unknown poems show not-found and are not indexed", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
   await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toBeAttached();
 });
+
+test("poems open in an overlay over the board; Esc returns to the same spot", async ({ page }) => {
+  const id = unique();
+  const pen = `Overlay Poet ${id}`;
+  await signUpAs(page, `ov-${id}@example.com`, pen);
+  await publish(page, `Overlay ${id}`, `overlay line ${id}\n    indented`);
+  await publish(page, `Overlay Locked ${id}`, `overlay secret ${id}`, "overlay-pass");
+  await openBoard(page);
+
+  const card = page.getByRole("link", { name: `Overlay ${id}`, exact: true });
+  await page.getByRole("button", { name: "Fit" }).click();
+  const camera = await world(page).getAttribute("style");
+  await card.click();
+
+  const dialog = page.getByRole("dialog", { name: `Overlay ${id}` });
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/p/overlay-poet-.*/overlay-${id.replace(/[^a-z0-9]+/g, "-")}$`));
+  expect(await dialog.locator("article").innerText()).toContain(`overlay line ${id}\n    indented`);
+  // The board is still mounted underneath.
+  await expect(page.locator('[aria-label="Poem board"]')).toBeAttached();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+  expect(await world(page).getAttribute("style")).toBe(camera);
+
+  // Back/forward reopen and close it.
+  await page.goForward();
+  await expect(page.getByRole("dialog", { name: `Overlay ${id}` })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // Refreshing a poem URL shows the full page instead of the overlay.
+  await page.goForward();
+  await page.reload();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back to the board" })).toBeVisible();
+  await expect(page.locator("article")).toContainText(`overlay line ${id}`);
+
+  // Private poems unlock inside the overlay, with a toast; text never leaks before.
+  await openBoard(page);
+  await page.getByRole("link", { name: `Overlay Locked ${id} (password protected)` }).click();
+  const locked = page.getByRole("dialog", { name: `Overlay Locked ${id}` });
+  await expect(locked.getByRole("button", { name: "Unlock poem" })).toBeVisible();
+  expect(await page.content()).not.toContain(`overlay secret ${id}`);
+  await locked.getByLabel("Password", { exact: true }).fill("not-it");
+  await locked.getByRole("button", { name: "Unlock poem" }).click();
+  await expect(page.locator("[data-sileo-toast]").getByText("Couldn't unlock this poem")).toBeVisible();
+  await locked.getByLabel("Password", { exact: true }).fill("overlay-pass");
+  await locked.getByRole("button", { name: "Unlock poem" }).click();
+  await expect(locked.locator("article")).toContainText(`overlay secret ${id}`);
+  await expect(page.locator("[data-sileo-toast]").getByText("Poem unlocked")).toBeVisible();
+
+  // Leaving via a link clears the overlay.
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Editor sign in" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

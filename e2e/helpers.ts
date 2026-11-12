@@ -32,7 +32,7 @@ export async function requestCode(page: Page, email: string) {
   await page.goto("/sign-in");
   await page.getByRole("textbox", { name: "Email" }).fill(email);
   await page.getByRole("button", { name: "Email me a sign-in code" }).click();
-  await expect(page.getByText(`We sent a 6-digit code to`)).toBeVisible();
+  await expect(page.getByRole("main").getByText(`We sent a 6-digit code to`)).toBeVisible();
 }
 
 export async function typeCode(page: Page, code: string) {

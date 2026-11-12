@@ -13,13 +13,28 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
+import { notify, withErrorToast } from "@/lib/notify";
 import { signInAction, type SignInState } from "./actions";
 
 const initialState: SignInState = { step: "email" };
 
 export function SignInForm() {
   const [state, formAction, pending] = useActionState(
-    signInAction,
+    withErrorToast(async (prev: SignInState, formData: FormData) => {
+      const next = await signInAction(prev, formData);
+      if (next.error) {
+        notify.error(
+          next.step === "code" ? "Couldn't sign you in" : "Couldn't send a code",
+          next.error,
+        );
+      } else if (next.step === "code" && (prev.step === "email" || next.notice)) {
+        notify.success(
+          prev.step === "email" ? "Check your email" : "New code sent",
+          `We sent a 6-digit code to ${next.email}.`,
+        );
+      }
+      return next;
+    }),
     initialState,
   );
 

@@ -31,7 +31,7 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await page.getByRole("button", { name: "Continue to dashboard" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "Your poems" })).toBeVisible();
-  await expect(page.getByText("under “Ada Verse”")).toBeVisible();
+  await expect(page.getByRole("main").getByText("under “Ada Verse”")).toBeVisible();
   // The shared header picks up the new pen name without a reload.
   await expect(page.locator("header")).toContainText("Ada Verse");
 
@@ -78,4 +78,23 @@ test("wrong codes show remaining attempts, then the right code works", async ({ 
 test("resend is disabled during the cooldown", async ({ page }) => {
   await requestCode(page, `cooldown-${Date.now()}@example.com`);
   await expect(page.getByRole("button", { name: /Resend code in \d+s/ })).toBeDisabled();
+});
+
+test("action messages appear as toasts at the top centre, also on phones", async ({ browser }) => {
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage();
+  const email = `toast-${Date.now()}@example.com`;
+  await requestCode(page, email);
+  const toast = page.locator("[data-sileo-toast]").filter({ hasText: "Check your email" });
+  await expect(toast).toBeVisible();
+  const box = (await toast.boundingBox())!;
+  // Fits the screen and is horizontally centred near the top.
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(360);
+  expect(Math.abs(box.x + box.width / 2 - 180)).toBeLessThan(4);
+  expect(box.y).toBeLessThan(80);
+
+  await typeCode(page, (await latestCode(email)) === "000000" ? "111111" : "000000");
+  await expect(page.locator("[data-sileo-toast]").getByText("Couldn't sign you in")).toBeVisible();
+  await ctx.close();
 });

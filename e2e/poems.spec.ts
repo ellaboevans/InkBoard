@@ -51,7 +51,7 @@ test("private poems require a password and never expose its hash", async ({ page
 
   // Client-side check blocks the request entirely.
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Private poems need a password readers can use")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Private poems need a password readers can use")).toBeVisible();
   await expect(page.getByLabel("Password", { exact: true }).filter({ visible: true })).toBeFocused();
   expect((await sql(`SELECT count(*)::int AS n FROM poems WHERE title = '${title}'`)).rows[0].n).toBe(0);
 
@@ -160,7 +160,7 @@ test("validation errors keep what the editor typed", async ({ page }) => {
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Poem" }).fill("Words I must not lose");
   await page.getByRole("button", { name: "Save draft" }).click();
-  await expect(page.getByText("Give your poem a title")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Give your poem a title")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Poem" })).toHaveValue("Words I must not lose");
 });
 

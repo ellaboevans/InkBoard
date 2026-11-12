@@ -5,7 +5,8 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { UnlockState } from "./actions";
+import { notify, withErrorToast } from "@/lib/notify";
+import type { UnlockState } from "./unlock-actions";
 
 export function UnlockForm({
   action,
@@ -16,7 +17,23 @@ export function UnlockForm({
   penName: string;
   sharedPassword: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, {});
+  const [state, formAction, pending] = useActionState(
+    withErrorToast(async (prev: UnlockState, formData: FormData) => {
+      const next = await action(prev, formData);
+      if (next.error) {
+        notify.error("Couldn't unlock this poem", next.error);
+      } else {
+        notify.success(
+          "Poem unlocked",
+          sharedPassword
+            ? `All of ${penName}'s private poems are open on this device for 12 hours.`
+            : "It stays open on this device for 12 hours.",
+        );
+      }
+      return next;
+    }),
+    {},
+  );
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
 

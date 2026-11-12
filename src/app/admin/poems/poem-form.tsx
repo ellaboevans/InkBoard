@@ -12,7 +12,6 @@ import {
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { toast } from "sonner";
 import { StatusBadge } from "@/components/poem-badges";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -33,6 +32,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { BODY_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
 import type { PoemErrors } from "@/server/poems";
 import { useOnceToast } from "@/hooks/use-once-toast";
+import { unstable_rethrow } from "next/navigation";
+import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
 
 export type PoemFormPoem = {
@@ -60,13 +61,18 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
   // once per save (effects re-run under StrictMode and when Next re-shows a
   // route kept alive in <Activity>).
   const [state, formAction, pending] = useActionState(
-    async (prev: PoemFormState, formData: FormData) => {
+    withErrorToast(async (prev: PoemFormState, formData: FormData) => {
       const next = await action(prev, formData);
       if (next.savedAt) {
-        toast.success(next.status === "published" ? "Saved and published" : "Draft saved");
+        notify.success(
+          next.status === "published" ? "Saved and published" : "Draft saved",
+          next.status === "published" ? "Readers see the update on the board right away." : "Only you can see drafts.",
+        );
+      } else if (next.errors) {
+        notify.error("Couldn't save the poem", next.errors.form ?? "Fix the highlighted fields and try again.");
       }
       return next;
-    },
+    }),
     {},
   );
   const formRef = useRef<HTMLFormElement>(null);
@@ -122,6 +128,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
     if (Object.keys(found).length > 0) {
       e.preventDefault();
       setClientErrors(found);
+      notify.error("Couldn't save the poem", Object.values(found)[0]);
       const first = Object.keys(found)[0];
       document.getElementById(first === "password" ? "password" : first)?.focus();
     } else {
@@ -129,7 +136,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
     }
   }
 
-  useOnceToast(justCreated ? "Poem created" : null, "created");
+  useOnceToast(justCreated ? "Poem created" : null, "created", "Keep editing, or head back to your poems.");
 
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
@@ -413,7 +420,16 @@ function DeletePoem({ title, action }: { title: string; action: () => Promise<vo
           </AlertDialogDescription>
         </AlertDialogHeader>
         {/* A separate form: the dialog is portalled outside the poem form. */}
-        <form action={action}>
+        <form
+          action={async () => {
+            try {
+              await action(); // redirects to the dashboard on success
+            } catch (err) {
+              unstable_rethrow(err);
+              notify.error("Couldn't delete the poem", "Please try again in a moment.");
+            }
+          }}
+        >
           <AlertDialogFooter>
             <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
             <ConfirmDelete />

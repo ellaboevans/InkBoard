@@ -79,7 +79,7 @@ export async function signInAction(
       return { ...prev, error, notice: undefined };
     }
     await startSession(res.editor.id);
-    redirect(res.editor.penName ? "/admin" : "/admin/onboarding");
+    redirect(res.editor.penName ? "/admin?signed-in=1" : "/admin/onboarding");
   }
 
   return { step: "email" };

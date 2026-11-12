@@ -9,7 +9,8 @@ PoemHub is a public, pan/zoom canvas board of poems grouped into per-author sect
 ## Commands
 
 ```bash
-pnpm dev                      # Next dev server (reads .env.local)
+pnpm dev                      # checks the DB has all migrations, then starts Next (reads .env.local)
+pnpm db:check                 # just the migration check
 pnpm build                    # Production build; also enforces Cache Components rules
 pnpm typecheck                # tsc --noEmit
 pnpm lint                     # ESLint (incl. React Compiler-style hook rules)
@@ -73,6 +74,16 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
 - Playwright starts the web server *before* globalSetup runs the migrations. That's why its readiness URL is `/sign-in`, which doesn't touch the DB.
 - The dev database may also be shared with sibling worktrees, and their seeds overwrite yours. For visual checks use a database of your own (e.g. `poemhub_dev_<name>`).
+
+**Poem overlay.** `src/app/@modal` is a parallel slot rendered by the root layout.
+- `(.)p/[author]/[poem]` intercepts soft navigations from the board and shows `PoemReader` in `PoemModal`. Hard loads render `src/app/p/[author]/[poem]/page.tsx`, which uses the same reader.
+- `@modal/default.tsx`, `@modal/page.tsx` and `@modal/[...catchAll]/page.tsx` all return null, so the overlay clears when navigating anywhere else. Keep them.
+- Client components in the slot can't call `usePathname()` outside Suspense (a build error under Cache Components), so URL-dependent bits are rendered on the server and passed in (`toolbar`).
+
+**Toasts.** Use `notify` from `src/lib/notify.ts` (Sileo, top-centre, `src/components/toaster.tsx`); don't import `sileo` directly.
+- Wrap `useActionState` actions in `withErrorToast`, which turns unexpected throws into a toast but still lets `redirect()`/`notFound()` through (`unstable_rethrow`).
+- After a redirect, show success with a flash param plus `<FlashToast param=… />` (examples: `?deleted=1`, `?signed-in=1`, `?welcome=1`, `/sign-in?signed-out=1`).
+- Toast descriptions often repeat inline text, so in E2E scope inline assertions with `page.getByRole("main")`, and toast assertions with `[data-sileo-toast]`.
 
 **Client patterns.**
 - Forms use `useActionState` with controlled inputs, because React resets uncontrolled fields after an action and that would wipe a poem on a validation error.

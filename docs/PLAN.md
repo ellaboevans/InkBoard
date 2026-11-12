@@ -168,7 +168,7 @@ auth or private content.
 - **Accept:** board renders N authors × M poems smoothly; tab order reaches every card; private card HTML contains no body text. All three are covered by E2E tests.
 - **Deferred:** opening a poem as a modal over the board (an intercepted route) moves to Phase 4, together with the unlock flow.
 
-### Phase 4: Reading view and private unlock (R3, R8, N1, N3, N6, R11) 🟡
+### Phase 4: Reading view and private unlock (R3, R8, N1, N3, N6, R11) ✅
 Done:
 - **Password mode, chosen by each editor (R11)** at `/admin/settings`:
   - **A different password for each poem** (the default): set on each private poem in the editor.
@@ -184,8 +184,17 @@ Done:
 - **Wrong-guess limits:** 10 per IP per poem (or per author in shared mode) per 15 minutes, and 60 per IP per hour overall.
 - **Accept:** wrong password shows an error and never reveals the body; correct password reveals it; changing the password in admin re-locks it for readers. All covered by unit and E2E tests, for both modes.
 
-Still to do:
-- Opening a poem as a modal over the board (an intercepted route), still directly linkable.
+- **Board overlay:** clicking a poem on the board opens it in an overlay (`src/app/@modal/(.)p/[author]/[poem]`, an intercepting route in a parallel slot), with the board kept underneath at the same pan/zoom position.
+  - Close it with Esc, the X, a click outside, or Back; they all use browser history.
+  - The URL is the poem's own, so it can be shared. Opening it directly or refreshing shows the full page, and "Open full page" does too.
+  - On phones it becomes a bottom sheet. Private poems unlock inside the overlay.
+  - The full page and the overlay share `src/components/poem/poem-reader.tsx`.
+
+### Cross-cutting: action feedback (toasts) ✅
+- Every user-facing action result is shown as a [Sileo](https://sileo.aaryan.design) toast at the top centre, sized to fit phone screens. Inline field errors stay next to their inputs as well, because toasts aren't focusable.
+- Covered: sign-in (code sent, new code, wrong code, rate limit), signed in/out, onboarding, poem save/publish/validation/delete, password settings, and reader unlock (wrong password, rate limit, unlocked).
+- Unexpected failures (Server Action throws) become a friendly "Something went wrong" toast, and what the user typed is kept. Pages that fail to render show `src/app/error.tsx`, with a retry button and a reference code.
+- `pnpm dev` first checks that the database has every migration (`scripts/check-migrations.ts`, also `pnpm db:check`). If not, it stops and tells you to run `pnpm db:migrate`, instead of failing later with "column does not exist".
 
 ### Phase 5: Full-text search (R10)
 - Migration: generated `tsvector` columns on `editors.pen_name` and `poems.title`, GIN + trigram indexes.
@@ -208,7 +217,7 @@ Still to do:
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
 | R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth, admin and board done |
 | R7 Email OTP, passwordless | 1 | ✅ |
-| R8 Visitor read/unlock | 4 | ✅ (board overlay still to do) |
+| R8 Visitor read/unlock | 4 | ✅ incl. board overlay |
 | R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ⏳ |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |

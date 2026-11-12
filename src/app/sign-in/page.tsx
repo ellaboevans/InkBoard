@@ -11,16 +11,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getCurrentEditor } from "@/server/auth/dal";
+import { FlashToast } from "@/components/flash-toast";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = { title: "Editor sign in" };
 
-export default function SignInPage() {
+export default function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   return (
     <main className="flex flex-1 items-center justify-center bg-canvas p-6">
       {/* Reads the session cookie, so it sits behind its own boundary. */}
       <Suspense fallback={null}>
         <RedirectIfSignedIn />
+      </Suspense>
+      <Suspense fallback={null}>
+        <SignedOutFlash searchParams={searchParams} />
       </Suspense>
 
       <div className="w-full max-w-sm">
@@ -45,6 +49,11 @@ export default function SignInPage() {
       </div>
     </main>
   );
+}
+
+async function SignedOutFlash({ searchParams }: Pick<PageProps<"/sign-in">, "searchParams">) {
+  const { "signed-out": signedOut } = await searchParams;
+  return signedOut === "1" ? <FlashToast param="signed-out" title="Signed out" /> : null;
 }
 
 async function RedirectIfSignedIn() {

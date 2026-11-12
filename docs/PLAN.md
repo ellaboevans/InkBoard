@@ -151,12 +151,21 @@ auth or private content.
   4. Found while fixing: signing out kept earlier admin pages, including private poem text, hidden in the tab (Next's `<Activity>`). Sign-out now does a full page reload.
 - **Not in this phase:** `/admin/profile` (changing pen name or bio, managing sessions). It moves to Phase 6, unless it's wanted sooner.
 
-### Phase 3: Public canvas board (R1, R9, N7, N8)
-- Board data query (published poems grouped by author; private ones expose title only).
-- Canvas engine: pan (drag/space+drag), zoom (wheel/pinch/±), fit-to-content, zoom-to-section, keyboard navigation, minimap.
-- Author section "shelves" with label, count and poem cards; locked badge on private cards.
-- Cached with `"use cache"` + `cacheTag('board')`, invalidated from admin mutations.
-- **Accept:** board renders N authors × M poems smoothly; tab order reaches every card; private card HTML contains no body text.
+### Phase 3: Public canvas board (R1, R9, N7, N8) ✅
+- **Data** (`src/server/board.ts`): published poems from onboarded editors, grouped by author A–Z, newest poem first. Excerpts (first 5 lines) and bodies are computed in SQL with `CASE WHEN visibility = 'public'`, so a private poem's text never leaves the database (N1). Cached in `board-cache.ts` with `"use cache"`, `cacheTag("board")` and `cacheLife("hours")`; admin saves invalidate it immediately.
+- **Layout** (`src/lib/board-layout.ts`): pure and tested. Each author gets a "shelf" with a card grid of up to 4 columns, and shelves are packed into rows to suit a landscape screen.
+- **Canvas** (`src/components/board/board-canvas.tsx`):
+  - Move around by dragging, trackpad scrolling, the arrow keys, or one finger on touch.
+  - Zoom with ⌘/Ctrl + scroll, a trackpad or two-finger pinch, the ± buttons, or the keys `+` `-` `0` (fit all) and `1` (100%).
+  - Every author has a colour. The Authors index jumps to a section, and so does clicking a section's name.
+  - The minimap supports click and drag.
+  - Below 40% zoom, cards fade and large author names take over.
+  - Opens on "fit all", or at a reading zoom on the first shelf when fitting everything would be too small (big boards, phones).
+- **Accessibility (N7):** every card is a real link in catalogue tab order, and tabbing to an off-screen card pans it into view. The board has a screen-reader description of its controls. A **List view** shows the same catalogue as plain headings and lists.
+- **Reading page** `/p/[author]/[poem]`: full text with indentation kept. Private poems show a lock notice for now; password entry is Phase 4.
+- **Demo content:** `pnpm db:seed` (scripts/seed.ts) adds 10 fictional authors and 48 original published poems (11 private, password `moonlight`), plus 2 drafts that must not appear. It only ever touches `@seed.poemhub.test` editors. `pnpm db:seed --clear` removes them.
+- **Accept:** board renders N authors × M poems smoothly; tab order reaches every card; private card HTML contains no body text. All three are covered by E2E tests.
+- **Deferred:** opening a poem as a modal over the board (an intercepted route) moves to Phase 4, together with the unlock flow.
 
 ### Phase 4: Reading view and private unlock (R3, R8, N1, N3, N6)
 - `/p/[author]/[poem]` reading page; opened from the board as an intercepted modal route, also directly linkable.
@@ -177,24 +186,24 @@ auth or private content.
 
 | Req | Phase | Status |
 | --- | ----- | ------ |
-| R1 Canvas board | 3 | ⏳ |
+| R1 Canvas board | 3 | ✅ pan/zoom/pinch/keyboard, minimap, list view |
 | R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
 | R3 Public/private + password | 2, 4 | 🟡 editor side done; reader unlock in Phase 4 |
 | R4 Admin dashboard | 1 (shell), 2 | ✅ |
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
-| R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth and admin screens done |
+| R6 shadcn/ui, custom theme | 0 → all | 🟡 theme, auth, admin and board done |
 | R7 Email OTP, passwordless | 1 | ✅ |
-| R8 Visitor read/unlock | 4 | ⏳ |
-| R9 Author sections | 1 (pen name), 3 | 🟡 pen name captured |
+| R8 Visitor read/unlock | 4 | 🟡 public reading page done; unlock in Phase 4 |
+| R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ⏳ |
-| N1 Private body never leaked | 3, 4, 5 | ⏳ |
+| N1 Private body never leaked | 3, 4, 5 | 🟡 board + reading page tested (unit + E2E); unlock and search pending |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | 🟡 OTP request/verify (per email, IP, global) done; unlock pending |
 | N4 Sessions | 1 | ✅ tested |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
 | N6 Poem password hashing/revocation | 2, 4 | 🟡 scrypt + version bump done; unlock cookies in Phase 4 |
-| N7 Accessibility | 3, 4 | ⏳ |
-| N8 Board caching | 3 | ⏳ |
+| N7 Accessibility | 3, 4 | 🟡 board done (links, focus pan, list view) |
+| N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
 | N9 No user enumeration | 1 | ✅ tested |
 
 ## 6. Decisions and open questions

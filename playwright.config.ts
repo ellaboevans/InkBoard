@@ -15,6 +15,10 @@ export default defineConfig({
   // change mid-save can remount the editor. One retry absorbs that; such
   // tests are still reported as "flaky", so real flakiness stays visible.
   retries: 1,
+  // `next dev` compiles each route on first visit, which can take several
+  // seconds on a busy machine; the defaults (5s / 30s) are too tight.
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
   use: {
     baseURL: `http://localhost:${PORT}`,
     // Uses the locally installed Chrome; run `pnpm exec playwright install chromium` instead if absent.
@@ -23,7 +27,9 @@ export default defineConfig({
   },
   webServer: {
     command: `pnpm next dev --port ${PORT}`,
-    url: `http://localhost:${PORT}`,
+    // Readiness probe must not touch the DB: Playwright starts the server
+    // *before* globalSetup runs the migrations.
+    url: `http://localhost:${PORT}/sign-in`,
     reuseExistingServer: false,
     timeout: 120_000,
     env: {

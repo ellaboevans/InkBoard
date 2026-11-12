@@ -21,6 +21,7 @@ pnpm exec playwright test -g "first sign-in" # single E2E test
 pnpm db:generate --name=<name>  # SQL migration from src/db/schema.ts → drizzle/
 pnpm db:migrate                 # apply migrations to DATABASE_URL
 pnpm next typegen               # regenerate route types (LayoutProps<"/x"> etc.) after adding routes
+pnpm db:seed                    # demo authors + poems (only @seed.poemhub.test editors); --clear removes them
 ```
 
 Use Node 22+ (`.nvmrc`). On Node 20, Vitest 5 crashes while printing failures (`Map.groupBy`), which hides which test failed.
@@ -54,6 +55,16 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Slugs: unique per editor. A draft's slug follows its title; once the poem is published the slug stays fixed.
 - Limits: shared with the client in `src/lib/poem-limits.ts`.
 - Server Actions (`src/app/admin/poems/actions.ts`) re-authorize, then call `updateTag(BOARD_TAG)` / `updateTag(poemTag(id))` from `src/server/cache-tags.ts`. Any new mutation that changes what readers see must do the same.
+
+**Board (reader side).** `src/server/board.ts` holds the uncached, tested loaders; `board-cache.ts` wraps them in `"use cache"` + `cacheTag(BOARD_TAG)`. Keep that split, because `next/cache` functions can't run under Vitest.
+- Never select `poems.body` for readers without `CASE WHEN visibility = 'public'` (N1). The tests check that the JSON contains no private text.
+- `/` is prerendered at build time, so `pnpm build` needs a reachable `DATABASE_URL`. Data written outside the app (the seed) shows up after the hourly revalidation or a server restart.
+- The canvas keeps its camera in a ref and writes the transform straight to the DOM. React state only feeds the zoom label and minimap, so don't put the camera in state.
+- World elements are absolutely positioned inside a 0×0 container, so give them explicit widths. Shrink-to-fit would truncate them.
+- Pointer capture is taken only once a drag passes 4px, so a plain click still reaches the card's link.
+- In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
+- Playwright starts the web server *before* globalSetup runs the migrations. That's why its readiness URL is `/sign-in`, which doesn't touch the DB.
+- The dev database may also be shared with sibling worktrees, and their seeds overwrite yours. For visual checks use a database of your own (e.g. `poemhub_dev_<name>`).
 
 **Client patterns.**
 - Forms use `useActionState` with controlled inputs, because React resets uncontrolled fields after an action and that would wipe a poem on a validation error.

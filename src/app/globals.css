@@ -138,3 +138,23 @@
     @apply font-sans;
   }
 }
+/* Board: per-author accent, driven by --hue (0–360) set on each section. */
+@layer components {
+  .section-shelf {
+    border-color: oklch(0.82 0.04 var(--hue) / 0.7);
+    background: oklch(0.975 0.016 var(--hue) / 0.72);
+  }
+  .section-dot {
+    background: oklch(0.62 0.12 var(--hue));
+  }
+  .section-ink {
+    color: oklch(0.38 0.07 var(--hue));
+  }
+  .dark .section-shelf {
+    border-color: oklch(0.5 0.05 var(--hue) / 0.4);
+    background: oklch(0.24 0.025 var(--hue) / 0.55);
+  }
+  .dark .section-ink {
+    color: oklch(0.85 0.05 var(--hue));
+  }
+}

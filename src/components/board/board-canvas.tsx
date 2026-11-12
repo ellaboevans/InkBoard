@@ -1,0 +1,705 @@
+"use client";
+
+import {
+  FeatherIcon,
+  ListIcon,
+  LockIcon,
+  MaximizeIcon,
+  MinusIcon,
+  PlusIcon,
+  UsersIcon,
+  XIcon,
+} from "lucide-react";
+import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Button } from "@/components/ui/button";
+import {
+  layoutBoard,
+  sectionHue,
+  type BoardLayout,
+  type Rect,
+} from "@/lib/board-layout";
+import type { BoardPoem, BoardSection } from "@/lib/board-types";
+
+/*
+ * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
+ * moved with a single CSS transform. Text stays real text (crisp, selectable
+ * by screen readers, every card a real link), see docs/PLAN.md.
+ *
+ * The camera lives in a ref and is applied straight to the DOM each frame;
+ * React state (`view`) is only refreshed once per frame for the zoom label
+ * and minimap, so panning never re-renders the cards.
+ */
+
+type Camera = { x: number; y: number; k: number }; // screen = world * k + (x, y)
+
+const MIN_K = 0.1;
+const MAX_K = 2.5;
+const OVERVIEW_K = 0.4; // below this, cards fade and author names take over
+const DRAG_THRESHOLD = 4;
+const INITIAL_MIN_K = 0.32;
+const INITIAL_READING_K = 0.62;
+
+const clampK = (k: number) => Math.min(MAX_K, Math.max(MIN_K, k));
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+type Gesture =
+  | { type: "pan"; id: number; startX: number; startY: number; cam: Camera; moved: boolean }
+  | { type: "pinch"; dist: number; midX: number; midY: number };
+
+export function BoardCanvas({
+  sections,
+  onListView,
+}: {
+  sections: BoardSection[];
+  onListView: () => void;
+}) {
+  const layout = useMemo(() => layoutBoard(sections), [sections]);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
+  const cam = useRef<Camera>({ x: 0, y: 0, k: 1 });
+  const [view, setView] = useState({ x: 0, y: 0, k: 1, w: 0, h: 0 });
+  const viewFrame = useRef(0);
+  const animFrame = useRef(0);
+
+  // ---- camera ------------------------------------------------------------
+
+  const apply = useCallback(() => {
+    const { x, y, k } = cam.current;
+    const world = worldRef.current;
+    const vp = viewportRef.current;
+    if (!world || !vp) return;
+    world.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+    world.dataset.lod = k < OVERVIEW_K ? "overview" : "detail";
+    // Dot grid moves with the world; double its spacing when it gets dense.
+    let grid = 24 * k;
+    while (grid < 14) grid *= 2;
+    vp.style.backgroundSize = `${grid}px ${grid}px`;
+    vp.style.backgroundPosition = `${x}px ${y}px`;
+    cancelAnimationFrame(viewFrame.current);
+    viewFrame.current = requestAnimationFrame(() =>
+      setView({ ...cam.current, w: vp.clientWidth, h: vp.clientHeight }),
+    );
+  }, []);
+
+  const moveTo = useCallback(
+    (target: Camera, animate = true) => {
+      cancelAnimationFrame(animFrame.current);
+      if (!animate || prefersReducedMotion()) {
+        cam.current = target;
+        apply();
+        return;
+      }
+      const from = { ...cam.current };
+      const start = performance.now();
+      const duration = 360;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / duration);
+        const e = 1 - Math.pow(1 - t, 3);
+        cam.current = {
+          x: from.x + (target.x - from.x) * e,
+          y: from.y + (target.y - from.y) * e,
+          k: from.k + (target.k - from.k) * e,
+        };
+        apply();
+        if (t < 1) animFrame.current = requestAnimationFrame(step);
+      };
+      animFrame.current = requestAnimationFrame(step);
+    },
+    [apply],
+  );
+
+  /** Camera that fits `rect` in the viewport (leaving room for the header). */
+  const fitCamera = useCallback((rect: Rect, maxK = 1): Camera => {
+    const vp = viewportRef.current;
+    if (!vp || rect.w === 0) return cam.current;
+    const w = vp.clientWidth;
+    const h = vp.clientHeight;
+    const pad = Math.min(72, w * 0.06);
+    const top = 72; // header overlay
+    const k = clampK(
+      Math.min((w - pad * 2) / rect.w, (h - top - pad * 2) / rect.h, maxK),
+    );
+    return {
+      k,
+      x: w / 2 - (rect.x + rect.w / 2) * k,
+      y: top + (h - top) / 2 - (rect.y + rect.h / 2) * k,
+    };
+  }, []);
+
+  const zoomAt = useCallback(
+    (factor: number, sx: number, sy: number, animate = false) => {
+      const c = cam.current;
+      const k = clampK(c.k * factor);
+      const f = k / c.k;
+      moveTo({ k, x: sx - (sx - c.x) * f, y: sy - (sy - c.y) * f }, animate);
+    },
+    [moveTo],
+  );
+
+  const zoomCenter = useCallback(
+    (factor: number) => {
+      const vp = viewportRef.current;
+      if (vp) zoomAt(factor, vp.clientWidth / 2, vp.clientHeight / 2, true);
+    },
+    [zoomAt],
+  );
+
+  const fitAll = useCallback(
+    (animate = true) => moveTo(fitCamera(layout.bounds), animate),
+    [fitCamera, layout.bounds, moveTo],
+  );
+
+  const zoomToSection = useCallback(
+    (rect: Rect) => moveTo(fitCamera(rect, 1.15)),
+    [fitCamera, moveTo],
+  );
+
+  // Position before first paint so there's no flash of an unpositioned board.
+  // Fit everything if that's still readable; otherwise (big boards, phones)
+  // start at a reading zoom on the first shelf, A–Z order.
+  useLayoutEffect(() => {
+    const fit = fitCamera(layout.bounds);
+    cam.current =
+      fit.k >= INITIAL_MIN_K
+        ? fit
+        : { k: INITIAL_READING_K, x: 24 - layout.bounds.x * INITIAL_READING_K, y: 136 - layout.bounds.y * INITIAL_READING_K };
+    apply();
+    if (viewportRef.current) viewportRef.current.dataset.ready = "true";
+  }, [apply, fitCamera, layout.bounds]);
+
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const ro = new ResizeObserver(() => apply());
+    ro.observe(vp);
+    return () => {
+      ro.disconnect();
+      cancelAnimationFrame(viewFrame.current);
+      cancelAnimationFrame(animFrame.current);
+    };
+  }, [apply]);
+
+  // ---- wheel / trackpad ----------------------------------------------------
+
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault(); // React's onWheel is passive and can't do this
+      cancelAnimationFrame(animFrame.current);
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? vp.clientHeight : 1;
+      const dx = e.deltaX * unit;
+      const dy = e.deltaY * unit;
+      if (e.ctrlKey || e.metaKey) {
+        // Trackpad pinch arrives as ctrl+wheel.
+        const r = vp.getBoundingClientRect();
+        zoomAt(Math.exp(-dy * 0.01), e.clientX - r.left, e.clientY - r.top);
+      } else {
+        const c = cam.current;
+        cam.current = { ...c, x: c.x - dx, y: c.y - dy };
+        apply();
+      }
+    };
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, [apply, zoomAt]);
+
+  // ---- pointer: drag to pan, two fingers to pinch ---------------------------
+
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<Gesture | null>(null);
+  const suppressClick = useRef(false);
+
+  const startPan = (id: number, x: number, y: number) => {
+    gesture.current = { type: "pan", id, startX: x, startY: y, cam: { ...cam.current }, moved: false };
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    cancelAnimationFrame(animFrame.current);
+    suppressClick.current = false;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 1) {
+      startPan(e.pointerId, e.clientX, e.clientY);
+    } else if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      const vp = e.currentTarget;
+      for (const id of pointers.current.keys()) vp.setPointerCapture(id);
+      gesture.current = {
+        type: "pinch",
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        midX: (a.x + b.x) / 2,
+        midY: (a.y + b.y) / 2,
+      };
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    const vp = e.currentTarget;
+
+    if (g?.type === "pan" && g.id === e.pointerId) {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (!g.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
+        g.moved = true;
+        // Capture only once it's a drag, so a plain click still reaches the card.
+        vp.setPointerCapture(e.pointerId);
+        vp.dataset.panning = "true";
+      }
+      if (g.moved) {
+        cam.current = { ...cam.current, x: g.cam.x + dx, y: g.cam.y + dy };
+        apply();
+      }
+    } else if (g?.type === "pinch" && pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+      const r = vp.getBoundingClientRect();
+      const c = cam.current;
+      const k = clampK(c.k * (dist / (g.dist || dist)));
+      const f = k / c.k;
+      const sx = midX - r.left;
+      const sy = midY - r.top;
+      cam.current = {
+        k,
+        x: sx - (sx - c.x) * f + (midX - g.midX),
+        y: sy - (sy - c.y) * f + (midY - g.midY),
+      };
+      apply();
+      gesture.current = { type: "pinch", dist, midX, midY };
+    }
+  };
+
+  const onPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.delete(e.pointerId)) return;
+    const g = gesture.current;
+    if (g?.type === "pan" && g.moved) suppressClick.current = true;
+    if (g?.type === "pinch") suppressClick.current = true;
+    if (pointers.current.size === 1) {
+      // Lifting one finger of a pinch continues as a pan with the other.
+      const [[id, p]] = [...pointers.current.entries()];
+      startPan(id, p.x, p.y);
+      (gesture.current as Extract<Gesture, { type: "pan" }>).moved = true;
+    } else if (pointers.current.size === 0) {
+      gesture.current = null;
+      delete e.currentTarget.dataset.panning;
+    }
+  };
+
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (suppressClick.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClick.current = false;
+    }
+  };
+
+  // ---- keyboard --------------------------------------------------------------
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; // leave browser zoom alone
+    const step = e.shiftKey ? 320 : 96;
+    const c = cam.current;
+    const pan = (dx: number, dy: number) => moveTo({ ...c, x: c.x + dx, y: c.y + dy }, false);
+    switch (e.key) {
+      case "ArrowLeft": pan(step, 0); break;
+      case "ArrowRight": pan(-step, 0); break;
+      case "ArrowUp": pan(0, step); break;
+      case "ArrowDown": pan(0, -step); break;
+      case "+":
+      case "=": zoomCenter(1.25); break;
+      case "-":
+      case "_": zoomCenter(0.8); break;
+      case "0": fitAll(); break;
+      case "1": zoomCenter(1 / c.k); break;
+      default: return;
+    }
+    e.preventDefault();
+  };
+
+  /** Keep keyboard-focused cards and section labels on screen and readable. */
+  const onFocus = (e: React.FocusEvent<HTMLDivElement>) => {
+    const el = e.target as HTMLElement;
+    if (!el.matches(":focus-visible") || !el.dataset.rect) return;
+    const [x, y, w, h] = el.dataset.rect.split(",").map(Number);
+    const vp = viewportRef.current;
+    if (!vp) return;
+    const c = cam.current;
+    const m = 32;
+    const sx = x * c.k + c.x;
+    const sy = y * c.k + c.y;
+    const visible =
+      c.k >= 0.6 &&
+      sx >= m && sy >= 72 &&
+      sx + w * c.k <= vp.clientWidth - m &&
+      sy + h * c.k <= vp.clientHeight - m;
+    if (visible) return;
+    const k = Math.max(c.k, 0.9);
+    moveTo({
+      k,
+      x: vp.clientWidth / 2 - (x + w / 2) * k,
+      y: vp.clientHeight / 2 - (y + h / 2) * k,
+    });
+  };
+
+  // ---- render ----------------------------------------------------------------
+
+  const [authorsOpen, setAuthorsOpen] = useState(false);
+  const total = sections.reduce((n, s) => n + s.poems.length, 0);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-canvas">
+      <div
+        ref={viewportRef}
+        tabIndex={0}
+        role="region"
+        aria-label="Poem board"
+        aria-describedby="board-help"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onClickCapture={onClickCapture}
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
+        className="absolute inset-0 cursor-grab touch-none overflow-clip opacity-0 outline-none select-none [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] data-[panning=true]:cursor-grabbing data-[ready=true]:opacity-100 data-[ready=true]:transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      >
+        <p id="board-help" className="sr-only">
+          {total} poems by {sections.length} authors. Drag or use the arrow keys
+          to move around, plus and minus to zoom, zero to see everything. Tab
+          moves between authors and poems. A list view is also available.
+        </p>
+        <div
+          ref={worldRef}
+          data-lod="detail"
+          className="group/world absolute top-0 left-0 origin-top-left"
+        >
+          <World sections={sections} layout={layout} onZoomToSection={zoomToSection} />
+        </div>
+      </div>
+
+      {/* Overlays: siblings of the viewport so they don't pan or eat wheel events. */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+        <Link
+          href="/"
+          className="pointer-events-auto flex items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
+        >
+          <FeatherIcon className="size-4 text-primary" aria-hidden />
+          <span className="font-serif text-lg leading-none">PoemHub</span>
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            {sections.length} authors · {total} poems
+          </span>
+        </Link>
+        <div className="pointer-events-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={onListView} className="bg-background/85 backdrop-blur">
+            <ListIcon />
+            <span className="hidden sm:inline">List view</span>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="bg-background/85 backdrop-blur">
+            <Link href="/sign-in">Editor sign in</Link>
+          </Button>
+        </div>
+      </header>
+
+      <AuthorsPanel
+        open={authorsOpen}
+        onOpenChange={setAuthorsOpen}
+        sections={sections}
+        layout={layout}
+        onPick={(rect) => {
+          zoomToSection(rect);
+          if (window.innerWidth < 640) setAuthorsOpen(false);
+        }}
+      />
+
+      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-background/90 p-1 shadow-sm backdrop-blur">
+        <Button variant="ghost" size="icon-sm" onClick={() => zoomCenter(0.8)} aria-label="Zoom out">
+          <MinusIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => zoomCenter(1 / cam.current.k)}
+          aria-label={`Zoom ${Math.round(view.k * 100)}%, reset to 100%`}
+          className="w-14 tabular-nums"
+        >
+          {Math.round(view.k * 100)}%
+        </Button>
+        <Button variant="ghost" size="icon-sm" onClick={() => zoomCenter(1.25)} aria-label="Zoom in">
+          <PlusIcon />
+        </Button>
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+        <Button variant="ghost" size="sm" onClick={() => fitAll()}>
+          <MaximizeIcon />
+          <span className="hidden sm:inline">Fit</span>
+        </Button>
+      </div>
+
+      <p className="pointer-events-none absolute bottom-5 left-4 hidden text-xs text-muted-foreground lg:block">
+        Drag to move · ⌘/Ctrl + scroll or pinch to zoom
+      </p>
+
+      <Minimap
+        layout={layout}
+        view={view}
+        onJump={(wx, wy) => {
+          const vp = viewportRef.current;
+          if (!vp) return;
+          const k = cam.current.k;
+          moveTo({ k, x: vp.clientWidth / 2 - wx * k, y: vp.clientHeight / 2 - wy * k }, false);
+        }}
+      />
+    </div>
+  );
+}
+
+// ---- world contents (memoised: never re-rendered while panning) -------------
+
+function World({
+  sections,
+  layout,
+  onZoomToSection,
+}: {
+  sections: BoardSection[];
+  layout: BoardLayout;
+  onZoomToSection: (rect: Rect) => void;
+}) {
+  // Render once per data change; camera updates bypass React entirely.
+  return useMemo(
+    () =>
+      sections.map((section, i) => {
+        const box = layout.sections[i];
+        const hue = sectionHue(section.editorId);
+        return (
+          <section
+            key={section.editorId}
+            aria-label={`${section.penName}, ${section.poems.length} ${section.poems.length === 1 ? "poem" : "poems"}`}
+            style={{ ["--hue" as string]: hue }}
+          >
+            <div
+              className="section-shelf absolute rounded-3xl border"
+              style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+            />
+            <button
+              type="button"
+              data-rect={`${box.x},${box.y},${box.w},${box.h}`}
+              onClick={() => onZoomToSection(box)}
+              title="Zoom to this author"
+              className="absolute flex items-baseline gap-3 rounded-lg px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              // Explicit width: the world is 0×0, so shrink-to-fit would truncate.
+              style={{ left: box.x + 28, top: box.y + 18, width: box.w - 56 }}
+            >
+              <span className="size-2.5 shrink-0 self-center rounded-full section-dot" aria-hidden />
+              <h2 className="min-w-0 truncate font-serif text-[28px] leading-tight">{section.penName}</h2>
+              <span className="shrink-0 text-sm text-muted-foreground">
+                {section.poems.length} {section.poems.length === 1 ? "poem" : "poems"}
+              </span>
+            </button>
+            {/* Overview label: legible when zoomed far out. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute flex items-center justify-center p-8 text-center opacity-0 transition-opacity duration-200 group-data-[lod=overview]/world:opacity-100"
+              style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
+            >
+              <span
+                className="section-ink font-serif leading-tight"
+                style={{ fontSize: Math.min(120, Math.max(56, box.w / 7)) }}
+              >
+                {section.penName}
+              </span>
+            </div>
+            {section.poems.map((poem, j) => (
+              <PoemCard key={poem.id} poem={poem} authorSlug={section.slug} rect={box.cards[j]} />
+            ))}
+          </section>
+        );
+      }),
+    [sections, layout, onZoomToSection],
+  );
+}
+
+function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: string; rect: Rect }) {
+  const isPrivate = poem.visibility === "private";
+  return (
+    <Link
+      href={`/p/${authorSlug}/${poem.slug}`}
+      draggable={false}
+      data-card=""
+      data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
+      aria-label={isPrivate ? `${poem.title} (password protected)` : poem.title}
+      className="absolute flex flex-col overflow-hidden rounded-2xl border bg-card p-4 text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06),0_4px_16px_-8px_oklch(0_0_0/0.12)] transition-[opacity,box-shadow,translate] duration-200 outline-none hover:-translate-y-0.5 hover:shadow-[0_2px_4px_oklch(0_0_0/0.08),0_12px_28px_-12px_oklch(0_0_0/0.25)] focus-visible:ring-3 focus-visible:ring-ring group-data-[lod=overview]/world:opacity-25"
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="line-clamp-2 font-serif text-[19px] leading-snug">{poem.title}</h3>
+        {isPrivate && (
+          <span className="mt-0.5 flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground">
+            <LockIcon className="size-3" aria-hidden />
+            Private
+          </span>
+        )}
+      </div>
+      {isPrivate ? (
+        <div className="mt-3 flex flex-1 flex-col justify-between">
+          {/* Decorative "redacted" lines: there is no text behind them. */}
+          <div className="grid gap-2 opacity-60" aria-hidden>
+            {[88, 72, 80, 54].map((w, i) => (
+              <span key={i} className="h-2 rounded-full bg-muted-foreground/20" style={{ width: `${w}%` }} />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Enter the password to read</p>
+        </div>
+      ) : (
+        <p className="mt-2 flex-1 overflow-hidden font-serif text-[14.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+          {poem.excerpt}
+          {poem.hasMore && "\n…"}
+        </p>
+      )}
+    </Link>
+  );
+}
+
+// ---- authors index ----------------------------------------------------------
+
+function AuthorsPanel({
+  open,
+  onOpenChange,
+  sections,
+  layout,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sections: BoardSection[];
+  layout: BoardLayout;
+  onPick: (rect: Rect) => void;
+}) {
+  return (
+    <div className="absolute top-20 left-4 z-10 w-64 max-w-[calc(100%-2rem)]">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onOpenChange(!open)}
+        aria-expanded={open}
+        aria-controls="authors-list"
+        className="bg-background/85 backdrop-blur"
+      >
+        {open ? <XIcon /> : <UsersIcon />}
+        Authors
+        <span className="text-muted-foreground">{sections.length}</span>
+      </Button>
+      {open && (
+        <nav
+          id="authors-list"
+          aria-label="Authors"
+          className="mt-2 max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
+        >
+          <ul>
+            {sections.map((s, i) => (
+              <li key={s.editorId}>
+                <button
+                  type="button"
+                  onClick={() => onPick(layout.sections[i])}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  style={{ ["--hue" as string]: sectionHue(s.editorId) }}
+                >
+                  <span className="size-2 shrink-0 rounded-full section-dot" aria-hidden />
+                  <span className="truncate font-serif text-[15px]">{s.penName}</span>
+                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">{s.poems.length}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+    </div>
+  );
+}
+
+// ---- minimap ------------------------------------------------------------------
+
+const MINI_W = 180;
+const MINI_H = 120;
+
+function Minimap({
+  layout,
+  view,
+  onJump,
+}: {
+  layout: BoardLayout;
+  view: { x: number; y: number; k: number; w: number; h: number };
+  onJump: (wx: number, wy: number) => void;
+}) {
+  const b = layout.bounds;
+  if (b.w === 0 || view.w === 0) return null;
+  const s = Math.min(MINI_W / b.w, MINI_H / b.h);
+  const w = b.w * s;
+  const h = b.h * s;
+  // Visible world rect
+  const vx = -view.x / view.k;
+  const vy = -view.y / view.k;
+  const vw = view.w / view.k;
+  const vh = view.h / view.k;
+
+  const jump = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    onJump((e.clientX - r.left) / s, (e.clientY - r.top) / s);
+  };
+
+  return (
+    <div
+      aria-hidden
+      className="absolute right-4 bottom-4 hidden overflow-hidden rounded-xl border bg-background/90 p-2 shadow-sm backdrop-blur md:block"
+    >
+      <svg
+        width={w}
+        height={h}
+        className="block cursor-pointer touch-none"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          jump(e);
+        }}
+        onPointerMove={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) jump(e);
+        }}
+      >
+        {layout.sections.map((sec) => (
+          <rect
+            key={sec.editorId}
+            x={sec.x * s}
+            y={sec.y * s}
+            width={sec.w * s}
+            height={sec.h * s}
+            rx={3}
+            fill={`oklch(0.75 0.08 ${sectionHue(sec.editorId)} / 0.55)`}
+          />
+        ))}
+        <rect
+          x={vx * s}
+          y={vy * s}
+          width={vw * s}
+          height={vh * s}
+          rx={2}
+          fill="var(--primary)"
+          fillOpacity={0.08}
+          stroke="var(--primary)"
+          strokeWidth={1.5}
+        />
+      </svg>
+    </div>
+  );
+}

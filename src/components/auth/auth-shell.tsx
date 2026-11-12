@@ -1,5 +1,6 @@
 import { FeatherIcon } from "lucide-react";
 import Link from "next/link";
+import { PoemBloom } from "./poem-bloom";
 
 /**
  * Sign-in and onboarding layout (shadcn login-02): the form on the left, a
@@ -38,15 +39,9 @@ export function AuthShell({
       </div>
       <aside
         aria-hidden
-        className="relative hidden overflow-hidden border-l bg-canvas [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] [background-size:22px_22px] lg:flex lg:items-center lg:justify-center"
+        className="poem-bloom-host relative hidden overflow-hidden border-l bg-canvas [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] [background-size:22px_22px] lg:flex lg:items-center lg:justify-center"
       >
-        <figure className="max-w-sm rotate-[-1.5deg] rounded-2xl border bg-card p-8 shadow-[0_1px_2px_oklch(0_0_0/0.06),0_12px_32px_-12px_oklch(0_0_0/0.18)]">
-          <p className="font-serif text-2xl leading-snug">Ink Hour</p>
-          <blockquote className="mt-4 font-serif text-lg leading-relaxed whitespace-pre-line text-muted-foreground">
-            {"the kettle hums its one low note,\nthe lamp leans in to read,\nand every word I haven't said\n    is waiting, like a seed."}
-          </blockquote>
-          <figcaption className="mt-6 text-sm text-muted-foreground">Write it down. Pin it to the board.</figcaption>
-        </figure>
+        <PoemBloom />
       </aside>
     </main>
   );

@@ -7,10 +7,12 @@ import {
   MaximizeIcon,
   MinusIcon,
   PlusIcon,
+  SearchIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -27,6 +29,9 @@ import {
   type Rect,
 } from "@/lib/board-layout";
 import type { BoardPoem, BoardSection } from "@/lib/board-types";
+import type { SearchResults } from "@/lib/search-types";
+import { notify } from "@/lib/notify";
+import { BoardSearch } from "./board-search";
 
 /*
  * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
@@ -359,7 +364,68 @@ export function BoardCanvas({
   // ---- render ----------------------------------------------------------------
 
   const [authorsOpen, setAuthorsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const total = sections.reduce((n, s) => n + s.poems.length, 0);
+  const router = useRouter();
+
+  // ⌘K / Ctrl+K anywhere, or "/" when not typing, opens search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.closest("input, textarea, [contenteditable]");
+      if (((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") || (e.key === "/" && !typing)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** Briefly ring an element so the eye finds it after the camera moves. */
+  const highlight = (el: Element | null) => {
+    if (!(el instanceof HTMLElement)) return;
+    delete el.dataset.highlight;
+    void el.offsetWidth; // restart the animation if it's already running
+    el.dataset.highlight = "true";
+    setTimeout(() => delete el.dataset.highlight, 2400);
+  };
+
+  const pickAuthor = (author: SearchResults["authors"][number]) => {
+    const i = sections.findIndex((s) => s.editorId === author.editorId);
+    if (i < 0) {
+      // Just published; this (cached) board doesn't have the section yet.
+      notify.info(`${author.penName} will appear on the board shortly`, "Please refresh in a minute.");
+      return;
+    }
+    zoomToSection(layout.sections[i]);
+    highlight(worldRef.current?.querySelector(`[data-section-id="${author.editorId}"]`) ?? null);
+    // Keyboard users land on the section label, ready to Tab into its poems.
+    setTimeout(() => {
+      worldRef.current
+        ?.querySelector<HTMLElement>(`[data-section-label="${author.editorId}"]`)
+        ?.focus({ preventScroll: true });
+    }, 380);
+  };
+
+  const pickPoem = (poem: SearchResults["poems"][number]) => {
+    const i = sections.findIndex((s) => s.editorId === poem.editorId);
+    const j = i < 0 ? -1 : sections[i].poems.findIndex((p) => p.id === poem.id);
+    if (j < 0) {
+      // Published after this board was cached: open it directly.
+      router.push(`/p/${poem.authorSlug}/${poem.slug}`);
+      return;
+    }
+    const card = layout.sections[i].cards[j];
+    const vp = viewportRef.current;
+    if (vp) {
+      const k = Math.max(cam.current.k, 1);
+      moveTo({ k, x: vp.clientWidth / 2 - (card.x + card.w / 2) * k, y: vp.clientHeight / 2 - (card.y + card.h / 2) * k });
+    }
+    const el = worldRef.current?.querySelector<HTMLElement>(`[data-poem-id="${poem.id}"]`) ?? null;
+    highlight(el);
+    // Focus the card (Enter then opens it) once the camera has arrived.
+    setTimeout(() => el?.focus({ preventScroll: true }), 380);
+  };
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-canvas">
@@ -405,6 +471,20 @@ export function BoardCanvas({
           </span>
         </Link>
         <div className="pointer-events-auto flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSearchOpen(true)}
+            aria-keyshortcuts="Meta+K Control+K /"
+            className="bg-background/85 backdrop-blur sm:min-w-52 sm:justify-start"
+          >
+            <SearchIcon />
+            <span className="hidden text-muted-foreground sm:inline">Search authors & poems</span>
+            <span className="sr-only sm:hidden">Search</span>
+            <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-sans text-[10px] text-muted-foreground sm:inline">
+              ⌘K
+            </kbd>
+          </Button>
           <Button variant="outline" size="sm" onClick={onListView} className="bg-background/85 backdrop-blur">
             <ListIcon />
             <span className="hidden sm:inline">List view</span>
@@ -414,6 +494,13 @@ export function BoardCanvas({
           </Button>
         </div>
       </header>
+
+      <BoardSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onPickAuthor={pickAuthor}
+        onPickPoem={pickPoem}
+      />
 
       <AuthorsPanel
         open={authorsOpen}
@@ -491,11 +578,13 @@ function World({
             style={{ ["--hue" as string]: hue }}
           >
             <div
+              data-section-id={section.editorId}
               className="section-shelf absolute rounded-3xl border"
               style={{ left: box.x, top: box.y, width: box.w, height: box.h }}
             />
             <button
               type="button"
+              data-section-label={section.editorId}
               data-rect={`${box.x},${box.y},${box.w},${box.h}`}
               onClick={() => onZoomToSection(box)}
               title="Zoom to this author"
@@ -539,6 +628,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
       href={`/p/${authorSlug}/${poem.slug}`}
       draggable={false}
       data-card=""
+      data-poem-id={poem.id}
       data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
       aria-label={isPrivate ? `${poem.title} (password protected)` : poem.title}
       className="absolute flex flex-col overflow-hidden rounded-2xl border bg-card p-4 text-card-foreground shadow-[0_1px_2px_oklch(0_0_0/0.06),0_4px_16px_-8px_oklch(0_0_0/0.12)] transition-[opacity,box-shadow,translate] duration-200 outline-none hover:-translate-y-0.5 hover:shadow-[0_2px_4px_oklch(0_0_0/0.08),0_12px_28px_-12px_oklch(0_0_0/0.25)] focus-visible:ring-3 focus-visible:ring-ring group-data-[lod=overview]/world:opacity-25"

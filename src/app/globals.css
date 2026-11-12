@@ -158,3 +158,15 @@
     color: oklch(0.85 0.05 var(--hue));
   }
 }
+
+/* Board search: briefly ring the section or card the camera flew to. */
+@keyframes board-highlight {
+  0%, 60% { box-shadow: 0 0 0 4px var(--background), 0 0 0 7px var(--primary); }
+  100% { box-shadow: 0 0 0 4px transparent, 0 0 0 7px transparent; }
+}
+[data-highlight="true"] {
+  animation: board-highlight 2.4s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-highlight="true"] { animation-duration: 0.01s; box-shadow: 0 0 0 3px var(--primary); }
+}

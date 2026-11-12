@@ -44,8 +44,10 @@ export async function typeCode(page: Page, code: string) {
 export async function signUpAs(page: Page, email: string, penName: string) {
   await requestCode(page, email);
   await typeCode(page, await latestCode(email));
-  await expect(page).toHaveURL(/\/admin\/onboarding$/);
+  // The first Server Action of a run is compiled on demand by `next dev`,
+  // which can take a while on a busy machine; later ones are fast.
+  await expect(page).toHaveURL(/\/admin\/onboarding$/, { timeout: 45_000 });
   await page.getByRole("textbox", { name: "Pen name" }).fill(penName);
   await page.getByRole("button", { name: "Continue to dashboard" }).click();
-  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page).toHaveURL(/\/admin(\?.*)?$/, { timeout: 45_000 });
 }

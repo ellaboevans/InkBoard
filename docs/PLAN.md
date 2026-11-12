@@ -196,10 +196,20 @@ Done:
 - Unexpected failures (Server Action throws) become a friendly "Something went wrong" toast, and what the user typed is kept. Pages that fail to render show `src/app/error.tsx`, with a retry button and a reference code.
 - `pnpm dev` first checks that the database has every migration (`scripts/check-migrations.ts`, also `pnpm db:check`). If not, it stops and tells you to run `pnpm db:migrate`, instead of failing later with "column does not exist".
 
-### Phase 5: Full-text search (R10)
-- Migration: generated `tsvector` columns on `editors.pen_name` and `poems.title`, GIN + trigram indexes.
-- Search box on the board (⌘K): results grouped as **Authors** and **Poems**; selecting one flies the camera to the section/card and highlights it.
-- **Accept:** prefix ("ros" → "Rose"), multi-word and slightly misspelt queries match; poem bodies never match.
+### Phase 5: Full-text search (R10) ✅
+- **Index** (`drizzle/0003_search.sql`):
+  - GIN indexes on `to_tsvector('simple', …)` and on trigrams (`pg_trgm`), over author pen names and poem titles only.
+  - `search_normalize()` is an immutable wrapper around `unaccent` + `lower`, so matching ignores case and accents ("jose" finds "José").
+  - Poem bodies are not indexed (N1).
+- **Matching** (`src/server/search.ts`):
+  - Every word must match, as a prefix ("ros gar" finds "Rose Garden").
+  - Only if a group (authors or poems) has no matches does it fall back to typo-tolerant matching, still requiring every word ("dickenson" finds "Dickinson"), and only for queries of 4+ characters. Matching typos on every query flooded short ones with noise.
+  - Query words are reduced to letters and digits before reaching `to_tsquery`, so search syntax typed by users is treated as plain text.
+- **API:** `GET /api/search?q=` returns titles and names only, for published poems by onboarded editors. Limited to 120 requests per IP per minute.
+- **UI:**
+  - ⌘K / Ctrl+K, `/`, or the Search button opens a palette with results grouped as **Authors** and **Poems** (private poems show a lock).
+  - Picking an author moves the board to their section and focuses its label. Picking a poem moves to its card, highlights it and focuses it, so Enter opens it in the overlay.
+- **Accept:** prefix ("ros" → "Rose"), multi-word and slightly misspelt queries match; poem bodies never match. Covered by unit tests (including a mutation check that the text test fails if bodies become searchable) and E2E.
 
 ### Phase 6: Hardening and launch
 - Security review of the full app, CSP/security headers, stale row cleanup (OTPs, sessions, rate limits) via cron.
@@ -219,9 +229,9 @@ Done:
 | R7 Email OTP, passwordless | 1 | ✅ |
 | R8 Visitor read/unlock | 4 | ✅ incl. board overlay |
 | R9 Author sections | 1 (pen name), 3 | ✅ |
-| R10 Full-text search | 5 | ⏳ |
+| R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
-| N1 Private body never leaked | 3, 4, 5 | 🟡 board, reading page and unlock tested; search pending |
+| N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
 | N4 Sessions | 1 | ✅ tested |

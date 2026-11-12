@@ -72,6 +72,7 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - World elements are absolutely positioned inside a 0×0 container, so give them explicit widths. Shrink-to-fit would truncate them.
 - Pointer capture is taken only once a drag passes 4px, so a plain click still reaches the card's link.
 - In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
+- `next dev` compiles routes on first request. globalSetup warms every route (including the intercepted overlay, via RSC + Next-Url headers); add new routes there. Server Actions can't be warmed, hence the long test and expect timeouts in `playwright.config.ts`.
 - Playwright starts the web server *before* globalSetup runs the migrations. That's why its readiness URL is `/sign-in`, which doesn't touch the DB.
 - The dev database may also be shared with sibling worktrees, and their seeds overwrite yours. For visual checks use a database of your own (e.g. `poemhub_dev_<name>`).
 
@@ -79,6 +80,12 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - `(.)p/[author]/[poem]` intercepts soft navigations from the board and shows `PoemReader` in `PoemModal`. Hard loads render `src/app/p/[author]/[poem]/page.tsx`, which uses the same reader.
 - `@modal/default.tsx`, `@modal/page.tsx` and `@modal/[...catchAll]/page.tsx` all return null, so the overlay clears when navigating anywhere else. Keep them.
 - Client components in the slot can't call `usePathname()` outside Suspense (a build error under Cache Components), so URL-dependent bits are rendered on the server and passed in (`toolbar`).
+
+**Search** (`src/server/search.ts`, `GET /api/search`, `src/components/board/board-search.tsx`) covers pen names and poem titles only. Never add `poems.body`: a test makes body text searchable on purpose and checks that it fails.
+- Index expressions use `search_normalize()` from `drizzle/0003_search.sql`, so new queries must use the same expression or they won't hit the index.
+- The indexes live only in that SQL migration, not in `schema.ts`; drizzle-kit ignores them.
+- Prefix matching comes first; typo matching is a per-group fallback only (see the file header for why).
+- The palette uses Dialog directly rather than `CommandDialog`, so that after a pick it can stop Radix returning focus to the Search button.
 
 **Toasts.** Use `notify` from `src/lib/notify.ts` (Sileo, top-centre, `src/components/toaster.tsx`); don't import `sileo` directly.
 - Wrap `useActionState` actions in `withErrorToast`, which turns unexpected throws into a toast but still lets `redirect()`/`notFound()` through (`unstable_rethrow`).

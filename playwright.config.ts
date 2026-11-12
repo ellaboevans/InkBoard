@@ -18,8 +18,10 @@ export default defineConfig({
   retries: 1,
   // `next dev` compiles each route on first visit, which can take several
   // seconds on a busy machine; the defaults (5s / 30s) are too tight.
-  timeout: 60_000,
-  expect: { timeout: 15_000 },
+  // Routes are warmed up in globalSetup, but Server Actions can't be: each
+  // one compiles on its first call (10–30 s on a busy machine).
+  timeout: 120_000,
+  expect: { timeout: 30_000 },
   use: {
     baseURL: `http://localhost:${PORT}`,
     // Uses the locally installed Chrome; run `pnpm exec playwright install chromium` instead if absent.

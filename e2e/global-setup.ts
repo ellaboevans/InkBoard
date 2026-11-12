@@ -36,6 +36,7 @@ async function warmUp() {
     ["/admin/poems/new"],
     ["/admin/poems/00000000-0000-0000-0000-000000000000"],
     ["/admin/settings"],
+    ["/api/search?q=warm"],
     ["/p/warm-up/warm-up"],
     ["/p/warm-up/warm-up", { RSC: "1", "Next-Url": "/" }],
   ];

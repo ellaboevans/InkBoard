@@ -16,7 +16,8 @@ import { rateLimit } from "@/server/rate-limit";
 import { isEmailAllowed, normalizeEmail } from "./email";
 import { ipBucket } from "./ip";
 
-export const OTP_TTL_SECONDS = 10 * 60;
+import { OTP_TTL_SECONDS } from "./otp-config";
+export { OTP_TTL_SECONDS };
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 

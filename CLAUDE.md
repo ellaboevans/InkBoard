@@ -50,6 +50,10 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - An editor with `pen_name` null hasn't onboarded yet. The pen name is the author's section label on the board, and the slug is used in public URLs.
 - `/admin/profile` renames via `updateProfile` (`profile.ts`), which never touches the slug: it is in every `/p/[author]/[poem]` link, so it is fixed once onboarding sets it. Device management (`listSessions`, `revokeSession`, `revokeOtherSessions` in `sessions.ts`) is scoped by editor; the current session's id comes from the DAL (`requireOnboardedSession`). Results never include `token_hash`.
 
+**Emails** (`src/server/email.ts`, content in `src/server/email-templates.ts` as pure functions). `sendOtpEmail` and `sendSignInAlertEmail` share one delivery path; tests mock both (`outbox`, `alerts` in `tests/support/outbox.ts`), and the E2E outbox records alerts as `{ kind: "sign-in-alert" }` lines (`alertsFor()` helper).
+- Code emails are built for client code detection: keep the code unbroken and alone on its line, and add **no other 4–8 digit numbers** (a test checks). Non-code emails must not contain the word "code".
+- New sign-in alerts: `notifyIfNewSignIn` runs after `startSession` in the verify action. `sign_in_locations` holds `hmac("sign-in-location", ipBucket(ip))`, never IPs. E2E simulates networks with `X-Forwarded-For`.
+
 **Client IP** comes from `X-Forwarded-For`, counting `TRUSTED_PROXY_HOPS` entries from the right (`src/server/auth/ip.ts`); entries further left are client-controlled. Requests with no IP share an `unknown` bucket. OTP emails are sent in `after()` so response timing doesn't reveal allowlist membership. Tests mock `after` from `next/server` to run the task immediately.
 
 **Poems** (`src/server/poems.ts`) follow the same pattern as `otp.ts`: framework-free functions that take the DAL-resolved `editorId` and scope **every** query by it. Another editor's poem id behaves like a missing one, and malformed ids are rejected before reaching SQL. Reads return `hasPassword` and never `password_hash`/`password_version`; keep it that way, since the editor UI gets these objects as props.

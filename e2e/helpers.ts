@@ -10,8 +10,8 @@ export async function latestCode(email: string): Promise<string> {
       const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n");
       code = lines
         .filter(Boolean)
-        .map((l) => JSON.parse(l) as { to: string; code: string })
-        .findLast((m) => m.to === email)?.code;
+        .map((l) => JSON.parse(l) as { to: string; code?: string })
+        .findLast((m) => m.to === email && m.code)?.code;
       return code;
     })
     .toBeTruthy();
@@ -60,4 +60,12 @@ export const accountButton = (page: Page, penName: string) =>
 export async function signOut(page: Page) {
   await page.getByRole("button", { name: /^Account menu:/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
+}
+
+/** Security notices written to the E2E outbox for `email`. */
+export async function alertsFor(email: string): Promise<{ device: string; ip: string }[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string; kind?: string; device: string; ip: string })
+    .filter((m) => m.to === email && m.kind === "sign-in-alert");
 }

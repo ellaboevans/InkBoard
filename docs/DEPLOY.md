@@ -31,11 +31,14 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 ### Cron
 `vercel.json` schedules `/api/cron/cleanup` daily at 04:17 UTC. It deletes expired sign-in codes, expired sessions and stale rate-limit rows. It returns 503 until `CRON_SECRET` is set, and 401 for any other caller. Run history is under Project → Cron Jobs.
 
-## 3. Resend (sign-in emails)
+## 3. Resend (sign-in codes and security emails)
 
 1. Create an API key at <https://resend.com/api-keys> (permission: *Sending access*), and set it as `RESEND_API_KEY`.
-2. **Verify a sending domain**: Domains → Add domain, then add the DNS records it shows (SPF, DKIM, and optionally DMARC). Until it's verified, Resend only delivers to your own address.
-3. Set `EMAIL_FROM` to an address on that domain.
+2. **Verify a sending domain**: Domains → Add domain, then add the DNS records it shows (SPF and DKIM). Until it's verified, Resend only delivers to your own address.
+3. **Add a DMARC record** too (not optional for us): a TXT record at `_dmarc.<your domain>`, e.g. `v=DMARC1; p=quarantine; rua=mailto:dmarc@<your domain>`. Start with `p=none` for a week if you want to watch reports first.
+4. Set `EMAIL_FROM` to an address on that domain, e.g. `PoemHub <signin@<your domain>>`. Keep it the same over time: mail clients build trust in a sender gradually.
+
+**Why step 3 matters:** Gmail's "Copy code" button, Apple Mail's code AutoFill and Outlook's code highlighting only appear for senders that pass SPF, DKIM and DMARC and have a good sending history. The emails are built to be easy to detect (see `src/server/email-templates.ts`), but detection is the mail client's decision, so it may not appear for a new domain at first. Check a delivered email's "Show original" in Gmail: SPF, DKIM and DMARC should all say PASS.
 
 In production there is no fallback. Without `RESEND_API_KEY` the app refuses to start, so codes are never written to logs. Never deploy with `NODE_ENV=development`.
 

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getRequestMeta, startSession } from "@/server/auth/dal";
 import { requestOtp, verifyOtp } from "@/server/auth/otp";
+import { notifyIfNewSignIn } from "@/server/auth/sign-in-alerts";
 
 export type SignInState =
   | { step: "email"; email?: string; error?: string }
@@ -27,7 +28,7 @@ export async function signInAction(
   formData: FormData,
 ): Promise<SignInState> {
   const intent = formData.get("intent");
-  const { ip } = await getRequestMeta();
+  const { ip, userAgent } = await getRequestMeta();
 
   if (intent === "change-email") {
     return { step: "email", email: prev.email };
@@ -79,6 +80,19 @@ export async function signInAction(
       return { ...prev, error, notice: undefined };
     }
     await startSession(res.editor.id);
+    // Security notice if this network is new for the editor. Best effort:
+    // the sign-in already succeeded, so a failure here must not undo it.
+    try {
+      await notifyIfNewSignIn({
+        editorId: res.editor.id,
+        email: res.editor.email,
+        penName: res.editor.penName,
+        ip,
+        userAgent,
+      });
+    } catch (err) {
+      console.error("Couldn't check for a new sign-in location", err);
+    }
     redirect(res.editor.penName ? "/admin?signed-in=1" : "/admin/onboarding");
   }
 

@@ -292,6 +292,20 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - Also this phase: the editor's live card preview (shared `PoemCardFace` and `cardExcerpt`, tested against the board SQL), and the blooming poem stack on the sign-in page.
 - **Tests:** loader integration tests (no private text or email in the payload, drafts excluded, pinned first and dropped when unpublished, unknown authors). E2E for the whole flow, and an axe scan of the page.
 
+### Phase 9: Security emails ✅
+- **Sign-in code email** (`otpEmail` in `src/server/email-templates.ts`), laid out for mail clients' one-time-code detection (Gmail "Copy code", Apple Mail AutoFill, Outlook):
+  - "code" and the code in the subject ("482910 is your PoemHub sign-in code"), in the preview text and in the first line.
+  - The code alone on its own line, bold, as one unbroken run of digits. A plain-text part has the same structure.
+  - No other 4–8 digit numbers in the message, so a detector can't pick the wrong one (tested).
+  - `Auto-Submitted` / `X-Auto-Response-Suppress` headers; no images or tracking.
+  - Detection itself is heuristic and up to the client. It also requires SPF, DKIM and DMARC on the sending domain (docs/DEPLOY.md §3). We don't add an `OTP-Token` header: we couldn't confirm any standard or client support, and it would copy the code into more logs.
+- **New sign-in alert** (`src/server/auth/sign-in-alerts.ts`, `signInAlertEmail`): after a successful sign-in from a network (IPv4 address or IPv6 /64) not seen before for that editor, they get an email with the device ("Chrome on macOS"), IP address and time (UTC), and what to do if it wasn't them: sign the device out under Signed-in devices, and secure their email.
+  - No alert on the first sign-in ever (or the first after this shipped), on known networks, or without a client IP. At most 5 alerts per editor per day.
+  - `sign_in_locations` stores only an HMAC of the network, never the IP. Rows unused for a year are pruned by the cleanup cron.
+  - Sent after the response (like codes); a failure is logged and never blocks the sign-in.
+  - The alert never says "code", so clients don't offer to "copy" the date in it (tested).
+- **Tests:** template tests (subject, unbroken code, no other digit runs, escaping, UTC time), alert logic (first, known, new, IPv6 /64, unknown IP, per editor, no raw IP stored, daily cap), cleanup, and E2E for a sign-in from a second network.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |

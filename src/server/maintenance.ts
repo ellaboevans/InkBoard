@@ -10,7 +10,7 @@ import { safeEqual, sha256 } from "./crypto";
  * the instant it expires.
  */
 
-export type CleanupResult = { otps: number; sessions: number; rateLimits: number };
+export type CleanupResult = { otps: number; sessions: number; rateLimits: number; signInLocations: number };
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const db = getDb();
@@ -30,7 +30,17 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const rateLimits = await db.execute(sql`
     DELETE FROM rate_limits WHERE window_start < now() - interval '2 days'
   `);
-  return { otps: count(otps), sessions: count(sessions), rateLimits: count(rateLimits) };
+  // Known sign-in networks: forget ones unused for a year (a sign-in from one
+  // again then counts as new, which errs on the side of telling the editor).
+  const signInLocations = await db.execute(sql`
+    DELETE FROM sign_in_locations WHERE last_seen_at < now() - interval '1 year'
+  `);
+  return {
+    otps: count(otps),
+    sessions: count(sessions),
+    rateLimits: count(rateLimits),
+    signInLocations: count(signInLocations),
+  };
 }
 
 /**

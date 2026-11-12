@@ -6,3 +6,6 @@ export function lastCodeFor(email: string): string {
   if (!mail) throw new Error(`No email sent to ${email}`);
   return mail.code;
 }
+
+/** Security notices "sent" during a test. */
+export const alerts: { to: string; device: string; ip: string; penName: string | null }[] = [];

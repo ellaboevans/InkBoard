@@ -110,6 +110,24 @@ export const sessions = pgTable(
   ],
 );
 
+/**
+ * Networks an editor has signed in from, to spot sign-ins from a new one.
+ * Only a keyed hash (HMAC) of the IP bucket is stored, never the IP itself.
+ */
+export const signInLocations = pgTable(
+  "sign_in_locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    ipKey: text("ip_key").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("sign_in_locations_editor_ip_key").on(t.editorId, t.ipKey)],
+);
+
 export const poemVisibility = pgEnum("poem_visibility", ["public", "private"]);
 export const poemStatus = pgEnum("poem_status", ["draft", "published"]);
 

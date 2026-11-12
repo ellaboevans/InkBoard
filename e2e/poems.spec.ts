@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signOut, signUpAs, sql } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -144,7 +144,7 @@ test("signing out removes the editor's poems from the page", async ({ page }) =>
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByText("Poem created")).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOut(page);
   await expect(page).toHaveURL(/\/sign-in$/);
   // Not even in hidden (Activity-preserved) routes: think shared computers.
   expect(await page.content()).not.toContain(secret);

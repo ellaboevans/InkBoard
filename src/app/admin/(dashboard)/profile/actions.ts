@@ -2,13 +2,13 @@
 
 import { refresh, updateTag } from "next/cache";
 import { requireOnboardedEditor, requireOnboardedSession } from "@/server/auth/dal";
-import { updateProfile, type ProfileFields } from "@/server/auth/profile";
+import { updateProfile, type ProfileField, type ProfileFields } from "@/server/auth/profile";
 import { revokeOtherSessions, revokeSession } from "@/server/auth/sessions";
 import { BOARD_TAG } from "@/server/cache-tags";
 
 export type ProfileState = {
   error?: string;
-  field?: "penName" | "bio";
+  field?: ProfileField;
   savedAt?: number;
   profile?: ProfileFields;
 };
@@ -22,12 +22,16 @@ export async function saveProfileAction(
   const res = await updateProfile(editor.id, {
     penName: formData.get("penName"),
     bio: formData.get("bio"),
+    tagline: formData.get("tagline"),
+    avatar: formData.get("avatar"),
+    links: formData.getAll("links"),
+    pinnedPoemId: formData.get("pinnedPoemId"),
   });
   if (!res.ok) return { error: res.error, field: res.field };
 
   // The pen name labels the editor's section on the board and every poem page.
   updateTag(BOARD_TAG);
-  // The admin header (shared layout) shows the pen name too.
+  // The sidebar (shared layout) shows the pen name and avatar too.
   refresh();
   return { savedAt: Date.now(), profile: res.profile };
 }

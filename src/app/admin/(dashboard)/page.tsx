@@ -2,18 +2,13 @@ import { PenLineIcon, PlusIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { StatusBadge, VisibilityBadge } from "@/components/poem-badges";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { requireOnboardedEditor } from "@/server/auth/dal";
-import { listEditorPoems, type EditorPoemSummary } from "@/server/poems";
+import { getProfile } from "@/server/auth/profile";
+import { getEditorStats } from "@/server/editor-stats";
+import { StatCards } from "@/components/admin/stat-cards";
+import { listEditorPoems } from "@/server/poems";
+import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
 
 export const metadata: Metadata = { title: "Your poems" };
@@ -28,12 +23,23 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const editor = await requireOnboardedEditor();
-  const poems = await listEditorPoems(editor.id);
-  const flash = await searchParams;
-  const published = poems.filter((p) => p.status === "published").length;
+  const [poems, stats, profile, flash] = await Promise.all([
+    listEditorPoems(editor.id),
+    getEditorStats(editor.id),
+    getProfile(editor.id),
+    searchParams,
+  ]);
+  const rows: DashboardPoem[] = poems.map((p) => ({
+    id: p.id,
+    title: p.title,
+    slug: p.slug,
+    status: p.status,
+    visibility: p.visibility,
+    updatedLabel: dateFormat.format(p.updatedAt),
+  }));
 
   return (
-    <div className="grid gap-8">
+    <div className="mx-auto grid w-full max-w-6xl gap-8">
       {flash.deleted === "1" && <FlashToast param="deleted" title="Poem deleted" />}
       {flash["signed-in"] === "1" && (
         <FlashToast param="signed-in" title="Signed in" description={`Welcome back, ${editor.penName}.`} />
@@ -51,13 +57,19 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
           <p className="mt-1 text-muted-foreground">
             {poems.length === 0
               ? <>They&apos;ll appear on the board under &ldquo;{editor.penName}&rdquo;.</>
-              : <>{published} of {poems.length} published under &ldquo;{editor.penName}&rdquo;.</>}
+              : <>{stats.published} of {stats.total} published under &ldquo;{editor.penName}&rdquo;.</>}
           </p>
         </div>
         {poems.length > 0 && <NewPoemButton />}
       </div>
 
-      {poems.length === 0 ? <EmptyState /> : <PoemTable poems={poems} />}
+      <StatCards stats={stats} />
+
+      {poems.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <PoemsTable poems={rows} authorSlug={editor.slug} pinnedPoemId={profile?.pinnedPoemId ?? null} />
+      )}
     </div>
   );
 }
@@ -74,47 +86,6 @@ function NewPoemButton() {
 }
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
-
-function PoemTable({ poems }: { poems: EditorPoemSummary[] }) {
-  return (
-    <div className="rounded-xl border bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-4">Title</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Access</TableHead>
-            <TableHead className="hidden pr-4 text-right sm:table-cell">Last edited</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {poems.map((poem) => (
-            <TableRow key={poem.id} className="relative">
-              <TableCell className="max-w-0 pl-4 font-serif text-base">
-                {/* Stretched link: the whole row is clickable, one tab stop. */}
-                <Link
-                  href={`/admin/poems/${poem.id}`}
-                  className="block truncate after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
-                >
-                  {poem.title}
-                </Link>
-              </TableCell>
-              <TableCell className="w-28">
-                <StatusBadge status={poem.status} />
-              </TableCell>
-              <TableCell className="w-28">
-                <VisibilityBadge visibility={poem.visibility} />
-              </TableCell>
-              <TableCell className="hidden w-36 pr-4 text-right text-muted-foreground tabular-nums sm:table-cell">
-                {dateFormat.format(poem.updatedAt)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
 
 function EmptyState() {
   return (

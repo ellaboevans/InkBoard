@@ -16,6 +16,8 @@ export type SessionEditor = {
   penName: string | null;
   slug: string | null;
   bio: string | null;
+  /** Chosen avatar id, or null for the default (see avatarIdFor). */
+  avatar: string | null;
 };
 
 export async function createSession(
@@ -49,6 +51,7 @@ export async function validateSession(
       penName: editors.penName,
       slug: editors.slug,
       bio: editors.bio,
+      avatar: editors.avatar,
     })
     .from(sessions)
     .innerJoin(editors, eq(editors.id, sessions.editorId))

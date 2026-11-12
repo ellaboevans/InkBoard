@@ -128,7 +128,7 @@ test("keyboard: zoom keys, and tabbing brings cards into view", async ({ page })
   await page.keyboard.press("Tab");
   await expect(card).toBeFocused();
   // The whole card (the title link is stretched over it) is panned into view.
-  await expect(card.locator("xpath=ancestor::div[@data-card]")).toBeInViewport({ ratio: 1 });
+  await expect(card.locator("xpath=ancestor::div[@data-card]")).toBeInViewport({ ratio: 0.99 }); // sub-pixel rounding at fractional zoom
 });
 
 test("list view shows the same catalogue", async ({ page }) => {

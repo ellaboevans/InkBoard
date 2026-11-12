@@ -64,7 +64,7 @@ test("search finds authors and titles (prefix, typo, accents) and flies to them"
   await expect(card).toBeFocused();
   // The title link is stretched over its card; the card is what's shown and highlighted.
   const box = card.locator("xpath=ancestor::div[@data-card]");
-  await expect(box).toBeInViewport({ ratio: 1 });
+  await expect(box).toBeInViewport({ ratio: 0.99 }); // sub-pixel rounding at fractional zoom
   await expect(box).toHaveAttribute("data-highlight", "true");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: title })).toBeVisible();

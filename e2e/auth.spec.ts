@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { latestCode, requestCode, sql, typeCode } from "./helpers";
+import { accountButton, latestCode, requestCode, signOut, sql, typeCode } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -33,14 +33,14 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await expect(page.getByRole("heading", { name: "Your poems" })).toBeVisible();
   await expect(page.getByRole("main").getByText("under “Ada Verse”")).toBeVisible();
   // The shared header picks up the new pen name without a reload.
-  await expect(page.locator("header")).toContainText("Ada Verse");
+  await expect(accountButton(page, "Ada Verse")).toBeVisible();
 
   // Signed-in editors visiting /sign-in go straight to the dashboard
   await page.goto("/sign-in");
   await expect(page).toHaveURL(/\/admin$/);
 
   // 3. Sign out → session revoked
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOut(page);
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/sign-in$/);
@@ -56,7 +56,7 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await expect.poll(() => latestCode(EMAIL)).not.toBe(firstCode);
   await typeCode(page, await latestCode(EMAIL));
   await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.locator("header")).toContainText("Ada Verse");
+  await expect(accountButton(page, "Ada Verse")).toBeVisible();
 
   const editors = await sql(`SELECT count(*)::int AS n FROM editors WHERE email = '${EMAIL}'`);
   expect(editors.rows[0].n).toBe(1);

@@ -90,10 +90,6 @@ function EmailStep({
         {pending ? <Loader2Icon className="animate-spin" /> : <MailIcon />}
         Email me a sign-in code
       </Button>
-      <p className="text-center text-xs text-muted-foreground">
-        No password needed. New here? Your account is created the first time
-        you sign in.
-      </p>
     </form>
   );
 }

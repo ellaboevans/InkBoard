@@ -4,8 +4,8 @@ import { latestCode, requestCode, signUpAs, sql } from "./helpers";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
- * Each test walks a flow and scans every screen it reaches, in the light
- * theme and in the dark one (applied by class, as the app would). Scans use
+ * Each test walks a flow and scans every screen it reaches (the app is
+ * light-only). Scans use
  * expect.soft so one run reports every screen, not just the first failure.
  * Automated checks find roughly a third of issues; they complement, not
  * replace, manual keyboard and screen-reader passes.
@@ -17,22 +17,20 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const unique = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 async function scan(page: Page, screen: string, include?: string) {
-  for (const theme of ["light", "dark"] as const) {
-    await page.evaluate((t) => document.documentElement.classList.toggle("dark", t === "dark"), theme);
-    // Let colour transitions settle so contrast is measured on final colours.
-    await page.waitForTimeout(250);
-    let builder = new AxeBuilder({ page }).withTags(WCAG);
-    if (include) builder = builder.include(include);
-    const { violations } = await builder.analyze();
-    const summary = violations.map((v) => ({
-      rule: v.id,
-      impact: v.impact,
-      help: v.help,
-      nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target.join(" "), summary: n.failureSummary })),
-    }));
-    expect.soft(summary, `${screen} (${theme})`).toEqual([]);
-  }
-  await page.evaluate(() => document.documentElement.classList.remove("dark"));
+  // Measure final colours, not a menu or drawer mid-animation (ignores looping spinners).
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+  );
+  let builder = new AxeBuilder({ page }).withTags(WCAG);
+  if (include) builder = builder.include(include);
+  const { violations } = await builder.analyze();
+  const summary = violations.map((v) => ({
+    rule: v.id,
+    impact: v.impact,
+    help: v.help,
+    nodes: v.nodes.slice(0, 5).map((n) => ({ target: n.target.join(" "), summary: n.failureSummary })),
+  }));
+  expect.soft(summary, screen).toEqual([]);
 }
 
 async function publish(page: Page, title: string, body: string, password?: string) {
@@ -88,6 +86,18 @@ test("admin screens", async ({ page }) => {
   await page.goto("/admin");
   await expect(page.getByRole("link", { name: `Seen ${id}` })).toBeVisible();
   await scan(page, "dashboard: with poems");
+  await page.getByRole("button", { name: `Actions for Seen ${id}` }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await scan(page, "dashboard: row menu");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await scan(page, "dashboard: phone");
+  await page.getByRole("button", { name: "Toggle Sidebar" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await scan(page, "dashboard: phone drawer");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await page.goto("/admin/settings");
   await scan(page, "settings: per poem");

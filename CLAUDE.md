@@ -100,13 +100,21 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 **Client patterns.**
 - Forms use `useActionState` with controlled inputs, because React resets uncontrolled fields after an action and that would wipe a poem on a validation error.
 - Don't show toasts or other one-shot side effects from `useEffect` on action state: effects re-run under StrictMode and when Next re-shows a route kept in `<Activity>`. Fire them from the action wrapper, or for redirect flashes (`?created=1`) use `useOnceToast` (`src/hooks/use-once-toast.ts`).
-- Next keeps recently visited routes mounted but hidden (`<Activity>`, `display: none`). So anything that must not outlive the session (sign-out) has to do a full page load, not a router navigation: see `src/app/admin/sign-out-button.tsx`.
+- Next keeps recently visited routes mounted but hidden (`<Activity>`, `display: none`). So anything that must not outlive the session (sign-out) has to do a full page load, not a router navigation: see `src/components/admin/nav-user.tsx`.
 - A form's first submit button is what Enter triggers. Multi-button forms put a hidden "keep current status" button first (`poem-form.tsx`).
 - In E2E tests, use `getByRole` (it skips hidden Activity routes). For password inputs, which have no role, use `getByLabel(…).filter({ visible: true })`. Plain `getByLabel`/`getByPlaceholder` can match a hidden copy of the page and fail in strict mode.
 - Don't start function names with `use` unless they're hooks: the hooks lint rule flags them (hence `switchToPerPoemPasswords`).
 - Lint forbids `setState` inside effects. Adjust state during render instead (the `seenState !== state` pattern in `poem-form.tsx` and `sign-in-form.tsx`).
 
-**Accessibility.** `e2e/a11y.spec.ts` runs axe (WCAG 2.2 A/AA) on every screen in light and dark. Add new screens or states there. Error text uses `--destructive`, tuned to ≥4.5:1 on paper and on its own tint in both themes, so check contrast if you change it. ARIA lets a listbox contain only options and groups, so put palette messages outside `CommandList`.
+**Editor dashboard** (`src/app/admin/(dashboard)/`, a route group with the sidebar-08 shell in its `layout.tsx`; onboarding sits outside it and shares `AuthShell` with `/sign-in`).
+- `SidebarInset` renders the page's `<main>`; pages must not add another one. URL-aware pieces (`NavMain`, `AdminBreadcrumb`) render inside Suspense.
+- Sign out lives in the account menu (`src/components/admin/nav-user.tsx`) and still does a full page load. In E2E use the `signOut()` / `accountButton()` helpers.
+- Client components get dates preformatted by the server (`updatedLabel`) to avoid hydration mismatches across time zones.
+- Don't use `Math.random()` in client components (Cache Components prerender error); `SidebarMenuSkeleton` was patched to a fixed width.
+- Avatars: ids in `src/lib/avatars.ts` are stored in `editors.avatar`. Never reorder or remove them; append only. SVGs come only from `renderAvatarSvg` (server) via `/avatars/[id]`.
+- Profile fields: validate in `updateProfile` (`profile.ts`). Links are https-only and normalised. A pinned poem must be the editor's own published poem (an editor-scoped query, like poems).
+
+**Accessibility.** `e2e/a11y.spec.ts` runs axe (WCAG 2.2 A/AA) on every screen (light only). Add new screens or states there. Error text uses `--destructive`, tuned to ≥4.5:1 on paper and on its own tint, so check contrast if you change it. ARIA lets a listbox contain only options and groups, so put palette messages outside `CommandList`.
 
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
 
@@ -120,4 +128,4 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 
 **Tests.** `vitest.config.mts` aliases `server-only` to an empty module, mocks `@/server/email` into `tests/support/outbox.ts` (`lastCodeFor(email)`), truncates all tables before each test, and runs files serially against the shared DB. Integration tests exercise real SQL, including concurrency (`Promise.all`) for races.
 
-**UI/theme.** Tailwind v4 is configured via CSS (`src/app/globals.css`) with a custom "paper & ink" palette, a dark "night ink" variant, and extra `--canvas`/`--canvas-dot` tokens for the board. Fonts: Geist (`font-sans`) for UI and Newsreader (`font-serif`, also `font-heading`) for poem titles and text.
+**UI/theme.** Tailwind v4 is configured via CSS (`src/app/globals.css`) with a custom "paper & ink" palette (**light only**: there is no dark theme; the class-based `dark` variant is kept only so shadcn's `dark:` classes never follow the OS setting), and extra `--canvas`/`--canvas-dot` tokens for the board. Fonts: Geist (`font-sans`) for UI and Newsreader (`font-serif`, also `font-heading`) for poem titles and text.

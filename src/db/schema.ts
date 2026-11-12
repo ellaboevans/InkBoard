@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -40,6 +42,16 @@ export const editors = pgTable(
     /** URL-safe handle derived from pen name, used in /p/[author]/[poem]. */
     slug: text("slug"),
     bio: text("bio"),
+    /** One-line tagline shown with the pen name (≤ 80 chars). */
+    tagline: text("tagline"),
+    /** Chosen avatar id from src/lib/avatars.ts; null = default derived from id. */
+    avatar: text("avatar"),
+    /** Up to 4 https links (website, socials), validated in profile.ts. */
+    links: jsonb("links").$type<string[]>().notNull().default([]),
+    /** A published poem of this editor's to feature. Ownership is checked in profile.ts. */
+    pinnedPoemId: uuid("pinned_poem_id").references((): AnyPgColumn => poems.id, {
+      onDelete: "set null",
+    }),
     passwordMode: passwordMode("password_mode").notNull().default("per_poem"),
     /** scrypt hash of the shared password; required when password_mode = 'shared'. */
     sharedPasswordHash: text("shared_password_hash"),

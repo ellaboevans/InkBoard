@@ -3,6 +3,12 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireOnboardedSession } from "@/server/auth/dal";
 import { listSessions, type SessionSummary } from "@/server/auth/sessions";
+import { getProfile } from "@/server/auth/profile";
+import { getEditorStats } from "@/server/editor-stats";
+import { listEditorPoems } from "@/server/poems";
+import { avatarIdFor } from "@/lib/avatars";
+import { EditorAvatar } from "@/components/admin/editor-avatar";
+import { StatCards } from "@/components/admin/stat-cards";
 import { describeUserAgent } from "@/lib/user-agent";
 import { ProfileForm } from "./profile-form";
 import { RevokeOtherSessionsButton, RevokeSessionButton } from "./session-buttons";
@@ -11,15 +17,15 @@ export const metadata: Metadata = { title: "Profile" };
 
 export default function ProfilePage() {
   return (
-    <div className="mx-auto grid max-w-2xl gap-10">
-      <section className="grid gap-4" aria-labelledby="profile-heading">
+    <div className="mx-auto grid w-full max-w-4xl gap-10">
+      <section className="grid gap-6" aria-labelledby="profile-heading">
         <div>
           <h1 id="profile-heading" className="font-serif text-3xl">
             Profile
           </h1>
-          <p className="mt-1 text-muted-foreground">How you appear to readers.</p>
+          <p className="mt-1 text-muted-foreground">How you appear to readers, and your writing so far.</p>
         </div>
-        <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-muted" />}>
+        <Suspense fallback={<div className="h-[40rem] animate-pulse rounded-xl bg-muted" />}>
           <Profile />
         </Suspense>
       </section>
@@ -43,7 +49,39 @@ export default function ProfilePage() {
 
 async function Profile() {
   const { editor } = await requireOnboardedSession();
-  return <ProfileForm penName={editor.penName} bio={editor.bio} slug={editor.slug} />;
+  const [profile, stats, poems] = await Promise.all([
+    getProfile(editor.id),
+    getEditorStats(editor.id),
+    listEditorPoems(editor.id),
+  ]);
+  if (!profile) return null;
+  const avatar = profile.avatar ?? avatarIdFor(editor);
+  const published = poems.filter((p) => p.status === "published").map((p) => ({ id: p.id, title: p.title }));
+  const pinned = published.find((p) => p.id === profile.pinnedPoemId);
+  return (
+    <div className="grid gap-6">
+      <div className="flex flex-col gap-4 rounded-xl border bg-card p-6 sm:flex-row sm:items-center">
+        <EditorAvatar editor={{ id: editor.id, avatar }} size={72} className="size-18" />
+        <div className="grid min-w-0 gap-1">
+          <p className="truncate font-serif text-2xl">{profile.penName}</p>
+          {profile.tagline && <p className="text-muted-foreground">{profile.tagline}</p>}
+          <p className="text-sm text-muted-foreground">
+            {stats.firstPublishedAt
+              ? `On the board since ${dateFormat.format(stats.firstPublishedAt)}`
+              : "Not on the board yet"}
+            {pinned && <> · Pinned: &ldquo;{pinned.title}&rdquo;</>}
+          </p>
+        </div>
+      </div>
+      <StatCards stats={stats} />
+      <ProfileForm
+        key={JSON.stringify(profile)}
+        initial={{ ...profile, avatar }}
+        slug={editor.slug}
+        publishedPoems={published}
+      />
+    </div>
+  );
 }
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });

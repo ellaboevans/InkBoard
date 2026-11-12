@@ -51,3 +51,13 @@ export async function signUpAs(page: Page, email: string, penName: string) {
   await page.getByRole("button", { name: "Continue to dashboard" }).click();
   await expect(page).toHaveURL(/\/admin(\?.*)?$/, { timeout: 45_000 });
 }
+
+/** The account menu button in the dashboard sidebar (shows the pen name). */
+export const accountButton = (page: Page, penName: string) =>
+  page.getByRole("button", { name: new RegExp(`^Account menu: ${penName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`) });
+
+/** Sign out through the sidebar account menu. */
+export async function signOut(page: Page) {
+  await page.getByRole("button", { name: /^Account menu:/ }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+}

@@ -37,6 +37,7 @@ describe("sessions", () => {
       penName: null,
       slug: null,
       bio: null,
+      avatar: null,
     });
   });
 

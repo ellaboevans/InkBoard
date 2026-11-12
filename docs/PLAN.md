@@ -79,6 +79,11 @@ poems        id · editor_id → editors · title · slug (unique per editor) ·
 rate_limits  key (pk) · window_start · count
 ```
 
+Phase 7 adds to `editors`: `tagline` · `avatar` (curated id) · `links` (jsonb, ≤ 4 https URLs) · `pinned_poem_id` → poems (ON DELETE SET NULL).
+
+```
+```
+
 "A private poem is always readable with some password" (its own in per-poem mode, the
 author's shared one in shared mode) is enforced by triggers in
 `drizzle/0002_password_mode_triggers.sql`, which replaced Phase 0's
@@ -98,7 +103,8 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /admin/poems/new       Create poem (R2, R3)
 /admin/poems/[id]      Edit poem, visibility, password, publish, delete (R2, R3)
 /admin/settings        Private-poem password mode: per poem or one shared (R11)
-/admin/profile         Pen name, bio, signed-in devices
+/admin/profile         Avatar, pen name, tagline, bio, links, pinned poem, stats, signed-in devices
+/avatars/[id]          Curated avatar SVGs (prerendered, cached forever)
 /api/search?q=         Search authors and poem titles (R10)
 /api/cron/cleanup      Daily cleanup of expired rows (Bearer CRON_SECRET)
 ```
@@ -268,6 +274,16 @@ To do:
 - **Manual screen-reader pass (N7):** automated checks catch only part of what matters. Try VoiceOver or NVDA on sign-in, the poem editor, the board, the overlay and the search palette.
 - **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 
+### Phase 7: Editor dashboard redesign ✅
+Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-in, **Navii** avatars via `@usenavii/core`, **light mode only**. The public author page is deferred to a later phase.
+- **Shell** (`src/app/admin/(dashboard)/layout.tsx`): inset sidebar that collapses to icons (⌘B / Ctrl+B) and becomes a drawer on phones. It has a "New poem" button, Poems / Profile / Settings, "View the board", and an account menu (avatar, pen name, email → Profile, Settings, Sign out) with breadcrumbs in the top bar. This fixes the old header, where Sign out was pushed off-screen on phones.
+- **Dashboard home:** stat cards with real counts only (published, drafts, private, last/first published; no reader analytics, so no charts), and a poems table with All / Published / Drafts / Private tabs, title search and a row menu (Edit, View on the board, Copy link, Pin to profile, Delete with confirmation). Phones get a card list.
+- **Sign-in and onboarding** (`src/components/auth/auth-shell.tsx`): two columns, with the form on the left and a typographic panel on the dotted canvas (an original poem) on the right, large screens only. No images, no social buttons.
+- **Avatars** (`src/lib/avatars.ts`, `src/server/avatar-svg.ts`, `/avatars/[id]`): 36 curated Navii mascots (fixed seeds, 12 muted palettes, hue drift off, paper tile), rendered on our server, so there is no third-party request or CSP change. Editors who haven't chosen get a stable default derived from their id.
+- **Profile:** avatar picker, tagline (≤ 80), bio, up to 4 links (https only, no credentials, normalised), pinned poem (only the editor's own published poems, checked server-side), and a summary with stats. Tagline, links and the pinned poem are stored for the public author page and not yet shown to readers.
+- **Light only:** the dormant dark theme was removed; `color-scheme: light`.
+- **Tests:** unit tests for links, tagline, avatar ids, pin ownership (incl. another editor's poem and FK unpin on delete), stats and avatar rendering. E2E covers the rich profile, dashboard filters/search, the phone drawer and sign-out. axe covers the new screens (row menu, phone view, drawer).
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
@@ -275,7 +291,7 @@ To do:
 | R1 Canvas board | 3 | ✅ pan/zoom/pinch/keyboard, minimap, list view |
 | R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
 | R3 Public/private + password | 2, 4 | ✅ |
-| R4 Admin dashboard | 1 (shell), 2 | ✅ |
+| R4 Admin dashboard | 1 (shell), 2, 7 | ✅ sidebar shell, stats, filterable table, rich profile |
 | R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
 | R6 shadcn/ui, custom theme | 0 → all | ✅ every screen (sign-in, admin, settings, profile, board, overlay, search) uses the themed components |
 | R7 Email OTP, passwordless | 1 | ✅ |

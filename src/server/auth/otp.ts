@@ -27,10 +27,19 @@ const REQUESTS_PER_IP = 20;
 const VERIFICATIONS_PER_IP = 30;
 // Caps total sends (protects email quota/reputation if IP limits are evaded).
 const REQUESTS_GLOBAL_PER_HOUR = 500;
-// Long-window caps on guesses per email, across codes and IPs, so repeating
-// "request code + 5 guesses" can't brute-force an account over days.
-const VERIFICATIONS_PER_EMAIL_PER_HOUR = 10;
-const VERIFICATIONS_PER_EMAIL_PER_DAY = 30;
+// Guess caps per email. Two layers, so that one attacker can't lock an editor
+// out of sign-in (review finding #5) while brute force stays bounded:
+// - per (email, client): what a single client may spend on one address. The
+//   editor's own browser has its own budget, untouched by others' guesses.
+// - per email, all clients: a higher backstop against IP rotation. A guess
+//   only counts here once the client is within its own budget, so a single
+//   client can never push this one up to lock the editor out.
+// At the backstop, an attacker gets at most 100 guesses/day on a 6-digit
+// code (~3.7% per year of nonstop effort, which also needs 4+ clients a day).
+const VERIFICATIONS_PER_EMAIL_CLIENT_PER_HOUR = 10;
+const VERIFICATIONS_PER_EMAIL_CLIENT_PER_DAY = 30;
+const VERIFICATIONS_PER_EMAIL_PER_HOUR = 30;
+const VERIFICATIONS_PER_EMAIL_PER_DAY = 100;
 
 /** Per-client bucket: IPv6 grouped by /64; no known IP -> one shared bucket. */
 const ipKey = ipBucket;
@@ -130,14 +139,25 @@ export async function verifyOtp(input: {
   }
 
   const emailKey = sha256(email);
-  const limits = await Promise.all([
-    rateLimit(`otp:verify:ip:${ipKey(input.ip)}`, VERIFICATIONS_PER_IP, WINDOW),
-    rateLimit(`otp:verify:email:h:${emailKey}`, VERIFICATIONS_PER_EMAIL_PER_HOUR, 3600),
-    rateLimit(`otp:verify:email:d:${emailKey}`, VERIFICATIONS_PER_EMAIL_PER_DAY, 86400),
-  ]);
-  const blocked = limits.find((l) => !l.allowed);
-  if (blocked) {
-    return { ok: false, error: "rate_limited", retryAfter: blocked.retryAfter };
+  const client = ipKey(input.ip);
+  // Checked in tiers: a client over its own budget is stopped before it can
+  // count against the next tier (see the limits above).
+  const tiers = [
+    () => [rateLimit(`otp:verify:ip:${client}`, VERIFICATIONS_PER_IP, WINDOW)],
+    () => [
+      rateLimit(`otp:verify:email-ip:h:${emailKey}:${client}`, VERIFICATIONS_PER_EMAIL_CLIENT_PER_HOUR, 3600),
+      rateLimit(`otp:verify:email-ip:d:${emailKey}:${client}`, VERIFICATIONS_PER_EMAIL_CLIENT_PER_DAY, 86400),
+    ],
+    () => [
+      rateLimit(`otp:verify:email:h:${emailKey}`, VERIFICATIONS_PER_EMAIL_PER_HOUR, 3600),
+      rateLimit(`otp:verify:email:d:${emailKey}`, VERIFICATIONS_PER_EMAIL_PER_DAY, 86400),
+    ],
+  ];
+  for (const tier of tiers) {
+    const blocked = (await Promise.all(tier())).find((l) => !l.allowed);
+    if (blocked) {
+      return { ok: false, error: "rate_limited", retryAfter: blocked.retryAfter };
+    }
   }
 
   const db = getDb();

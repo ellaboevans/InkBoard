@@ -132,7 +132,7 @@ auth or private content.
 
   `rate_limits` rows are also pruned opportunistically.
 - **Known trade-offs (revisit in Phase 6):**
-  - The per-email caps let an attacker lock a specific editor out of sign-in for up to a day (#5). Mitigations to consider: per-(email, IP) budgets, and a "someone is trying to sign in" email.
+  - The per-email caps let an attacker lock a specific editor out of sign-in for up to a day (#5). Fixed in Phase 6 with per-(email, client) budgets.
   - IP limits only hold behind a proxy that sets `X-Forwarded-For` (e.g. Vercel).
   - If the email fails to send, the editor still sees "code sent"; the failure is logged server-side and the editor can press resend.
   - Never deploy with `NODE_ENV=development` and no `RESEND_API_KEY`: codes would go to the logs.
@@ -250,8 +250,12 @@ Done:
   - **Signed-in devices:** lists the editor's live sessions (browser and OS, sign-in date, IP, expiry), marks "This device", and can sign out any other device or all of them. Revoking is scoped by editor, so another editor's session id behaves like a missing one.
   - Covered by integration tests (rename keeps slug, bio normalisation, cross-editor revoke, sign out others) and two E2E tests.
 
+- **Sign-in lockout (#5 from the Phase 1 review), fixed** (`src/server/auth/otp.ts`):
+  - Code guesses are now limited per (email, client) at 10/hour and 30/day, so the editor's own connection has its own budget. A shared per-email backstop of 30/hour and 100/day still bounds brute force across rotating IPs (at most ~3.7% a year of nonstop effort against one account).
+  - Limits are checked in tiers. A client that is over its own budget never counts against the shared one, so a single attacker can't lock an editor out. It now takes 4+ clients a day. Tested, including a check that the test fails without the tiering.
+  - Still possible: an attacker with many IPs can exhaust the backstop, and anyone can use up the 5-requests-per-15-minutes limit on sending codes to one email. Both are bounded and short-lived. A magic link in the email (a long random token, which can't be guessed and so can skip guess limits) would remove the first entirely, and is the follow-up if this becomes a problem.
+
 To do:
-- **Sign-in lockout (#5 from the Phase 1 review):** an attacker can still lock a specific editor out of sign-in for up to a day by using up the per-email limits. Decide between per-(email, IP) budgets and a "someone is trying to sign in" email, or accept the risk for launch.
 - **Accessibility pass (N7):** check the admin forms, the poem overlay and the search palette with a screen reader and an automated checker (e.g. axe). The board itself is done.
 - **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
 

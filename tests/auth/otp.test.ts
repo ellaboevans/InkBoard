@@ -204,20 +204,48 @@ describe("verifyOtp", () => {
     },
   );
 
-  it("caps guesses per email across codes and IPs", async () => {
-    // Attacker loop: request a code, burn its 5 attempts, repeat, rotating IPs.
-    let blocked: unknown;
-    for (let round = 0; round < 3 && !blocked; round++) {
-      await skipCooldown();
-      await requestOtp({ email: EMAIL, ip: `192.0.2.${round}` });
-      const code = lastCodeFor(EMAIL);
-      for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
-        const res = await verifyOtp({ email: EMAIL, code: wrong(code), ip: `198.51.100.${round * 10 + i}` });
-        if (!res.ok && res.error === "rate_limited") { blocked = res; break; }
-      }
+  /** Request a code (from `requestIp`) and spend its attempts with wrong guesses from `ip`. */
+  async function burnCode(ip: (i: number) => string, requestIp = "192.0.2.250") {
+    await skipCooldown();
+    await requestOtp({ email: EMAIL, ip: requestIp });
+    const code = lastCodeFor(EMAIL);
+    for (let i = 0; i < OTP_MAX_ATTEMPTS; i++) {
+      const res = await verifyOtp({ email: EMAIL, code: wrong(code), ip: ip(i) });
+      if (!res.ok && res.error === "rate_limited") return res;
+    }
+    return null;
+  }
+
+  it("caps one client's guesses per email, without locking the editor out", async () => {
+    const attacker = "198.51.100.66";
+    let blocked: unknown = null;
+    for (let round = 0; round < 4 && !blocked; round++) blocked = await burnCode(() => attacker);
+    expect(blocked).toMatchObject({ ok: false, error: "rate_limited" });
+
+    // The attacker keeps hammering; blocked guesses don't count against the editor.
+    for (let i = 0; i < 40; i++) {
+      await verifyOtp({ email: EMAIL, code: "000000", ip: attacker });
+    }
+
+    // The editor, on their own connection, still signs in.
+    await skipCooldown();
+    await requestOtp({ email: EMAIL, ip: "203.0.113.5" });
+    expect(
+      await verifyOtp({ email: EMAIL, code: lastCodeFor(EMAIL), ip: "203.0.113.5" }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("caps guesses per email across codes and rotating IPs", async () => {
+    // Attacker loop: request a code, burn its 5 attempts, repeat, with a fresh IP per guess.
+    let blocked: unknown = null;
+    let n = 0;
+    for (let round = 0; round < 8 && !blocked; round++) {
+      blocked = await burnCode(() => `198.51.${100 + (n >> 8)}.${n++ & 255}`);
     }
     expect(blocked).toMatchObject({ ok: false, error: "rate_limited" });
-    // ...and the right code is refused while the cap holds.
+    // 30 per hour across all clients: the 31st guess was refused.
+    expect(n).toBe(31);
+    // ...and while the backstop holds, even the right code is refused.
     await skipCooldown();
     await requestOtp({ email: EMAIL });
     expect(await verifyOtp({ email: EMAIL, code: lastCodeFor(EMAIL) })).toMatchObject({

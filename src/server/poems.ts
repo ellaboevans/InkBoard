@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
+import { normalizePoemBody } from "@/lib/poem-text";
 import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
 import { BODY_MAX, PASSWORD_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
@@ -30,7 +31,7 @@ const inputSchema = z.object({
     .string()
     // Normalise line endings, drop leading blank lines and trailing
     // whitespace; indentation inside the poem is meaningful and kept.
-    .transform((b) => b.replace(/\r\n?/g, "\n").replace(/^\s*\n/, "").trimEnd())
+    .transform(normalizePoemBody)
     .pipe(
       z
         .string()

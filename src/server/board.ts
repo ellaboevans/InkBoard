@@ -1,4 +1,5 @@
 import "server-only";
+import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
@@ -13,8 +14,8 @@ import type { BoardSection, ReaderPoem } from "@/lib/board-types";
  * text is not even loaded into the server process for private poems.
  */
 
-export const EXCERPT_LINES = 5;
-const EXCERPT_CHARS = 280;
+// The same rule the editor's live preview uses (cardExcerpt): keep them in sync.
+export { EXCERPT_CHARS, EXCERPT_LINES };
 
 const lines = sql`string_to_array(${poems.body}, E'\\n')`;
 const isPublic = sql`${poems.visibility} = 'public'`;

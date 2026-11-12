@@ -71,6 +71,12 @@ test("admin screens", async ({ page }) => {
 
   await page.goto("/admin/poems/new");
   await scan(page, "new poem");
+  await page.getByRole("textbox", { name: "Poem" }).fill("a line\n\n  indented");
+  await page.getByRole("region", { name: "Card preview" }).getByRole("button").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await scan(page, "new poem: card preview dialog");
+  await page.keyboard.press("Escape");
+  await page.getByRole("textbox", { name: "Poem" }).fill("");
   await page.getByRole("switch", { name: "Password protected" }).click();
   await page.getByRole("button", { name: "Publish to board" }).click();
   await scan(page, "new poem: validation errors");

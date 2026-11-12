@@ -35,6 +35,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
       deleteAction={deletePoemAction.bind(null, poem.id)}
       justCreated={created === "1"}
       passwordMode={passwordMode}
+      penName={editor.penName}
       poem={{
         id: poem.id,
         title: poem.title,

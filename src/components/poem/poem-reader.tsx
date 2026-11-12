@@ -2,6 +2,7 @@ import { LockOpenIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DialogTitle } from "@/components/ui/dialog";
+import { PoemBody } from "./poem-body";
 import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
 import { unlockPoemAction } from "./unlock-actions";
@@ -70,11 +71,6 @@ export function PoemReaderSkeleton({ inDialog = false }: { inDialog?: boolean })
   );
 }
 
-function PoemBody({ body }: { body: string }) {
-  return (
-    <div className="font-serif text-lg leading-relaxed whitespace-pre-wrap sm:text-xl">{body}</div>
-  );
-}
 
 async function PrivatePoem({
   author,

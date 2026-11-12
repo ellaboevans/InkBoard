@@ -19,5 +19,5 @@ export default function NewPoemPage() {
 async function NewPoem() {
   const editor = await requireOnboardedEditor();
   const passwordMode = await getPasswordMode(editor.id);
-  return <PoemForm action={createPoemAction} passwordMode={passwordMode} />;
+  return <PoemForm action={createPoemAction} passwordMode={passwordMode} penName={editor.penName} />;
 }

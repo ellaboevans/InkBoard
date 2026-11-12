@@ -35,6 +35,7 @@ import { useOnceToast } from "@/hooks/use-once-toast";
 import { unstable_rethrow } from "next/navigation";
 import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
+import { CardPreview } from "./card-preview";
 
 export type PoemFormPoem = {
   id: string;
@@ -53,9 +54,11 @@ type Props = {
   justCreated?: boolean;
   /** The author's choice in Settings; "shared" hides the per-poem password. */
   passwordMode: "per_poem" | "shared";
+  /** Shown in the card preview's reading view ("by …"). */
+  penName: string;
 };
 
-export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode }: Props) {
+export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode, penName }: Props) {
   const shared = passwordMode === "shared";
   // Toast from the action's result rather than an effect, so it fires exactly
   // once per save (effects re-run under StrictMode and when Next re-shows a
@@ -249,6 +252,13 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
         </div>
 
         <aside className="grid content-start gap-4">
+          <CardPreview
+            title={title}
+            body={body}
+            isPrivate={isPrivate}
+            published={status === "published"}
+            penName={penName}
+          />
           <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="text-sm font-medium">Publishing</h2>
             <p className="text-sm text-muted-foreground">

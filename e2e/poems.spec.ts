@@ -202,3 +202,27 @@ test("delete asks for confirmation", async ({ page }) => {
   await expect(page.getByText("No poems yet")).toBeVisible();
   expect((await sql(`SELECT count(*)::int AS n FROM poems WHERE id = '${id}'`)).rows[0].n).toBe(0);
 });
+
+test("the editor shows a live card preview that opens the full poem", async ({ page }) => {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  await signUpAs(page, `preview-${id}@example.com`, `Preview Poet ${id}`);
+  await page.goto("/admin/poems/new");
+  const preview = page.getByRole("region", { name: "Card preview" });
+  await page.getByRole("textbox", { name: "Title" }).fill(`Tide ${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("one\ntwo\n\n    three, indented\nfour\nfive\nsix");
+  // Same excerpt rule as the board: five lines kept as typed, then "…".
+  await expect(preview.locator("[data-card] p")).toHaveText("one\ntwo\n\n    three, indented\nfour\n…", { useInnerText: true });
+
+  // Clicking the card opens the full poem and doesn't submit the form.
+  await preview.getByRole("button", { name: new RegExp(`Tide ${id}`) }).click();
+  const dialog = page.getByRole("dialog", { name: `Tide ${id}` });
+  await expect(dialog).toContainText(`by Preview Poet ${id}`);
+  await expect(dialog).toContainText("six");
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/admin\/poems\/new$/);
+
+  // Password protected: the card shows what readers see before unlocking.
+  await page.getByRole("switch", { name: "Password protected" }).click();
+  await expect(preview.locator("[data-card]")).toContainText("Enter the password to read");
+  await expect(preview.locator("[data-card]")).not.toContainText("three, indented");
+});

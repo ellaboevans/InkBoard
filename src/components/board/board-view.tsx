@@ -1,5 +1,6 @@
 "use client";
 
+import { PoemText } from "@/components/poem/poem-text";
 import { FeatherIcon, LayoutGridIcon, LockIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -55,7 +56,7 @@ function BoardList({ sections, onCanvasView }: { sections: BoardSection[]; onCan
                       </span>
                       {p.excerpt && (
                         <span className="mt-1 line-clamp-2 block font-serif text-sm whitespace-pre-line text-muted-foreground">
-                          {p.excerpt}
+                          <PoemText text={p.excerpt} truncated={p.hasMore} />
                         </span>
                       )}
                     </Link>

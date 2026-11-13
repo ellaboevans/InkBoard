@@ -356,7 +356,7 @@ Decided:
 - **Who may become an editor?** Anyone who verifies their email. `EDITOR_ALLOWLIST` stays empty by default and remains available if you ever want to restrict sign-ups.
 - **Do private poems show their title on the board?** Yes: title, author and a lock badge. The text stays hidden until the reader enters the password.
 - **Password per poem, or one for all?** The editor decides, in Settings (R11). The default is a password per poem.
-- **Poem formatting?** Plain text, with line breaks and indentation kept. Light Markdown (italics, bold) could come later.
+- **Poem formatting?** Plain text, with line breaks and indentation kept, plus light Markdown: `*italic*`, `**bold**`, `\*` for a literal asterisk (⌘I / ⌘B in the editor). Emphasis stays within a line; nothing else is special.
 - **How long does an unlock last?** 12 hours per browser, or until the editor changes the password (or unpublishes the poem).
 - **Email provider?** Resend, with a verified sending domain (done at launch).
 - **Board layout?** An automatic grid of author sections. Letting editors arrange positions could be a later phase.
@@ -365,4 +365,4 @@ No open questions remain.
 
 Possible later work (not planned):
 - **Magic link in the sign-in email,** next to the code. A long random token can't be guessed, so it would remove the remaining bounded lockout described in Phase 6. Worth doing only if that becomes a problem.
-- **Light Markdown** in poems, and **editor-arranged board positions** (see above).
+- **Editor-arranged board positions** (see above).

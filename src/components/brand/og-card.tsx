@@ -1,3 +1,4 @@
+import { stripPoemMarkdown } from "@/lib/poem-markdown";
 import { BRAND, SITE_NAME } from "@/lib/site";
 
 /*
@@ -114,6 +115,6 @@ export function truncate(s: string, max: number) {
 /** First lines of a public poem for the card, kept short enough to fit. */
 export function ogQuote(body: string | null, lines = 3) {
   if (!body) return null;
-  const head = body.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, lines);
+  const head = stripPoemMarkdown(body).split("\n").map((l) => l.trim()).filter(Boolean).slice(0, lines);
   return head.map((l) => truncate(l, 64)).join("\n") || null;
 }

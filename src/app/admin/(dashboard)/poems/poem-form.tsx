@@ -30,12 +30,36 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BODY_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
+import { toggleEmphasis } from "@/lib/poem-markdown";
 import type { PoemErrors } from "@/server/poems";
 import { useOnceToast } from "@/hooks/use-once-toast";
 import { unstable_rethrow } from "next/navigation";
 import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
 import { CardPreview } from "./card-preview";
+
+/**
+ * ⌘B / ⌘I on a Mac, Ctrl+B / Ctrl+I elsewhere: toggle `**` / `*` around the
+ * selection. Ctrl on a Mac is left alone (it moves the caret in text fields).
+ */
+function onEmphasisShortcut(e: React.KeyboardEvent<HTMLTextAreaElement>, setBody: (v: string) => void) {
+  const key = e.key.toLowerCase();
+  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  if (!(isMac ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey || (key !== "b" && key !== "i")) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const edit = toggleEmphasis(el.value, el.selectionStart, el.selectionEnd, key === "b" ? "**" : "*");
+  if (el.value.length - (edit.to - edit.from) + edit.insert.length > BODY_MAX) return;
+  // insertText goes through the browser's editing path, so ⌘Z undoes it and
+  // the input event reaches onChange. Fall back to setting the value.
+  el.setSelectionRange(edit.from, edit.to);
+  if (!document.execCommand("insertText", false, edit.insert)) {
+    setBody(el.value.slice(0, edit.from) + edit.insert + el.value.slice(edit.to));
+    requestAnimationFrame(() => el.setSelectionRange(edit.selStart, edit.selEnd));
+    return;
+  }
+  el.setSelectionRange(edit.selStart, edit.selEnd);
+}
 
 export type PoemFormPoem = {
   id: string;
@@ -235,15 +259,20 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
               name="body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(e) => onEmphasisShortcut(e, setBody)}
               placeholder={"Begin here…\n\nLine breaks and indentation are kept exactly as you type them."}
               maxLength={BODY_MAX}
               spellCheck
               aria-invalid={errors.body ? true : undefined}
-              aria-describedby={errors.body ? "body-error body-count" : "body-count"}
+              aria-describedby={errors.body ? "body-error body-format body-count" : "body-format body-count"}
               className="min-h-[60vh] resize-y bg-card p-5 font-serif text-lg leading-relaxed"
             />
-            <div className="flex justify-between gap-4">
+            <div className="flex flex-wrap justify-between gap-x-4 gap-y-1">
               <FieldError id="body-error" message={errors.body} />
+              <p id="body-format" className="text-xs text-muted-foreground">
+                <span className="font-mono">*italic*</span> and <span className="font-mono">**bold**</span> (⌘I / ⌘B,
+                or Ctrl on Windows). Write <span className="font-mono">\*</span> for a plain asterisk.
+              </p>
               <p id="body-count" className="ml-auto text-xs text-muted-foreground tabular-nums">
                 {body.length.toLocaleString("en")} / {BODY_MAX.toLocaleString("en")}
               </p>

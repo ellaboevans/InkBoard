@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import { LockIcon } from "lucide-react";
+import { PoemText } from "@/components/poem/poem-text";
 
 /**
  * How a poem looks as a card on the board. Shared by the board canvas and the
@@ -63,7 +64,7 @@ export function PoemCardFace({
         </div>
       ) : (
         <p className="mt-2 flex-1 overflow-hidden font-serif text-[14.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
-          {excerpt}
+          {excerpt !== null && <PoemText text={excerpt} truncated={hasMore} />}
           {hasMore && "\n…"}
         </p>
       )}

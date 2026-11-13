@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { PoemReader, PoemReaderSkeleton } from "@/components/poem/poem-reader";
 import { Button } from "@/components/ui/button";
 import { JsonLd } from "@/components/seo/json-ld";
+import { stripPoemMarkdown } from "@/lib/poem-markdown";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
 
@@ -41,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /** Poem lines joined into one ~160-char sentence for search snippets. */
 function metaDescription(body: string) {
-  const text = body.split("\n").map((l) => l.trim()).filter(Boolean).join(" / ");
+  const text = stripPoemMarkdown(body).split("\n").map((l) => l.trim()).filter(Boolean).join(" / ");
   return text.length > 160 ? `${text.slice(0, 157).trimEnd()}…` : text;
 }
 
@@ -59,7 +60,7 @@ async function PoemJsonLd({ params }: Pick<Props, "params">) {
     author: { "@type": "Person", name: p.penName, url: absoluteUrl(`/a/${p.authorSlug}`) },
     ...(p.publishedAt && { datePublished: p.publishedAt }),
     isAccessibleForFree: p.visibility === "public",
-    ...(p.visibility === "public" && p.body && { text: p.body }),
+    ...(p.visibility === "public" && p.body && { text: stripPoemMarkdown(p.body) }),
     publisher: { "@type": "Organization", name: SITE_NAME, url: absoluteUrl("/") },
   };
   return <JsonLd data={data} />;

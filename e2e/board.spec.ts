@@ -232,3 +232,61 @@ test("clicking anywhere on a card opens the poem, not just the title", async ({ 
     }
   }
 });
+
+test("light Markdown: italic and bold on cards and in the reader, typed or via shortcuts", async ({ page }) => {
+  const id = unique();
+  const pen = `Markdown Poet ${id}`;
+  await signUpAs(page, `md-${id}@example.com`, pen);
+
+  // ⌘/Ctrl+I wraps the selection in *…*.
+  await page.goto("/admin/poems/new");
+  const poem = page.getByRole("textbox", { name: "Poem" });
+  await poem.fill("moth");
+  await poem.selectText();
+  await page.keyboard.press("ControlOrMeta+i");
+  await expect(poem).toHaveValue("*moth*");
+  // The edit goes through the browser's undo stack.
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(poem).toHaveValue("moth");
+  // ⌘B wraps, and pressing it again on the still-selected word unwraps.
+  await poem.selectText();
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(poem).toHaveValue("**moth**");
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(poem).toHaveValue("moth");
+
+  await page.getByRole("textbox", { name: "Title" }).fill(`Formatted ${id}`);
+  await poem.fill(`a *moth* rehearses\n**its one** argument\n* * *\n\\*not italic\\*`);
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+
+  await openBoard(page);
+  const card = page
+    .getByRole("region", { name: `${pen}, 1 poem` })
+    .locator("[data-card]")
+    .filter({ has: page.getByRole("link", { name: `Formatted ${id}`, exact: true }) });
+  await expect(card.locator("em")).toHaveText("moth");
+  await expect(card.locator("strong")).toHaveText("its one");
+
+  await card.getByRole("link").click();
+  const reader = page.getByRole("dialog");
+  await expect(reader.locator("em")).toHaveText("moth");
+  await expect(reader.locator("strong")).toHaveText("its one");
+  await expect(reader).toContainText("* * *");
+  await expect(reader).toContainText("*not italic*");
+  await expect(reader).not.toContainText("**its one**");
+
+  // Hard load: the full page renders the same, and search snippets and
+  // structured data get the text without markers.
+  await page.goto(page.url());
+  const main = page.getByRole("main");
+  await expect(main.locator("em")).toHaveText("moth");
+  await expect(main.locator("strong")).toHaveText("its one");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    "a moth rehearses / its one argument / * * * / *not italic*",
+  );
+  const jsonLd = await page.locator('script[type="application/ld+json"]').allTextContents();
+  const creative = jsonLd.map((s) => JSON.parse(s)).find((d) => d.text);
+  expect(creative.text).toBe("a moth rehearses\nits one argument\n* * *\n*not italic*");
+});

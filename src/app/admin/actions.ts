@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { endSession, requireEditor } from "@/server/auth/dal";
 import { setPenName } from "@/server/auth/profile";
+import { sendWelcomeOnce } from "@/server/welcome";
 
 /**
  * Ends the session. Deliberately does *not* redirect: the client then does a
@@ -26,6 +27,12 @@ export async function completeOnboardingAction(
   const penName = formData.get("penName");
   const res = await setPenName(editor.id, penName);
   if (!res.ok) return { error: res.error, penName: String(penName ?? "") };
+  // Welcome email, once per editor. Best effort: onboarding already succeeded.
+  try {
+    await sendWelcomeOnce(editor.id);
+  } catch (err) {
+    console.error("Couldn't queue the welcome email", err);
+  }
   // The admin layout (header shows the pen name) is shared, so re-render it too.
   refresh();
   redirect("/admin?welcome=1");

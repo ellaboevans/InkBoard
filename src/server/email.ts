@@ -4,7 +4,15 @@ import { Resend } from "resend";
 import { env } from "@/env";
 import { OTP_TTL_SECONDS } from "./auth/otp-config";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./email-logo";
-import { otpEmail, signInAlertEmail, signInLinkUrl, type EmailMessage, type SignInAlertDetails } from "./email-templates";
+import {
+  otpEmail,
+  signInAlertEmail,
+  signInLinkUrl,
+  welcomeEmail,
+  type EmailMessage,
+  type SignInAlertDetails,
+  type WelcomeDetails,
+} from "./email-templates";
 
 let resend: Resend | undefined;
 
@@ -62,4 +70,9 @@ export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlert
     message,
     { kind: "sign-in-alert", device: details.device, ip: details.ip, reason: details.reason },
   );
+}
+
+export async function sendWelcomeEmail(to: string, details: Omit<WelcomeDetails, "appUrl">): Promise<void> {
+  const message = welcomeEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, { kind: "welcome", penName: details.penName, slug: details.slug });
 }

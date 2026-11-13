@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { accountButton, latestCode, latestLink, requestCode, signOut, sql, typeCode } from "./helpers";
+import { accountButton, latestCode, latestLink, requestCode, signOut, sql, typeCode, welcomesFor } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -34,6 +34,8 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
   await expect(page.getByRole("main").getByText("under “Ada Verse”")).toBeVisible();
   // The shared header picks up the new pen name without a reload.
   await expect(accountButton(page, "Ada Verse")).toBeVisible();
+  // A newcomer gets the welcome email once onboarding is done.
+  await expect.poll(() => welcomesFor(EMAIL)).toEqual([expect.objectContaining({ penName: "Ada Verse" })]);
 
   // Signed-in editors visiting /sign-in go straight to the dashboard
   await page.goto("/sign-in");
@@ -60,6 +62,8 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
 
   const editors = await sql(`SELECT count(*)::int AS n FROM editors WHERE email = '${EMAIL}'`);
   expect(editors.rows[0].n).toBe(1);
+  // Signing in again isn't a first sign-in: still just the one welcome.
+  expect(await welcomesFor(EMAIL)).toHaveLength(1);
 });
 
 test("the sign-in link signs in after a deliberate click, once, and replaces the code", async ({ page }) => {
@@ -87,6 +91,9 @@ test("the sign-in link signs in after a deliberate click, once, and replaces the
   await expect(page.getByRole("main").getByRole("link", { name: "Request a new sign-in email" })).toBeVisible();
 
   // ...and the code from the same email no longer works either.
+  // (Skip the 60s resend cooldown: this test only passed when the steps
+  // above happened to take longer than that.)
+  await sql("DELETE FROM rate_limits");
   await requestCode(page, EMAIL);
   const fresh = await latestCode(EMAIL);
   await page.goto(link.replace(/^https?:\/\/[^/]+/, ""));

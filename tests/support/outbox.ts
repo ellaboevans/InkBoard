@@ -15,3 +15,6 @@ export function lastLinkTokenFor(email: string): string {
 
 /** Security notices "sent" during a test. */
 export const alerts: { to: string; device: string; ip: string; penName: string | null; reason: string }[] = [];
+
+/** Welcome emails "sent" during a test. */
+export const welcomes: { to: string; penName: string; slug: string }[] = [];

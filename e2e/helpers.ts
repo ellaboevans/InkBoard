@@ -79,6 +79,14 @@ export async function signOut(page: Page) {
 }
 
 /** Security notices written to the E2E outbox for `email`. */
+/** Welcome emails recorded for this address by the E2E outbox. */
+export async function welcomesFor(email: string): Promise<{ penName: string; slug: string }[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string; kind?: string; penName: string; slug: string })
+    .filter((m) => m.to === email && m.kind === "welcome");
+}
+
 export async function alertsFor(email: string): Promise<{ device: string; ip: string }[]> {
   const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
   return lines

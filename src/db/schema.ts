@@ -58,6 +58,8 @@ export const editors = pgTable(
     /** Bumped whenever the shared password (or mode) changes, revoking reader unlocks. */
     sharedPasswordVersion: integer("shared_password_version").notNull().default(0),
     lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+    /** When the welcome email was claimed (sent at most once, after onboarding). */
+    welcomedAt: timestamp("welcomed_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

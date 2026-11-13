@@ -1,17 +1,20 @@
 import { sql } from "drizzle-orm";
 import { beforeEach, vi } from "vitest";
 import { getDb } from "@/db";
-import { alerts, outbox } from "./outbox";
+import { alerts, outbox, welcomes } from "./outbox";
 
 // Capture outgoing emails instead of sending/logging them.
 vi.mock("@/server/email", async () => {
-  const { alerts, outbox } = await import("./outbox");
+  const { alerts, outbox, welcomes } = await import("./outbox");
   return {
     sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
       outbox.push({ to, code, linkToken });
     }),
     sendSignInAlertEmail: vi.fn(async (to: string, d: { device: string; ip: string; penName: string | null; reason: string }) => {
       alerts.push({ to, device: d.device, ip: d.ip, penName: d.penName, reason: d.reason });
+    }),
+    sendWelcomeEmail: vi.fn(async (to: string, d: { penName: string; slug: string }) => {
+      welcomes.push({ to, penName: d.penName, slug: d.slug });
     }),
   };
 });
@@ -27,6 +30,7 @@ vi.mock("next/server", async (importOriginal) => ({
 beforeEach(async () => {
   outbox.length = 0;
   alerts.length = 0;
+  welcomes.length = 0;
   await getDb().execute(
     sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits CASCADE`,
   );

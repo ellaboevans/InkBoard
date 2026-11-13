@@ -64,6 +64,14 @@ test("sign-in and onboarding", async ({ page }) => {
   await scan(page, "onboarding");
 });
 
+test("sign-in link page", async ({ page }) => {
+  await page.goto("/sign-in/link#" + "Q".repeat(44));
+  await scan(page, "sign-in link: continue");
+  await page.getByRole("button", { name: "Continue to InkBoard" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await scan(page, "sign-in link: expired");
+});
+
 test("admin screens", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-admin-${id}@example.com`, `Access Poet ${id}`);

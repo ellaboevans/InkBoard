@@ -70,13 +70,15 @@ export const editors = pgTable(
   ],
 );
 
-/** One-time sign-in codes. Only an HMAC of the code is stored. */
+/** One-time sign-in codes and links. Only HMACs of the code and link token are stored. */
 export const emailOtps = pgTable(
   "email_otps",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").notNull(),
     codeHash: text("code_hash").notNull(),
+    /** HMAC of the sign-in link token sent with the code; null for decoy rows. */
+    linkTokenHash: text("link_token_hash"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     attempts: integer("attempts").notNull().default(0),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
@@ -85,7 +87,10 @@ export const emailOtps = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("email_otps_email_created_idx").on(t.email, t.createdAt)],
+  (t) => [
+    index("email_otps_email_created_idx").on(t.email, t.createdAt),
+    uniqueIndex("email_otps_link_token_hash_key").on(t.linkTokenHash),
+  ],
 );
 
 /** Server-side sessions. The cookie holds a random token; we store its SHA-256. */

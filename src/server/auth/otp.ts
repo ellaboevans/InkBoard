@@ -5,8 +5,10 @@ import { getDb } from "@/db";
 import { editors, emailOtps, type Editor } from "@/db/schema";
 import { env } from "@/env";
 import {
+  generateLetterToken,
   generateOtpCode,
   generateToken,
+  LINK_TOKEN_LENGTH,
   hmac,
   safeEqual,
   sha256,
@@ -47,6 +49,8 @@ const ipKey = ipBucket;
 
 const hashCode = (email: string, code: string) =>
   hmac("email-otp", `${email}:${code}`);
+const hashLinkToken = (token: string) => hmac("email-link", token);
+const LINK_TOKEN_RE = new RegExp(`^[A-Za-z]{${LINK_TOKEN_LENGTH}}$`);
 
 export type RequestOtpResult =
   | { ok: true; email: string; resendIn: number }
@@ -54,7 +58,9 @@ export type RequestOtpResult =
   | { ok: false; error: "rate_limited"; retryAfter: number };
 
 /**
- * Issue a new sign-in code and email it.
+ * Issue a new sign-in code, plus a sign-in link token, and email both.
+ * Code and link live in one row: using either consumes it, and requesting a
+ * new email invalidates both.
  *
  * Responds identically whether or not the address is on the allowlist, so the
  * form cannot be used to discover who is an editor.
@@ -88,6 +94,8 @@ export async function requestOtp(input: {
   const codeHash = allowed
     ? hashCode(email, code)
     : hmac("email-otp-decoy", `${email}:${generateToken()}`);
+  // Decoy rows get no link (nothing is emailed for them anyway).
+  const linkToken = allowed ? generateLetterToken() : null;
 
   await getDb().transaction(async (tx) => {
     // Only the newest code is ever valid.
@@ -98,6 +106,7 @@ export async function requestOtp(input: {
     await tx.insert(emailOtps).values({
       email,
       codeHash,
+      linkTokenHash: linkToken ? hashLinkToken(linkToken) : null,
       expiresAt: sql`now() + make_interval(secs => ${OTP_TTL_SECONDS})`,
       requestedIp: input.ip ?? null,
     });
@@ -108,7 +117,7 @@ export async function requestOtp(input: {
     // (and failures) would make allowed addresses distinguishable by timing.
     after(async () => {
       try {
-        await sendOtpEmail(email, code);
+        await sendOtpEmail(email, code, linkToken!);
       } catch (err) {
         console.error("[otp] failed to send sign-in email", err);
       }
@@ -190,15 +199,17 @@ export async function verifyOtp(input: {
     )
     .returning({ attempts: emailOtps.attempts });
 
+  // Too many wrong guesses lock the *code* only (attempts stay at the max,
+  // so the update above keeps failing). The row is not consumed, so the
+  // sign-in link in the same email keeps working: someone guessing codes
+  // can't take away the editor's link.
   if (!counted) {
-    await consume(otp.id);
     return { ok: false, error: "too_many_attempts" };
   }
 
   if (!safeEqual(otp.codeHash, hashCode(email, code))) {
     const attemptsLeft = OTP_MAX_ATTEMPTS - counted.attempts;
     if (attemptsLeft <= 0) {
-      await consume(otp.id);
       return { ok: false, error: "too_many_attempts" };
     }
     return { ok: false, error: "invalid_code", attemptsLeft };
@@ -212,8 +223,57 @@ export async function verifyOtp(input: {
     return { ok: false, error: "invalid_code" };
   }
 
+  return { ok: true, editor: await upsertEditor(email) };
+}
+
+export type VerifyLinkResult =
+  | { ok: true; editor: Editor }
+  | { ok: false; error: "invalid_link" }
+  | { ok: false; error: "rate_limited"; retryAfter: number };
+
+/**
+ * Sign in with the link from the email. The token is ~250 random bits, so it
+ * can't be guessed and skips the per-email guess limits (which is what makes
+ * the link immune to the lockout described in docs/PLAN.md, Phase 6). Only a
+ * per-client limit applies, against junk floods.
+ *
+ * Expired, used, superseded and unknown links all get the same answer.
+ */
+export async function verifyLinkToken(input: {
+  token: unknown;
+  ip?: string | null;
+}): Promise<VerifyLinkResult> {
+  const limit = await rateLimit(`otp:link:ip:${ipKey(input.ip)}`, VERIFICATIONS_PER_IP, WINDOW);
+  if (!limit.allowed) return { ok: false, error: "rate_limited", retryAfter: limit.retryAfter };
+
+  const token = typeof input.token === "string" ? input.token.trim() : "";
+  if (!LINK_TOKEN_RE.test(token)) return { ok: false, error: "invalid_link" };
+
+  // Single use, like the code: one conditional update wins.
+  const [row] = await getDb()
+    .update(emailOtps)
+    .set({ consumedAt: sql`now()` })
+    .where(
+      and(
+        eq(emailOtps.linkTokenHash, hashLinkToken(token)),
+        isNull(emailOtps.consumedAt),
+        gt(emailOtps.expiresAt, sql`now()`),
+      ),
+    )
+    .returning({ email: emailOtps.email });
+  if (!row) return { ok: false, error: "invalid_link" };
+
+  // Re-checked in case the allowlist changed since the email was sent.
+  if (!isEmailAllowed(row.email, env().EDITOR_ALLOWLIST)) {
+    return { ok: false, error: "invalid_link" };
+  }
+  return { ok: true, editor: await upsertEditor(row.email) };
+}
+
+/** First successful sign-in creates the editor; later ones record the time. */
+async function upsertEditor(email: string): Promise<Editor> {
   const now = new Date();
-  const [editor] = await db
+  const [editor] = await getDb()
     .insert(editors)
     .values({ email, lastSignInAt: now })
     .onConflictDoUpdate({
@@ -221,8 +281,7 @@ export async function verifyOtp(input: {
       set: { lastSignInAt: now },
     })
     .returning();
-
-  return { ok: true, editor };
+  return editor;
 }
 
 async function consume(id: string): Promise<boolean> {

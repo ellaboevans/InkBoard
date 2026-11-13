@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, formatAlertTime, otpEmail, signInAlertEmail } from "@/server/email-templates";
+import { escapeHtml, formatAlertTime, otpEmail, signInAlertEmail, signInLinkUrl } from "@/server/email-templates";
 
 /** What a reader (or a code detector) sees in the HTML part: no tags, styles or attributes. */
 function visibleText(html: string) {
@@ -12,7 +12,19 @@ function visibleText(html: string) {
 const digitRuns = (s: string) => s.match(/\d{4,8}/g) ?? [];
 
 describe("sign-in code email", () => {
-  const mail = otpEmail({ code: "482910", appUrl: "https://poemhub.example", ttlMinutes: 10 });
+  const token = "AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfGhIjKlMnOpQr";
+  const link = signInLinkUrl("https://poemhub.example", token);
+  const mail = otpEmail({ code: "482910", link, appUrl: "https://poemhub.example", ttlMinutes: 10 });
+
+  it("puts the link token in the URL fragment, never the path or query", () => {
+    expect(link).toBe(`https://poemhub.example/sign-in/link#${token}`);
+  });
+
+  it("includes the sign-in link as a button and in the plain-text part", () => {
+    expect(mail.html).toContain(`href="${link}"`);
+    expect(mail.html).toContain("Sign in to InkBoard");
+    expect(mail.text.split("\n")).toContain(link);
+  });
 
   it("has the fixed subject, and the code in the preview text and first line", () => {
     expect(mail.subject).toBe("Your InkBoard One Time Password");
@@ -25,16 +37,19 @@ describe("sign-in code email", () => {
     expect(mail.html).toMatch(/<strong>482910<\/strong>/);
   });
 
-  it("contains no other 4–8 digit numbers a detector could pick instead", () => {
+  it("contains no other 4–8 digit numbers a detector could pick instead, links included", () => {
     expect(digitRuns(mail.subject)).toEqual([]);
     for (const part of [mail.text, visibleText(mail.html)]) {
       expect(new Set(digitRuns(part))).toEqual(new Set(["482910"]));
     }
+    const hrefs = [...mail.html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs.flatMap(digitRuns)).toEqual([]);
   });
 
-  it("marks itself as automated and has no tracking or unsubscribe header", () => {
+  it("marks itself as automated; the only image is our own logo, with no tracking", () => {
     expect(mail.headers).toEqual({ "Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All" });
-    expect(mail.html).not.toMatch(/<img/);
+    const imgs = [...mail.html.matchAll(/<img[^>]*src="([^"]+)"/g)].map((m) => m[1]);
+    expect(imgs).toEqual(["https://poemhub.example/email/logo.png"]);
   });
 });
 

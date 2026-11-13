@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { getRequestMeta, startSession } from "@/server/auth/dal";
-import { requestOtp, verifyOtp } from "@/server/auth/otp";
+import { requestOtp, verifyLinkToken, verifyOtp } from "@/server/auth/otp";
+import type { Editor } from "@/db/schema";
 import { notifyIfNewSignIn } from "@/server/auth/sign-in-alerts";
 
 export type SignInState =
@@ -79,22 +80,49 @@ export async function signInAction(
               : "That code is invalid or has expired.";
       return { ...prev, error, notice: undefined };
     }
-    await startSession(res.editor.id);
-    // Security notice if this network is new for the editor. Best effort:
-    // the sign-in already succeeded, so a failure here must not undo it.
-    try {
-      await notifyIfNewSignIn({
-        editorId: res.editor.id,
-        email: res.editor.email,
-        penName: res.editor.penName,
-        ip,
-        userAgent,
-      });
-    } catch (err) {
-      console.error("Couldn't check for a new sign-in location", err);
-    }
-    redirect(res.editor.penName ? "/admin?signed-in=1" : "/admin/onboarding");
+    await completeSignIn(res.editor, ip, userAgent);
   }
 
   return { step: "email" };
+}
+
+export type LinkSignInState = { error?: string };
+
+/**
+ * Sign in with the link from the email (/sign-in/link). The token comes from
+ * the URL fragment, read in the browser only when the person presses
+ * "Continue", so mail scanners that pre-open links can't use it up.
+ */
+export async function linkSignInAction(_prev: LinkSignInState, formData: FormData): Promise<LinkSignInState> {
+  const { ip, userAgent } = await getRequestMeta();
+  const res = await verifyLinkToken({ token: formData.get("token"), ip });
+  if (!res.ok) {
+    return {
+      error:
+        res.error === "rate_limited"
+          ? `Too many attempts. Try again in ${Math.ceil(res.retryAfter / 60)} min.`
+          : "This sign-in link has expired or was already used. Request a new one.",
+    };
+  }
+  await completeSignIn(res.editor, ip, userAgent);
+  return {};
+}
+
+/** Start the session, send the new-network notice if needed, and go to the dashboard. */
+async function completeSignIn(editor: Editor, ip: string | null, userAgent: string | null): Promise<never> {
+  await startSession(editor.id);
+  // Security notice if this network is new for the editor. Best effort:
+  // the sign-in already succeeded, so a failure here must not undo it.
+  try {
+    await notifyIfNewSignIn({
+      editorId: editor.id,
+      email: editor.email,
+      penName: editor.penName,
+      ip,
+      userAgent,
+    });
+  } catch (err) {
+    console.error("Couldn't check for a new sign-in location", err);
+  }
+  redirect(editor.penName ? "/admin?signed-in=1" : "/admin/onboarding");
 }

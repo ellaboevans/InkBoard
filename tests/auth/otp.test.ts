@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { editors, emailOtps } from "@/db/schema";
 import { resetEnvCache } from "@/env";
-import { OTP_MAX_ATTEMPTS, requestOtp, verifyOtp } from "@/server/auth/otp";
-import { lastCodeFor, outbox } from "../support/outbox";
+import { OTP_MAX_ATTEMPTS, requestOtp, verifyLinkToken, verifyOtp } from "@/server/auth/otp";
+import { lastCodeFor, lastLinkTokenFor, outbox } from "../support/outbox";
 
 const db = getDb();
 const EMAIL = "poet@example.com";
@@ -173,6 +173,14 @@ describe("verifyOtp", () => {
     expect((await verifyOtp({ email: EMAIL, code })).ok).toBe(false);
   });
 
+  it("locking the code leaves the sign-in link working, so guessers can't lock the editor out", async () => {
+    await requestOtp({ email: EMAIL });
+    const code = lastCodeFor(EMAIL);
+    for (let i = 0; i < OTP_MAX_ATTEMPTS + 2; i++) await verifyOtp({ email: EMAIL, code: wrong(code) });
+    expect(await verifyOtp({ email: EMAIL, code })).toEqual({ ok: false, error: "too_many_attempts" });
+    expect((await verifyLinkToken({ token: lastLinkTokenFor(EMAIL) })).ok).toBe(true);
+  });
+
   it("never exceeds the attempt limit under concurrent guessing", async () => {
     await requestOtp({ email: EMAIL });
     const code = lastCodeFor(EMAIL);
@@ -180,8 +188,9 @@ describe("verifyOtp", () => {
       Array.from({ length: 15 }, () => verifyOtp({ email: EMAIL, code: wrong(code) })),
     );
     const [row] = await db.select().from(emailOtps);
-    expect(row.attempts).toBeLessThanOrEqual(OTP_MAX_ATTEMPTS);
-    expect(row.consumedAt).not.toBeNull();
+    expect(row.attempts).toBe(OTP_MAX_ATTEMPTS);
+    // Locked, not consumed: only the code is dead (see the test above).
+    expect(row.consumedAt).toBeNull();
   });
 
   it("lets only one concurrent request redeem a code", async () => {
@@ -280,6 +289,9 @@ describe("allowlist", () => {
 
     // ...but only the allowed one actually got a code.
     expect(outbox.map((m) => m.to)).toEqual(["ada@poets.org"]);
+    // The decoy row has no sign-in link at all.
+    const [decoy] = await db.select().from(emailOtps).where(eq(emailOtps.email, "eve@example.com"));
+    expect(decoy.linkTokenHash).toBeNull();
 
     // A wrong guess looks identical for both (attempts are counted on a decoy).
     expect(await verifyOtp({ email: "eve@example.com", code: "123456" })).toEqual({
@@ -301,5 +313,81 @@ describe("allowlist", () => {
     expect((await verifyOtp({ email: "ada@poets.org", code: lastCodeFor("ada@poets.org") })).ok).toBe(true);
     const rows = await db.select().from(editors).where(eq(editors.email, "eve@example.com"));
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("verifyLinkToken", () => {
+  afterEach(() => {
+    process.env.EDITOR_ALLOWLIST = "";
+    resetEnvCache();
+  });
+
+  it("emails a letters-only token and stores only its hash", async () => {
+    await requestOtp({ email: EMAIL });
+    const token = lastLinkTokenFor(EMAIL);
+    expect(token).toMatch(/^[A-Za-z]{44}$/);
+    const [row] = await db.select().from(emailOtps);
+    expect(row.linkTokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(row.linkTokenHash).not.toContain(token);
+  });
+
+  it("signs in (creating the editor the first time) and is single use", async () => {
+    await requestOtp({ email: EMAIL });
+    const token = lastLinkTokenFor(EMAIL);
+    const res = await verifyLinkToken({ token });
+    expect(res).toMatchObject({ ok: true, editor: { email: EMAIL } });
+    expect(await verifyLinkToken({ token })).toEqual({ ok: false, error: "invalid_link" });
+  });
+
+  it("shares one row with the code: using either one cancels the other", async () => {
+    await requestOtp({ email: EMAIL });
+    expect((await verifyLinkToken({ token: lastLinkTokenFor(EMAIL) })).ok).toBe(true);
+    expect((await verifyOtp({ email: EMAIL, code: lastCodeFor(EMAIL) })).ok).toBe(false);
+
+    await skipCooldown();
+    await requestOtp({ email: EMAIL });
+    expect((await verifyOtp({ email: EMAIL, code: lastCodeFor(EMAIL) })).ok).toBe(true);
+    expect(await verifyLinkToken({ token: lastLinkTokenFor(EMAIL) })).toEqual({ ok: false, error: "invalid_link" });
+  });
+
+  it("is invalidated by a newer email", async () => {
+    await requestOtp({ email: EMAIL });
+    const old = lastLinkTokenFor(EMAIL);
+    await skipCooldown();
+    await requestOtp({ email: EMAIL });
+    expect(await verifyLinkToken({ token: old })).toEqual({ ok: false, error: "invalid_link" });
+    expect((await verifyLinkToken({ token: lastLinkTokenFor(EMAIL) })).ok).toBe(true);
+  });
+
+  it("rejects expired, unknown and malformed tokens the same way", async () => {
+    await requestOtp({ email: EMAIL });
+    const token = lastLinkTokenFor(EMAIL);
+    await db.update(emailOtps).set({ expiresAt: sql`now() - interval '1 second'` });
+    for (const t of [token, "A".repeat(44), "short", 42, null, `${token}x`, `${token.slice(0, 43)}1`]) {
+      expect(await verifyLinkToken({ token: t })).toEqual({ ok: false, error: "invalid_link" });
+    }
+  });
+
+  it("lets only one concurrent request redeem a link", async () => {
+    await requestOtp({ email: EMAIL });
+    const token = lastLinkTokenFor(EMAIL);
+    const results = await Promise.all(Array.from({ length: 5 }, () => verifyLinkToken({ token })));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+  });
+
+  it("refuses an address removed from the allowlist after the email was sent", async () => {
+    await requestOtp({ email: EMAIL });
+    process.env.EDITOR_ALLOWLIST = "@poets.org";
+    resetEnvCache();
+    expect(await verifyLinkToken({ token: lastLinkTokenFor(EMAIL) })).toEqual({ ok: false, error: "invalid_link" });
+    expect(await db.select().from(editors)).toHaveLength(0);
+  });
+
+  it("rate limits link attempts per client", async () => {
+    let last;
+    for (let i = 0; i < 31; i++) last = await verifyLinkToken({ token: "B".repeat(44), ip: "203.0.113.9" });
+    expect(last).toMatchObject({ ok: false, error: "rate_limited" });
+    // Another client is unaffected.
+    expect(await verifyLinkToken({ token: "B".repeat(44), ip: "198.51.100.1" })).toEqual({ ok: false, error: "invalid_link" });
   });
 });

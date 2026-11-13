@@ -43,6 +43,13 @@
       "when": 1794526860255,
       "tag": "0005_sign_in_locations",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794566291562,
+      "tag": "0006_sign_in_link",
+      "breakpoints": true
     }
   ]
 }

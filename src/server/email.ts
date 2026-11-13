@@ -3,7 +3,7 @@ import { appendFile } from "node:fs/promises";
 import { Resend } from "resend";
 import { env } from "@/env";
 import { OTP_TTL_SECONDS } from "./auth/otp-config";
-import { otpEmail, signInAlertEmail, type EmailMessage, type SignInAlertDetails } from "./email-templates";
+import { otpEmail, signInAlertEmail, signInLinkUrl, type EmailMessage, type SignInAlertDetails } from "./email-templates";
 
 let resend: Resend | undefined;
 
@@ -43,9 +43,11 @@ async function deliver(to: string, message: EmailMessage, testRecord: Record<str
   }
 }
 
-export async function sendOtpEmail(to: string, code: string): Promise<void> {
-  const message = otpEmail({ code, appUrl: env().APP_URL, ttlMinutes: OTP_TTL_SECONDS / 60 });
-  await deliver(to, message, { code });
+export async function sendOtpEmail(to: string, code: string, linkToken: string): Promise<void> {
+  const { APP_URL } = env();
+  const link = signInLinkUrl(APP_URL, linkToken);
+  const message = otpEmail({ code, link, appUrl: APP_URL, ttlMinutes: OTP_TTL_SECONDS / 60 });
+  await deliver(to, message, { code, link });
 }
 
 export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlertDetails, "appUrl">): Promise<void> {

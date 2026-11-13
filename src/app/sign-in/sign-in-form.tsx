@@ -116,7 +116,7 @@ function CodeStep({
       <p className="text-sm text-muted-foreground">
         We sent a 6-digit code to{" "}
         <span className="font-medium text-foreground">{state.email}</span>. It
-        expires in 10 minutes.
+        expires in 10 minutes. You can also use the sign-in button in that email.
       </p>
 
       <form ref={formRef} action={action} className="grid gap-4">

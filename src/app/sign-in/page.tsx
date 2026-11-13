@@ -16,7 +16,7 @@ export default function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   return (
     <AuthShell
       title="Sign in to InkBoard"
-      description="We'll email you a one-time code. New here? Your account is created the first time you sign in."
+      description="We'll email you a one-time code and a sign-in link. New here? Your account is created the first time you sign in."
     >
       {/* Reads the session cookie, so it sits behind its own boundary. */}
       <Suspense fallback={null}>

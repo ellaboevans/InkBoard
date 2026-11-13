@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { accountButton, latestCode, requestCode, signOut, sql, typeCode } from "./helpers";
+import { accountButton, latestCode, latestLink, requestCode, signOut, sql, typeCode } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -60,6 +60,39 @@ test("first sign-in creates the editor, onboarding, sign-out, and return sign-in
 
   const editors = await sql(`SELECT count(*)::int AS n FROM editors WHERE email = '${EMAIL}'`);
   expect(editors.rows[0].n).toBe(1);
+});
+
+test("the sign-in link signs in after a deliberate click, once, and replaces the code", async ({ page }) => {
+  const EMAIL = `link-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
+  await requestCode(page, EMAIL);
+  const link = await latestLink(EMAIL);
+  // The token is in the fragment (never sent to the server) and has no digits.
+  const url = new URL(link);
+  expect(url.pathname).toBe("/sign-in/link");
+  expect(url.search).toBe("");
+  expect(url.hash).toMatch(/^#[A-Za-z]{44}$/);
+
+  // Opening the link alone does nothing (mail scanners pre-open links).
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await expect(page.getByRole("heading", { name: "Continue signing in" })).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in\/link/);
+  await page.getByRole("button", { name: "Continue to InkBoard" }).click();
+  await expect(page).toHaveURL(/\/admin\/onboarding$/, { timeout: 45_000 });
+
+  // Used up: a second visit (e.g. on another device) fails clearly...
+  await page.context().clearCookies();
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await page.getByRole("button", { name: "Continue to InkBoard" }).click();
+  await expect(page.getByRole("main").getByText("This sign-in link has expired or was already used.")).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Request a new sign-in email" })).toBeVisible();
+
+  // ...and the code from the same email no longer works either.
+  await requestCode(page, EMAIL);
+  const fresh = await latestCode(EMAIL);
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, ""));
+  await page.getByRole("button", { name: "Continue to InkBoard" }).click();
+  await expect(page.getByRole("main").getByText("This sign-in link has expired or was already used.")).toBeVisible();
+  expect(fresh).toMatch(/^\d{6}$/);
 });
 
 test("wrong codes show remaining attempts, then the right code works", async ({ page }) => {

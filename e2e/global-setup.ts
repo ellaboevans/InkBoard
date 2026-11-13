@@ -30,6 +30,7 @@ export default async function globalSetup() {
 async function warmUp() {
   const routes: [string, Record<string, string>?][] = [
     ["/sign-in"],
+    ["/sign-in/link"],
     ["/"],
     ["/admin"],
     ["/admin/onboarding"],

@@ -18,6 +18,22 @@ export async function latestCode(email: string): Promise<string> {
   return code!;
 }
 
+/** The sign-in link from the newest sign-in email to `email` (`…/sign-in/link#<token>`). */
+export async function latestLink(email: string): Promise<string> {
+  let link: string | undefined;
+  await expect
+    .poll(async () => {
+      const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n");
+      link = lines
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as { to: string; link?: string })
+        .findLast((m) => m.to === email && m.link)?.link;
+      return link;
+    })
+    .toBeTruthy();
+  return link!;
+}
+
 export async function sql(query: string) {
   const client = new pg.Client({ connectionString: E2E_DATABASE_URL });
   await client.connect();

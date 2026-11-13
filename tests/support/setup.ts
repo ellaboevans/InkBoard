@@ -7,8 +7,8 @@ import { alerts, outbox } from "./outbox";
 vi.mock("@/server/email", async () => {
   const { alerts, outbox } = await import("./outbox");
   return {
-    sendOtpEmail: vi.fn(async (to: string, code: string) => {
-      outbox.push({ to, code });
+    sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
+      outbox.push({ to, code, linkToken });
     }),
     sendSignInAlertEmail: vi.fn(async (to: string, d: { device: string; ip: string; penName: string | null }) => {
       alerts.push({ to, device: d.device, ip: d.ip, penName: d.penName });

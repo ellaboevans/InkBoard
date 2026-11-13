@@ -18,6 +18,26 @@ export function generateToken(): string {
   return randomBytes(32).toString("base64url");
 }
 
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+/** Length of a sign-in link token: 44 letters ≈ 250 bits. */
+export const LINK_TOKEN_LENGTH = 44;
+
+/**
+ * Random token made of letters only (no digits, `-` or `_`), for sign-in
+ * links. Mail clients' code detectors look for runs of digits, so a link
+ * must never contain one they could mistake for the 6-digit code.
+ */
+export function generateLetterToken(length = LINK_TOKEN_LENGTH): string {
+  let out = "";
+  while (out.length < length) {
+    for (const byte of randomBytes(length)) {
+      // 52 * 4 = 208: reject 208–255 so every letter is equally likely.
+      if (byte < 208 && out.length < length) out += LETTERS[byte % 52];
+    }
+  }
+  return out;
+}
+
 export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }

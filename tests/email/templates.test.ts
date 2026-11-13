@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { EMAIL_LOGO_PNG_BASE64 } from "@/server/email-logo";
 import { describe, expect, it } from "vitest";
 import { escapeHtml, formatAlertTime, otpEmail, signInAlertEmail, signInLinkUrl } from "@/server/email-templates";
 
@@ -49,7 +52,12 @@ describe("sign-in code email", () => {
   it("marks itself as automated; the only image is our own logo, with no tracking", () => {
     expect(mail.headers).toEqual({ "Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All" });
     const imgs = [...mail.html.matchAll(/<img[^>]*src="([^"]+)"/g)].map((m) => m[1]);
-    expect(imgs).toEqual(["https://poemhub.example/email/logo.png"]);
+    expect(imgs).toEqual(["cid:inkboard-logo"]);
+  });
+
+  it("the inline logo is the PNG in public/email", () => {
+    const png = readFileSync(path.join(import.meta.dirname, "../../public/email/logo.png"));
+    expect(Buffer.from(EMAIL_LOGO_PNG_BASE64, "base64").equals(png)).toBe(true);
   });
 });
 

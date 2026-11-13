@@ -18,10 +18,13 @@
  * sending domain), is a deployment step: see docs/DEPLOY.md.
  *
  * Layout: tables and inline styles only (what every client renders), one
- * 520px card on the paper background, the logo as a small PNG from our own
- * domain (SVG is stripped by Gmail and Outlook) with a text wordmark beside
- * it, so the email still reads correctly with images blocked.
+ * 520px card on the paper background, the logo as a small inline PNG
+ * attachment (cid:, see email-logo.ts; SVG and data: URIs are stripped by
+ * Gmail and Outlook) with a text wordmark beside it, so the email still reads
+ * correctly with images blocked.
  */
+
+import { EMAIL_LOGO_CID } from "./email-logo";
 
 export type EmailMessage = {
   subject: string;
@@ -74,7 +77,7 @@ function frame({
   footer: string;
 }) {
   const home = escapeHtml(new URL("/", appUrl).href);
-  const logo = escapeHtml(new URL("/email/logo.png", appUrl).href);
+  const logo = `cid:${EMAIL_LOGO_CID}`;
   const host = escapeHtml(new URL(appUrl).host);
   return `<!doctype html>
 <html lang="en">

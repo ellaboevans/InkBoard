@@ -3,6 +3,7 @@ import { appendFile } from "node:fs/promises";
 import { Resend } from "resend";
 import { env } from "@/env";
 import { OTP_TTL_SECONDS } from "./auth/otp-config";
+import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./email-logo";
 import { otpEmail, signInAlertEmail, signInLinkUrl, type EmailMessage, type SignInAlertDetails } from "./email-templates";
 
 let resend: Resend | undefined;
@@ -33,6 +34,10 @@ async function deliver(to: string, message: EmailMessage, testRecord: Record<str
     text: message.text,
     html: message.html,
     headers: message.headers,
+    // The header logo, inline so it shows wherever APP_URL points (see email-logo.ts).
+    attachments: [
+      { filename: "inkboard.png", content: EMAIL_LOGO_PNG_BASE64, contentType: "image/png", contentId: EMAIL_LOGO_CID },
+    ],
   });
   if (error) {
     throw new Error(`Failed to send "${message.subject}" email: ${error.message}`);

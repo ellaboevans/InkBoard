@@ -58,13 +58,14 @@ account; every later sign-in sends a fresh code.
 | DB | **Neon Postgres** via **Drizzle ORM** + drizzle-kit SQL migrations | Typed schema, plain SQL migrations reviewable in PRs. |
 | DB driver | `@neondatabase/serverless` (WebSocket pool, supports transactions) when `DATABASE_URL` points at Neon; `pg` for local Postgres | Same code path for prod and local dev/tests; no Neon account needed to develop. |
 | Auth | **Custom email-OTP** (≈300 lines, fully tested) rather than a framework | Requirement is narrow (OTP only, no passwords/OAuth). Owning it keeps every rule in N2–N4/N9 explicit and testable. |
-| Email | **Resend** in production; codes logged to the server console in development | Simple API, good deliverability. Swappable behind `sendOtpEmail()`. |
+| Email | **Resend** everywhere, local development included; codes are never printed. Only automated tests skip it (Vitest mocks the module, E2E writes to an outbox file) | Simple API, good deliverability. Swappable behind `sendOtpEmail()`. |
 | UI | **shadcn/ui** (Radix base, Nova preset) with a custom "paper & ink" theme; serif face for poem text | R6. |
 | Board rendering | **Infinite canvas of DOM nodes in a CSS-transformed world layer** (pan/zoom via pointer, wheel, pinch, keyboard) | Behaves like Figma/Miro, but text stays crisp, selectable, translatable, screen-reader accessible and every card is a real link (N7). A raw `<canvas>` would require re-implementing text layout, hit-testing and accessibility. Virtualise off-screen sections if counts grow. |
 | Board layout | Deterministic auto-layout: author sections on a grid ("shelves"), poems as cards inside | Predictable catalogue (R9). Free-form placement by editors is a possible later feature. |
 | Search | Postgres FTS (GIN expression indexes on `to_tsvector('simple', search_normalize(…))`) on poem **title** and author **pen name**, plus `pg_trgm` for typo-tolerant matches | R10 without an external service; bodies are excluded (N1). |
 | Private unlock | Server Action verifies password → adds a grant to one signed (HMAC) cookie, 12h expiry. A grant covers one poem (`p:<poemId>:<password_version>`) or, in shared mode, all of an author's private poems (`a:<editorId>:<shared_password_version>`) | Stateless, revocable on password change (N6). |
 | Rate limiting | Fixed-window counters in a Postgres table (`rate_limits`) | Works on serverless without adding Redis; can be swapped for Upstash later. |
+| SEO & sharing | Next.js metadata file conventions (`icon.svg`, `favicon.ico`, `apple-icon`, `opengraph-image`, `robots`, `sitemap`, `manifest`); share cards rendered with `ImageResponse` | No third-party service or CSP change; cards and sitemap reuse the cached board data. |
 
 ### Data model
 
@@ -81,7 +82,11 @@ rate_limits  key (pk) · window_start · count
 
 Phase 7 adds to `editors`: `tagline` · `avatar` (curated id) · `links` (jsonb, ≤ 4 https URLs) · `pinned_poem_id` → poems (ON DELETE SET NULL).
 
+Phase 9 adds:
+
 ```
+sign_in_locations  id · editor_id → editors · ip_key (HMAC of the network, never the IP) · first_seen_at · last_seen_at
+                   UNIQUE (editor_id, ip_key)
 ```
 
 "A private poem is always readable with some password" (its own in per-poem mode, the
@@ -108,6 +113,11 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /avatars/[id]          Curated avatar SVGs (prerendered, cached forever)
 /api/search?q=         Search authors and poem titles (R10)
 /api/cron/cleanup      Daily cleanup of expired rows (Bearer CRON_SECRET)
+/robots.txt            Crawl rules: everything except /admin and /api/
+/sitemap.xml           Board, author pages and published poems
+/manifest.webmanifest  Web app manifest (name, colours, icons)
+/opengraph-image       Share cards; also under /p/[author]/[poem] and /a/[author]
+/icon.svg, /favicon.ico, /apple-icon   Logo icons
 ```
 
 ## 4. Delivery phases
@@ -228,7 +238,7 @@ Done:
   - Picking an author moves the board to their section and focuses its label. Picking a poem moves to its card, highlights it and focuses it, so Enter opens it in the overlay.
 - **Accept:** prefix ("ros" → "Rose"), multi-word and slightly misspelt queries match; poem bodies never match. Covered by unit tests (including a mutation check that the text test fails if bodies become searchable) and E2E.
 
-### Phase 6: Hardening and launch 🟡
+### Phase 6: Hardening and launch ✅
 Done:
 - **Security headers** (`next.config.ts`, all routes):
   - The CSP allows only our own origin, with no framing, no plugins, and forms posting only to us. Scripts have `'unsafe-inline'` and no nonces, because nonces would disable prerendering; no user HTML is ever rendered.
@@ -241,7 +251,8 @@ Done:
   - Neon via Vercel's integration, with a database branch per preview deployment.
   - Migrations run on every build (`pnpm db:migrate && pnpm build`) over `DATABASE_URL_UNPOOLED`.
   - The env var table, Resend domain verification, and a post-deploy checklist.
-- **E2E coverage** for sign-in, publish, board, overlay, unlock (both password modes) and search: 24 tests.
+- **Launched** (done by the product owner): Neon and Vercel projects created, a Resend sending domain verified (SPF, DKIM, DMARC), and the env vars from `docs/DEPLOY.md` set, including `APP_URL`. The site is live.
+- **E2E coverage** for sign-in, publish, board, overlay, unlock (both password modes) and search. 24 tests at the time; 35 today, after Phases 7–9.
 
 - **Full-app security review (done):**
   - No high-severity issues, and no path for private poem text to reach a browser without a valid grant. This covered RSC payloads, the cache, the overlay, error pages, search and metadata.
@@ -263,17 +274,15 @@ Done:
   - Still possible: an attacker with many IPs can exhaust the backstop, and anyone can use up the 5-requests-per-15-minutes limit on sending codes to one email. Both are bounded and short-lived. A magic link in the email (a long random token, which can't be guessed and so can skip guess limits) would remove the first entirely, and is the follow-up if this becomes a problem.
 
 - **Automated accessibility checks (N7)** (`e2e/a11y.spec.ts`, axe-core, WCAG 2.2 A/AA):
-  - Covers 24 screens and states in both themes: sign-in steps, onboarding, dashboard, poem editor (incl. validation errors and the delete dialog), settings, profile, board, list view, search palette (empty, results, no results), overlay (public, locked, wrong password), and the full poem page (locked, unlocked, not found).
+  - Covers every screen and state (29 scans today, light theme only since Phase 7): sign-in steps, onboarding, dashboard, poem editor (incl. validation errors and the delete dialog), settings, profile, board, list view, search palette (empty, results, no results), overlay (public, locked, wrong password), and the full poem page (locked, unlocked, not found).
   - Fixed what it found:
     1. Error text was below 4.5:1 contrast (4.42:1 on paper, 4.1:1 on its tint, 3.92:1 in the dark theme). The `--destructive` token was darkened in light mode and lightened in dark mode.
     2. Board cards were links whose `aria-label` hid their visible text (WCAG 2.5.3), so screen readers couldn't read excerpts. Cards are now stretched title links: the title is the link and its name, and the excerpt is plain text.
     3. The search palette rendered an empty `listbox` before any results (an ARIA error). Status messages now sit outside it, and it's hidden until there are results.
     4. Found while scanning: after closing one poem's overlay and opening another, the dialog kept the old poem's name, because the overlay used a fixed id and Next keeps the previous overlay mounted but hidden. The poem's title is now the Radix `DialogTitle`, whose id is unique to each dialog.
-  - Note: the dark "night ink" theme is defined and passes these checks, but nothing in the app switches it on yet.
+  - The dark theme that was scanned at the time was removed in Phase 7, so only the light theme is checked now.
 
-To do:
-- **Manual screen-reader pass (N7):** automated checks catch only part of what matters. Try VoiceOver or NVDA on sign-in, the poem editor, the board, the overlay and the search palette.
-- **Needs you:** create the Neon project and Vercel project, verify a Resend sending domain, and set the env vars from `docs/DEPLOY.md`.
+- **Manual screen-reader pass (N7)** (done by the product owner): VoiceOver on sign-in, the poem editor, the board, the overlay and the search palette. Passed.
 
 ### Phase 7: Editor dashboard redesign ✅
 Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-in, **Navii** avatars via `@usenavii/core`, **light mode only**. The public author page followed in Phase 8.
@@ -306,6 +315,16 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
   - The alert never says "code", so clients don't offer to "copy" the date in it (tested).
 - **Tests:** template tests (subject, unbroken code, no other digit runs, escaping, UTC time), alert logic (first, known, new, IPv6 /64, unknown IP, per editor, no raw IP stored, daily cap), cleanup, and E2E for a sign-in from a second network.
 
+### Phase 10: SEO and link sharing ✅
+- **Logo icons:** the favicon is the InkBoard logo (white Feather on the ink-red tile) instead of the Next.js default: `src/app/icon.svg`, a multi-size `favicon.ico` (16/32/48) generated from it, and a 180px `apple-icon` for iPhone home screens. A web manifest uses the same icons and the paper colour.
+- **Share cards** (Open Graph and Twitter/X, 1200×630, `src/components/brand/og-card.tsx`): one for the site, one per poem (title, author, first three lines) and one per author (pen name, tagline, poem count), set in Newsreader. Private poems show only title and author, never text (N1).
+- **Metadata:** `metadataBase` from `APP_URL` (Vercel's production domain as fallback), a canonical URL, title and description on every public page, `og:type` article/profile, and large image previews in search results. Public poems use their opening lines as the description; private ones a generic line.
+- **Crawling:** `robots.txt` (blocks `/admin` and `/api/`, links the sitemap) and `sitemap.xml` (board, authors, published poems; cached with `BOARD_TAG`, so it follows publishes). `/admin`, onboarding and `/sign-in` are `noindex`.
+- **Structured data (JSON-LD):** the site on `/`, each poem as a `CreativeWork` with author and date (text only when public), each author as a `ProfilePage`. Never the email.
+- **Lessons recorded in CLAUDE.md:** a relative canonical in the root layout breaks prerendering of the intercepted poem overlay, so each page sets its own; Next replaces rather than merges a child's `openGraph`/`twitter`; Satori needs static fonts.
+- **Checked:** typecheck, lint, build, 201 Vitest (unit + DB integration) tests and 35 E2E tests pass, and all four card types plus the icons were checked visually on a production build.
+- **`APP_URL`** is set to the live domain (done at launch). Every share card and sitemap URL is built from it, so it must change if the domain does.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
@@ -314,7 +333,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
 | R3 Public/private + password | 2, 4 | ✅ |
 | R4 Admin dashboard | 1 (shell), 2, 7 | ✅ sidebar shell, stats, filterable table, rich profile |
-| R5 Neon | 0 | ✅ schema + driver switch (needs a Neon `DATABASE_URL` to go live) |
+| R5 Neon | 0, 6 | ✅ schema + driver switch; live on Neon since launch |
 | R6 shadcn/ui, custom theme | 0 → all | ✅ every screen (sign-in, admin, settings, profile, board, overlay, search) uses the themed components |
 | R7 Email OTP, passwordless | 1 | ✅ |
 | R8 Visitor read/unlock | 4 | ✅ incl. board overlay |
@@ -327,7 +346,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
-| N7 Accessibility | 3, 4, 6 | 🟡 board done (links, focus pan, list view); axe passes on every screen in both themes (E2E); manual screen-reader pass still to do |
+| N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
 | N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
 | N9 No user enumeration | 1 | ✅ tested |
 
@@ -337,10 +356,13 @@ Decided:
 - **Who may become an editor?** Anyone who verifies their email. `EDITOR_ALLOWLIST` stays empty by default and remains available if you ever want to restrict sign-ups.
 - **Do private poems show their title on the board?** Yes: title, author and a lock badge. The text stays hidden until the reader enters the password.
 - **Password per poem, or one for all?** The editor decides, in Settings (R11). The default is a password per poem.
+- **Poem formatting?** Plain text, with line breaks and indentation kept. Light Markdown (italics, bold) could come later.
+- **How long does an unlock last?** 12 hours per browser, or until the editor changes the password (or unpublishes the poem).
+- **Email provider?** Resend, with a verified sending domain (done at launch).
+- **Board layout?** An automatic grid of author sections. Letting editors arrange positions could be a later phase.
 
-Open (current assumptions in brackets):
+No open questions remain.
 
-3. **Poem formatting?** [Plain text with line breaks and indentation preserved. Light Markdown (italics/bold) could come later.]
-4. **How long does an unlock last?** [12 hours per browser, or until the editor changes the password.]
-5. **Email provider / sending domain?** [Resend. A verified sending domain is needed for production.]
-6. **Board layout?** [Automatic grid of author sections. Editor-arranged positions could be a later phase.]
+Possible later work (not planned):
+- **Magic link in the sign-in email,** next to the code. A long random token can't be guessed, so it would remove the remaining bounded lockout described in Phase 6. Worth doing only if that becomes a problem.
+- **Light Markdown** in poems, and **editor-arranged board positions** (see above).

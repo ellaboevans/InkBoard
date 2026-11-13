@@ -1,7 +1,9 @@
+import { transliterate } from "./letters";
+
 /** URL-safe slug: accents stripped, lower-case, dashes, max 48 chars. */
 export function slugify(value: string, fallback = "untitled"): string {
   return (
-    value
+    transliterate(value)
       .normalize("NFKD")
       .replace(/[\u0300-\u036f]/g, "") // strip accents
       .toLowerCase()

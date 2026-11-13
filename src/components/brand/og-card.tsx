@@ -71,7 +71,8 @@ export function OgCard({
         backgroundImage: `radial-gradient(${BRAND.dot} 2px, transparent 2px)`,
         backgroundSize: "32px 32px",
         color: BRAND.ink,
-        fontFamily: "Newsreader",
+        // Gentium supplies Ghanaian letters and IPA that Newsreader lacks (og-fonts.ts).
+        fontFamily: "Newsreader, Gentium Book Plus",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>

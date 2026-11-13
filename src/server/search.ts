@@ -1,6 +1,7 @@
 import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
+import { toNfc } from "@/lib/letters";
 import type { SearchResults } from "@/lib/search-types";
 
 /*
@@ -22,9 +23,13 @@ const TYPO_THRESHOLD = "0.5";
 /** Typo matching on very short queries is mostly noise. */
 const FUZZY_MIN_LENGTH = 4;
 
-/** Split into plain letter/digit words; nothing else reaches to_tsquery. */
+/**
+ * Split into plain words; nothing else reaches to_tsquery. Combining marks
+ * (\p{M}) belong to their word: Ewe tones on ɛ/ɔ have no precomposed form,
+ * so without them "ɔ̃" would split in two. NFC first, like stored text.
+ */
 export function searchWords(raw: string): string[] {
-  return (raw.slice(0, SEARCH_MAX_LENGTH).match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, MAX_WORDS);
+  return (toNfc(raw.slice(0, SEARCH_MAX_LENGTH)).match(/[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu) ?? []).slice(0, MAX_WORDS);
 }
 
 /**

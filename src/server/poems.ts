@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
+import { toNfc } from "@/lib/letters";
 import { normalizePoemBody } from "@/lib/poem-text";
 import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
@@ -24,6 +25,7 @@ const idSchema = z.uuid();
 const inputSchema = z.object({
   title: z
     .string()
+    .overwrite(toNfc)
     .trim()
     .min(1, "Give your poem a title")
     .max(TITLE_MAX, `Titles can be at most ${TITLE_MAX} characters`),

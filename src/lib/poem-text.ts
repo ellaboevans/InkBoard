@@ -1,3 +1,5 @@
+import { toNfc } from "./letters";
+
 /**
  * Text rules shared by the server and the editor's live card preview, so the
  * preview shows exactly what the board will.
@@ -8,11 +10,12 @@ export const EXCERPT_LINES = 5;
 export const EXCERPT_CHARS = 280;
 
 /**
- * How a poem body is stored: line endings normalised, leading blank lines and
- * trailing whitespace dropped. Indentation inside the poem is meaningful and kept.
+ * How a poem body is stored: one Unicode form (NFC, see letters.ts), line
+ * endings normalised, leading blank lines and trailing whitespace dropped.
+ * Indentation inside the poem is meaningful and kept.
  */
 export function normalizePoemBody(body: string): string {
-  return body.replace(/\r\n?/g, "\n").replace(/^\s*\n/, "").trimEnd();
+  return toNfc(body).replace(/\r\n?/g, "\n").replace(/^\s*\n/, "").trimEnd();
 }
 
 /**

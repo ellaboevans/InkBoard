@@ -35,6 +35,7 @@ account; every later sign-in sends a fresh code.
 | R9  | Board groups poems by author into labelled sections (catalogue layout). |
 | R10 | Full-text search over author names (section labels) and poem titles. |
 | R11 | Each editor chooses whether their private poems each have their own password or all share one password, and sets it accordingly. |
+| R12 | Poets can write, and readers can read, poems in Ghanaian languages (Ewe, Twi/Akan, Nzema, Ga) with their own letters and tone marks, and linguists can write IPA. Every letter renders in our typefaces, on the site and in share cards, and works in links and search. |
 
 ### Non-functional (derived — needed to meet the brief safely)
 
@@ -327,6 +328,36 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - **Checked:** typecheck, lint, build, 201 Vitest (unit + DB integration) tests and 35 E2E tests pass, and all four card types plus the icons were checked visually on a production build.
 - **`APP_URL`** is set to the live domain (done at launch). Every share card and sitemap URL is built from it, so it must change if the domain does.
 
+### Phase 11: Ghanaian languages and IPA (R12)
+
+**Why.** Our poem typeface (Newsreader) has no glyphs for Ɛ ɛ Ɔ ɔ Ɖ ɖ Ƒ Ɣ ɣ Ʋ ʋ Ʒ ʒ (checked glyph by glyph), so a Twi word like *ɔdɔ* rendered with letters borrowed from another font mid-word, and share cards (Satori, which only has the fonts we give it) could show empty boxes. Slugs dropped these letters (*Ɔdɔ* → `d`), search treated ɔ and o as unrelated, and the same accented letter could be stored two ways (precomposed or with a combining mark), depending on the keyboard.
+
+**Languages in scope** (decided with the product owner): Ewe, Twi/Akan (incl. Fante), Nzema (Nzima) and Ga, plus IPA for linguists. The interface itself is **not** translated.
+
+| Language | Letters beyond A–Z | Tone marks |
+| --- | --- | --- |
+| Twi / Akan (Fante) | Ɛ ɛ, Ɔ ɔ | rarely written |
+| Ewe | Ɖ ɖ, Ɛ ɛ, Ƒ ƒ, Ɣ ɣ, Ŋ ŋ, Ɔ ɔ, Ʋ ʋ | acute, grave, tilde (nasal), caron, macron |
+| Ga | Ɛ ɛ, Ŋ ŋ, Ɔ ɔ | acute, grave (optional) |
+| Nzema | Ɛ ɛ, Ɔ ɔ (letter list to confirm with a Nzema writer before 11b) | |
+| IPA | the full IPA set (Latin Extended-B, IPA Extensions, combining diacritics) | |
+
+**Phase 11a: render and store correctly** ✅ (no visible change for existing poems)
+- **Fonts:** Gentium Book Plus (SIL, OFL, made for African Latin alphabets and IPA) follows Newsreader, and Andika (SIL's sans) follows Geist, so only the letters our main fonts lack come from them. They're **self-hosted subsets** of SIL's full fonts (Google Fonts' copies drop the IPA Extensions block, which holds the lowercase ɛ ɔ ɖ ɣ ʋ ʒ), with a `unicode-range` and no preload, so pages without such letters never download them. The extension font sits *before* next/font's metric fallback in each stack; otherwise Times New Roman/Arial answer first (measured in Chrome). Preloading only the Latin subsets also cut the sign-in page from 13 font files to 4.
+- **Share cards:** static Gentium Book Plus files in `src/assets/fonts`, given to Satori as a fallback after Newsreader.
+- **One stored form:** titles, poem text, pen names, bios and taglines are NFC-normalised on save, so a letter typed with a combining mark and its precomposed form are the same text.
+- **Slugs:** a transliteration step before ASCII folding (Ɛ→e, Ɔ→o, Ɖ→d, Ƒ→f, Ɣ→g, Ŋ→ng, Ʋ→v, Ʒ→z, plus IPA letters with an obvious base), so *Ɔdɔ* → `odo`. Existing slugs are untouched (published slugs never change).
+- **Search:** `search_normalize()` folds the same letters (ŋ→n there, since search matches letter for letter), so "odo" finds *ɔdɔ* and *ɔdɔ* still finds itself. New migration; indexes rebuilt.
+- **Tests:** real Ewe, Twi, Nzema and Ga lines through save (NFC), excerpt, slug and search (with and without the letters, upper and lower case, with tone marks), and `search_normalize()` checked against `SEARCH_FOLD`.
+- **Checked:** typecheck, lint, production build, 257 Vitest tests, and E2E for board, poems, author page, search, profile and the full accessibility scan. On a production build, Chrome reported Gentium/Andika for every in-scope letter in regular, italic and bold, including tone-marked ɔ̃ ɛ́ ŋ̀, and no system-font fallback; the reading page and a poem's share card were checked visually.
+
+**Phase 11b: typing them** (preview for the product owner before building)
+- A "Special letters" bar under the poem field (also usable for title and pen name): tabs for Twi/Akan, Ewe, Ga, Nzema. A click inserts at the cursor with native undo (same path as ⌘B/⌘I). Tone-mark buttons add a mark to the letter before the cursor. The last tab is remembered per browser.
+- An **IPA** tab for linguists, with search by name ("open-mid back rounded" → ɔ), kept apart so the language tabs stay short.
+- A short help note: Gboard (Android/iOS) has Akan, Ewe and Ga keyboards; SIL Keyman covers macOS and Windows.
+
+**Phase 11c (optional, later): a poem's language.** Editors can tag a poem's language, set as `lang` on the poem so screen readers pronounce it correctly, and readers could browse by language.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
@@ -342,6 +373,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
+| R12 Ghanaian languages and IPA | 11 | 🚧 11a ✅ (fonts, share cards, NFC, slugs, search); 11b (typing) and 11c (poem language) planned |
 | N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
@@ -361,6 +393,7 @@ Decided:
 - **Poem formatting?** Plain text, with line breaks and indentation kept, plus light Markdown: `*italic*`, `**bold**`, `\*` for a literal asterisk (⌘I / ⌘B in the editor). Emphasis stays within a line; nothing else is special.
 - **How long does an unlock last?** 12 hours per browser, or until the editor changes the password (or unpublishes the poem).
 - **Email provider?** Resend, with a verified sending domain (done at launch).
+- **Which local languages?** Ewe, Twi/Akan, Nzema and Ga for poets, and IPA for linguists (Phase 11). The interface stays in English.
 - **Board layout?** An automatic grid of author sections. Letting editors arrange positions could be a later phase.
 
 No open questions remain.

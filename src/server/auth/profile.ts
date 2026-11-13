@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
 import { isAvatarId, type AvatarId } from "@/lib/avatars";
+import { toNfc } from "@/lib/letters";
 import {
   BIO_MAX,
   LINK_MAX_LENGTH,
@@ -16,6 +17,7 @@ import { firstFreeSlug, isUniqueViolation, slugify } from "@/lib/slug";
 
 export const penNameSchema = z
   .string()
+  .overwrite(toNfc)
   .trim()
   .min(PEN_NAME_MIN, `Pen name must be at least ${PEN_NAME_MIN} characters`)
   .max(PEN_NAME_MAX, `Pen name must be at most ${PEN_NAME_MAX} characters`)
@@ -24,7 +26,7 @@ export const penNameSchema = z
 /** Plain text; line endings normalised, outer blank space trimmed, empty → null. */
 export const bioSchema = z
   .string()
-  .transform((s) => s.replace(/\r\n?/g, "\n").trim())
+  .transform((s) => toNfc(s).replace(/\r\n?/g, "\n").trim())
   .pipe(z.string().max(BIO_MAX, `Bio must be at most ${BIO_MAX} characters`))
   .transform((s) => (s === "" ? null : s));
 
@@ -91,7 +93,7 @@ export type UpdateProfileResult =
 /** Plain one line; inner whitespace collapsed, empty → null. */
 export const taglineSchema = z
   .string()
-  .transform((s) => s.replace(/\s+/g, " ").trim())
+  .transform((s) => toNfc(s).replace(/\s+/g, " ").trim())
   .pipe(z.string().max(TAGLINE_MAX, `Tagline must be at most ${TAGLINE_MAX} characters`))
   .transform((s) => (s === "" ? null : s));
 

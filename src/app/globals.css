@@ -9,10 +9,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* Stacks set on <html> in layout.tsx: Ghanaian letters and IPA missing from Geist/Newsreader come from Andika/Gentium. */
+  --font-sans: var(--font-sans-stack);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-serif);
-  --font-heading: var(--font-serif);
+  --font-serif: var(--font-serif-stack);
+  --font-heading: var(--font-serif-stack);
   --color-canvas: var(--canvas);
   --color-canvas-dot: var(--canvas-dot);
   --color-sidebar-ring: var(--sidebar-ring);

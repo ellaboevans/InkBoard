@@ -64,6 +64,13 @@
       "when": 1794579945799,
       "tag": "0008_editor_welcomed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794584948944,
+      "tag": "0009_search_ghanaian_letters",
+      "breakpoints": true
     }
   ]
 }

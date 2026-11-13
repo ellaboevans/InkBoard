@@ -1,17 +1,57 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
+import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { Toaster } from "@/components/toaster";
 import { BASE_OPEN_GRAPH, BRAND, SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
-const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+/*
+ * Fonts. Only the Latin subsets are preloaded (listing a subset preloads it);
+ * next/font still declares the others with a unicode-range, so a browser
+ * fetches them only for a page that has such a letter.
+ *
+ * Newsreader and Geist have no Ɛ ɛ Ɔ ɔ Ɖ ɖ Ƒ Ɣ ɣ Ʋ ʋ Ʒ ʒ or most IPA, so
+ * Ghanaian-language poems (Ewe, Twi/Akan, Nzema, Ga) and IPA borrowed
+ * whatever font the system had, mid-word. SIL's Gentium Book Plus (serif) and
+ * Andika (sans) were made for exactly these alphabets, so they follow in the
+ * stacks and supply only the missing letters (docs/PLAN.md, Phase 11).
+ *
+ * They're self-hosted (src/assets/fonts/web): Google Fonts' copies drop the
+ * IPA Extensions block, which is where the lowercase ɛ ɔ ɖ ɣ ʋ ʒ live. The
+ * files are subsets of SIL's full fonts without plain Latin (the main fonts
+ * have it), with a matching unicode-range and no preload, so most visitors
+ * never download them.
+ */
+// Both extension fonts: unicode-range below = these ranges (next/font needs literal options).
+// U+0100-02FF, U+0300-036F, U+0370-03FF, U+1D00-1DFF, U+1E00-1EFF, U+2C60-2C7F, U+A720-A7FF
+const sans = Geist({ subsets: ["latin"] });
+const sansExt = localFont({
+  preload: false,
+  adjustFontFallback: false,
+  declarations: [
+    { prop: "unicode-range", value: "U+0100-02FF, U+0300-036F, U+0370-03FF, U+1D00-1DFF, U+1E00-1EFF, U+2C60-2C7F, U+A720-A7FF" },
+  ],
+  src: [
+    { path: "../assets/fonts/web/Andika-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../assets/fonts/web/Andika-Bold.woff2", weight: "700", style: "normal" },
+  ],
+});
 const mono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 // Literary serif for poem titles and bodies.
-const serif = Newsreader({
-  variable: "--font-serif",
-  subsets: ["latin"],
-  style: ["normal", "italic"],
+const serif = Newsreader({ subsets: ["latin"], style: ["normal", "italic"] });
+const serifExt = localFont({
+  preload: false,
+  adjustFontFallback: false,
+  declarations: [
+    { prop: "unicode-range", value: "U+0100-02FF, U+0300-036F, U+0370-03FF, U+1D00-1DFF, U+1E00-1EFF, U+2C60-2C7F, U+A720-A7FF" },
+  ],
+  src: [
+    { path: "../assets/fonts/web/GentiumBookPlus-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../assets/fonts/web/GentiumBookPlus-Italic.woff2", weight: "400", style: "italic" },
+    { path: "../assets/fonts/web/GentiumBookPlus-Bold.woff2", weight: "700", style: "normal" },
+    { path: "../assets/fonts/web/GentiumBookPlus-BoldItalic.woff2", weight: "700", style: "italic" },
+  ],
 });
 
 // Icons, the manifest and the default share image come from file conventions
@@ -32,13 +72,31 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false, email: false, address: false },
 };
 
+/**
+ * `main, ext, main's fallback`. next/font follows each font
+ * with a metric-matched local fallback (e.g. Times New Roman), which keeps
+ * text from jumping while the web font loads. Left in place it would also
+ * answer for Ɛ/Ɔ/… before Gentium or Andika (measured in Chrome), so the
+ * extension font goes between the main font and those fallbacks.
+ */
+function fontStack(main: { style: { fontFamily: string } }, ext: { style: { fontFamily: string } }) {
+  const [mainFamily, ...mainFallbacks] = main.style.fontFamily.split(/,\s*/);
+  const [extFamily, ...extFallbacks] = ext.style.fontFamily.split(/,\s*/);
+  return [mainFamily, extFamily, ...mainFallbacks, ...extFallbacks].join(", ");
+}
+const fontStacks = {
+  "--font-sans-stack": fontStack(sans, sansExt),
+  "--font-serif-stack": fontStack(serif, serifExt),
+} as React.CSSProperties;
+
 export const viewport: Viewport = { themeColor: BRAND.paper, colorScheme: "light" };
 
 export default function RootLayout({ children, modal }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${sans.variable} ${mono.variable} ${serif.variable} h-full antialiased`}
+      className={`${mono.variable} h-full antialiased`}
+      style={fontStacks}
     >
       <body className="flex min-h-full flex-col">
         {children}

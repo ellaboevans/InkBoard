@@ -27,11 +27,17 @@ const schema = z
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(10).default(1),
   })
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV === "production" && !env.RESEND_API_KEY) {
+    // Emails are always really sent, locally too: no key means no sign-in, so
+    // fail at startup with a clear message instead. The only exceptions are
+    // automated tests: Vitest mocks the email module, and the E2E server
+    // records emails in E2E_OTP_OUTBOX (never in production).
+    const automatedTest =
+      env.NODE_ENV === "test" || (env.NODE_ENV !== "production" && Boolean(process.env.E2E_OTP_OUTBOX));
+    if (!env.RESEND_API_KEY && !automatedTest) {
       ctx.addIssue({
         code: "custom",
         path: ["RESEND_API_KEY"],
-        message: "RESEND_API_KEY is required in production",
+        message: "RESEND_API_KEY is required to send sign-in emails (set it in .env.local; see docs/DEPLOY.md)",
       });
     }
   });

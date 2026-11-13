@@ -18,7 +18,7 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 | Variable | Production | Preview | Notes |
 | --- | --- | --- | --- |
 | `AUTH_SECRET` | ✅ | ✅ (a different value) | `openssl rand -base64 48`. Rotating it signs everyone out and invalidates reader unlocks. |
-| `RESEND_API_KEY` | ✅ | ✅ | Required in production builds; see section 3. |
+| `RESEND_API_KEY` | ✅ | ✅ | Required everywhere (local development too); see section 3. |
 | `EMAIL_FROM` | ✅ | ✅ | e.g. `PoemHub <login@yourdomain.com>`, on your verified domain. |
 | `APP_URL` | ✅ `https://yourdomain.com` | optional | Used in sign-in emails. |
 | `CRON_SECRET` | ✅ | optional | `openssl rand -base64 32`. Vercel Cron sends it to `/api/cron/cleanup`. |
@@ -40,7 +40,7 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 
 **Why step 3 matters:** Gmail's "Copy code" button, Apple Mail's code AutoFill and Outlook's code highlighting only appear for senders that pass SPF, DKIM and DMARC and have a good sending history. The emails are built to be easy to detect (see `src/server/email-templates.ts`), but detection is the mail client's decision, so it may not appear for a new domain at first. Check a delivered email's "Show original" in Gmail: SPF, DKIM and DMARC should all say PASS.
 
-In production there is no fallback. Without `RESEND_API_KEY` the app refuses to start, so codes are never written to logs. Never deploy with `NODE_ENV=development`.
+There is no fallback, locally or in production: without `RESEND_API_KEY` the app refuses to start, and codes are never written to logs.
 
 ## 4. After the first deploy
 

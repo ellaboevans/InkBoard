@@ -8,26 +8,25 @@ import { otpEmail, signInAlertEmail, type EmailMessage, type SignInAlertDetails 
 let resend: Resend | undefined;
 
 /**
- * Send one transactional email. Without RESEND_API_KEY (development only) it is
- * logged instead, and recorded in E2E_OTP_OUTBOX for end-to-end tests.
+ * Send one transactional email through Resend, locally and in production.
+ * Codes are never printed. The one exception is the automated E2E server (no
+ * key, E2E_OTP_OUTBOX set, never production), which records emails in that
+ * file for Playwright instead of sending them.
  */
-async function deliver(to: string, message: EmailMessage, devRecord: Record<string, unknown>, devLog: string) {
+async function deliver(to: string, message: EmailMessage, testRecord: Record<string, unknown>) {
   const { RESEND_API_KEY, EMAIL_FROM, NODE_ENV } = env();
 
   if (!RESEND_API_KEY) {
-    if (NODE_ENV === "production") {
-      throw new Error("RESEND_API_KEY is not configured");
+    if (NODE_ENV !== "production" && process.env.E2E_OTP_OUTBOX) {
+      await appendFile(process.env.E2E_OTP_OUTBOX, JSON.stringify({ to, ...testRecord }) + "\n");
+      return;
     }
-    // End-to-end tests read emails from this file (never active in production).
-    if (process.env.E2E_OTP_OUTBOX) {
-      await appendFile(process.env.E2E_OTP_OUTBOX, JSON.stringify({ to, ...devRecord }) + "\n");
-    }
-    console.info(`\n[dev email] ${devLog}\n`);
-    return;
+    // env() refuses to start without a key, so this is only reachable if that check is bypassed.
+    throw new Error("RESEND_API_KEY is not configured");
   }
 
   resend ??= new Resend(RESEND_API_KEY);
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: EMAIL_FROM,
     to,
     subject: message.subject,
@@ -38,11 +37,15 @@ async function deliver(to: string, message: EmailMessage, devRecord: Record<stri
   if (error) {
     throw new Error(`Failed to send "${message.subject}" email: ${error.message}`);
   }
+  // Outside production, confirm real sends in the terminal (never the code itself).
+  if (NODE_ENV !== "production") {
+    console.info(`[email] Sent ${String(testRecord.kind ?? "sign-in code")} email to ${to} via Resend (id ${data?.id ?? "?"})`);
+  }
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
   const message = otpEmail({ code, appUrl: env().APP_URL, ttlMinutes: OTP_TTL_SECONDS / 60 });
-  await deliver(to, message, { code }, `Sign-in code for ${to}: ${code}`);
+  await deliver(to, message, { code });
 }
 
 export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlertDetails, "appUrl">): Promise<void> {
@@ -51,6 +54,5 @@ export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlert
     to,
     message,
     { kind: "sign-in-alert", device: details.device, ip: details.ip },
-    `New sign-in alert for ${to}: ${details.device} from ${details.ip}`,
   );
 }

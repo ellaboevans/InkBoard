@@ -18,7 +18,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open http://localhost:3000/sign-in. Without `RESEND_API_KEY`, sign-in codes are printed in the dev server log.
+Open http://localhost:3000/sign-in. Sign-in codes are sent as real emails, so `.env.local` needs `RESEND_API_KEY` and an `EMAIL_FROM` on a domain verified in Resend (docs/DEPLOY.md §3).
 
 ### Deploying
 

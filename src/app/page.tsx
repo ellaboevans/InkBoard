@@ -7,7 +7,7 @@ export default async function HomePage() {
   const sections = await getBoardSections();
   return (
     <main className="h-dvh">
-      <h1 className="sr-only">PoemHub board</h1>
+      <h1 className="sr-only">InkBoard board</h1>
       <BoardView sections={sections} />
     </main>
   );

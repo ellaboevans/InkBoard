@@ -14,10 +14,10 @@ const digitRuns = (s: string) => s.match(/\d{4,8}/g) ?? [];
 describe("sign-in code email", () => {
   const mail = otpEmail({ code: "482910", appUrl: "https://poemhub.example", ttlMinutes: 10 });
 
-  it("puts 'code' and the code in the subject and first line", () => {
-    expect(mail.subject).toBe("482910 is your PoemHub sign-in code");
-    expect(mail.text.split("\n")[0]).toBe("Your PoemHub sign-in code is:");
-    expect(visibleText(mail.html).trim().startsWith("Your PoemHub sign-in code is 482910.")).toBe(true); // preheader
+  it("has the fixed subject, and the code in the preview text and first line", () => {
+    expect(mail.subject).toBe("Your InkBoard One Time Password");
+    expect(mail.text.split("\n")[0]).toBe("Your InkBoard sign-in code is:");
+    expect(visibleText(mail.html).trim().startsWith("Your InkBoard sign-in code is 482910.")).toBe(true); // preheader
   });
 
   it("shows the code alone on its own line, bold and unbroken", () => {
@@ -26,7 +26,8 @@ describe("sign-in code email", () => {
   });
 
   it("contains no other 4–8 digit numbers a detector could pick instead", () => {
-    for (const part of [mail.subject, mail.text, visibleText(mail.html)]) {
+    expect(digitRuns(mail.subject)).toEqual([]);
+    for (const part of [mail.text, visibleText(mail.html)]) {
       expect(new Set(digitRuns(part))).toEqual(new Set(["482910"]));
     }
   });
@@ -48,7 +49,7 @@ describe("new sign-in alert email", () => {
   });
 
   it("says what happened, from which device and network, and when", () => {
-    expect(mail.subject).toBe("New sign-in to your PoemHub account");
+    expect(mail.subject).toBe("New sign-in to your InkBoard account");
     for (const part of [mail.text, visibleText(mail.html)]) {
       expect(part).toContain("Chrome on macOS");
       expect(part).toContain("203.0.113.5");

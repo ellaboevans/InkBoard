@@ -36,13 +36,13 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
           <SidebarHeader>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton size="lg" asChild tooltip="PoemHub dashboard">
+                <SidebarMenuButton size="lg" asChild tooltip="InkBoard dashboard">
                   <Link href="/admin">
                     <span className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                       <FeatherIcon className="size-4" aria-hidden />
                     </span>
                     <span className="grid flex-1 text-left leading-tight">
-                      <span className="truncate font-serif text-base">PoemHub</span>
+                      <span className="truncate font-serif text-base">InkBoard</span>
                       <span className="truncate text-xs text-muted-foreground">Editor</span>
                     </span>
                   </Link>

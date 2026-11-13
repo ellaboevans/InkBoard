@@ -1,7 +1,7 @@
 /**
  * A small stack of poem cards that blooms open, like petals, when the panel
  * is hovered (pure CSS, see `.poem-bloom` in globals.css). Decorative: the
- * parent panel is aria-hidden. All poems are original to PoemHub.
+ * parent panel is aria-hidden. All poems are original to InkBoard.
  */
 
 type Petal = {

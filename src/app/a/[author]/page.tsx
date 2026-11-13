@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { author } = await params;
   const a = await getAuthorPage(author);
   if (!a) return { title: "Author not found" };
-  return { title: a.penName, description: a.tagline ?? `Poems by ${a.penName} on PoemHub.` };
+  return { title: a.penName, description: a.tagline ?? `Poems by ${a.penName} on InkBoard.` };
 }
 
 /** An author's public page: who they are, their links, and their poems. */
@@ -75,7 +75,7 @@ async function Author({ params }: Pick<Props, "params">) {
           <p className="text-sm text-muted-foreground">
             {a.poems.length} {a.poems.length === 1 ? "poem" : "poems"}
             {privateCount > 0 && <> · {privateCount} password protected</>}
-            {first && <> · on PoemHub since {yearFormat.format(new Date(first))}</>}
+            {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
           </p>
           {a.bio && <p className="max-w-2xl leading-relaxed whitespace-pre-line">{a.bio}</p>}
           {a.links.length > 0 && (

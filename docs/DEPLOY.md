@@ -1,4 +1,4 @@
-# Deploying PoemHub (Neon + Vercel + Resend)
+# Deploying InkBoard (Neon + Vercel + Resend)
 
 A one-time setup, about 20 minutes. After it, every push to `main` deploys to production, and every pull request gets a preview deployment with its **own database branch**, so previews never touch production data.
 
@@ -19,7 +19,7 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 | --- | --- | --- | --- |
 | `AUTH_SECRET` | ✅ | ✅ (a different value) | `openssl rand -base64 48`. Rotating it signs everyone out and invalidates reader unlocks. |
 | `RESEND_API_KEY` | ✅ | ✅ | Required everywhere (local development too); see section 3. |
-| `EMAIL_FROM` | ✅ | ✅ | e.g. `PoemHub <login@yourdomain.com>`, on your verified domain. |
+| `EMAIL_FROM` | ✅ | ✅ | e.g. `InkBoard <login@yourdomain.com>`, on your verified domain. |
 | `APP_URL` | ✅ `https://yourdomain.com` | optional | Used in sign-in emails. |
 | `CRON_SECRET` | ✅ | optional | `openssl rand -base64 32`. Vercel Cron sends it to `/api/cron/cleanup`. |
 | `TRUSTED_PROXY_HOPS` | `1` | `1` | Correct for Vercel. It's how the client IP is found for rate limits. |
@@ -36,7 +36,7 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 1. Create an API key at <https://resend.com/api-keys> (permission: *Sending access*), and set it as `RESEND_API_KEY`.
 2. **Verify a sending domain**: Domains → Add domain, then add the DNS records it shows (SPF and DKIM). Until it's verified, Resend only delivers to your own address.
 3. **Add a DMARC record** too (not optional for us): a TXT record at `_dmarc.<your domain>`, e.g. `v=DMARC1; p=quarantine; rua=mailto:dmarc@<your domain>`. Start with `p=none` for a week if you want to watch reports first.
-4. Set `EMAIL_FROM` to an address on that domain, e.g. `PoemHub <signin@<your domain>>`. Keep it the same over time: mail clients build trust in a sender gradually.
+4. Set `EMAIL_FROM` to an address on that domain, e.g. `InkBoard <signin@<your domain>>`. Keep it the same over time: mail clients build trust in a sender gradually.
 
 **Why step 3 matters:** Gmail's "Copy code" button, Apple Mail's code AutoFill and Outlook's code highlighting only appear for senders that pass SPF, DKIM and DMARC and have a good sending history. The emails are built to be easy to detect (see `src/server/email-templates.ts`), but detection is the mail client's decision, so it may not appear for a new domain at first. Check a delivered email's "Show original" in Gmail: SPF, DKIM and DMARC should all say PASS.
 

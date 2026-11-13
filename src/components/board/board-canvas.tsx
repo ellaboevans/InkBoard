@@ -465,7 +465,7 @@ export function BoardCanvas({
           className="pointer-events-auto flex items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
         >
           <FeatherIcon className="size-4 text-primary" aria-hidden />
-          <span className="font-serif text-lg leading-none">PoemHub</span>
+          <span className="font-serif text-lg leading-none">InkBoard</span>
           <span className="hidden text-xs text-muted-foreground sm:inline">
             {sections.length} authors · {total} poems
           </span>

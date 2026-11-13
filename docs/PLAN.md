@@ -1,4 +1,4 @@
-# PoemHub — Product & Engineering Plan
+# InkBoard — Product & Engineering Plan
 
 Living document. Every phase lists the requirements it satisfies and the acceptance
 checks that must pass before the phase is considered done. Update the **Status**
@@ -286,7 +286,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - **Tests:** unit tests for links, tagline, avatar ids, pin ownership (incl. another editor's poem and FK unpin on delete), stats and avatar rendering. E2E covers the rich profile, dashboard filters/search, the phone drawer and sign-out. axe covers the new screens (row menu, phone view, drawer).
 
 ### Phase 8: Public author page ✅
-- **`/a/[author]`** (`src/app/a/[author]/page.tsx`): avatar, pen name, tagline, bio, links (open in a new tab with `rel="me nofollow ugc noopener noreferrer"`), poem count and "on PoemHub since". Then the author's published poems as board cards, pinned poem first, then newest first. Unknown or not-yet-onboarded authors get "Author not found".
+- **`/a/[author]`** (`src/app/a/[author]/page.tsx`): avatar, pen name, tagline, bio, links (open in a new tab with `rel="me nofollow ugc noopener noreferrer"`), poem count and "on InkBoard since". Then the author's published poems as board cards, pinned poem first, then newest first. Unknown or not-yet-onboarded authors get "Author not found".
 - **Data** (`loadAuthorPage` in `src/server/board.ts`, cached as `getAuthorPage` with `BOARD_TAG`): published poems only; private poems are title-only cards (bodies cut in SQL, N1). The email is never selected. A pinned poem that has since been unpublished is ignored.
 - **Links in:** the "by …" byline on every poem (full page and overlay), and "View public page" on the editor's profile. Pinning from the poems list now invalidates the cache, so the page updates at once.
 - Also this phase: the editor's live card preview (shared `PoemCardFace` and `cardExcerpt`, tested against the board SQL), and the blooming poem stack on the sign-in page.
@@ -294,7 +294,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 
 ### Phase 9: Security emails ✅
 - **Sign-in code email** (`otpEmail` in `src/server/email-templates.ts`), laid out for mail clients' one-time-code detection (Gmail "Copy code", Apple Mail AutoFill, Outlook):
-  - "code" and the code in the subject ("482910 is your PoemHub sign-in code"), in the preview text and in the first line.
+  - Subject "Your InkBoard One Time Password" (a fixed subject, chosen by the product owner). "code" and the code itself lead the preview text and the first line.
   - The code alone on its own line, bold, as one unbroken run of digits. A plain-text part has the same structure.
   - No other 4–8 digit numbers in the message, so a detector can't pick the wrong one (tested).
   - `Auto-Submitted` / `X-Auto-Response-Suppress` headers; no images or tracking.

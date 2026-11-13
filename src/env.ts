@@ -12,7 +12,7 @@ const schema = z
       .min(32, "AUTH_SECRET must be at least 32 characters"),
     EDITOR_ALLOWLIST: z.string().optional().default(""),
     RESEND_API_KEY: z.string().optional().default(""),
-    EMAIL_FROM: z.string().optional().default("PoemHub <onboarding@resend.dev>"),
+    EMAIL_FROM: z.string().optional().default("InkBoard <onboarding@resend.dev>"),
     APP_URL: z.url().default("http://localhost:3000"),
     /**
      * How many proxies in front of the app append to X-Forwarded-For.

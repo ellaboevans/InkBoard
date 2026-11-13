@@ -26,7 +26,7 @@ function BoardList({ sections, onCanvasView }: { sections: BoardSection[]; onCan
         <header className="mb-10 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2 font-serif text-2xl">
             <FeatherIcon className="size-5 text-primary" aria-hidden />
-            PoemHub
+            InkBoard
           </Link>
           <Button variant="outline" size="sm" onClick={onCanvasView}>
             <LayoutGridIcon />
@@ -74,7 +74,7 @@ function EmptyBoard() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 bg-canvas p-6 text-center [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] [background-size:24px_24px]">
       <FeatherIcon className="size-8 text-primary" aria-hidden />
-      <h1 className="font-serif text-5xl tracking-tight">PoemHub</h1>
+      <h1 className="font-serif text-5xl tracking-tight">InkBoard</h1>
       <p className="max-w-md font-serif text-lg text-muted-foreground italic">
         A living board of poems, catalogued by author.
       </p>

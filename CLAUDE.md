@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
-PoemHub is a public, pan/zoom canvas board of poems grouped into per-author sections. Editors manage their poems from `/admin` and sign in with a passwordless email OTP. Poems are public or password-protected. **`docs/PLAN.md` is the source of truth** for requirements (R1–R10, N1–N9), phases, architecture decisions and the traceability matrix. Update its status table when a phase lands.
+InkBoard (formerly PoemHub) is a public, pan/zoom canvas board of poems grouped into per-author sections. Editors manage their poems from `/admin` and sign in with a passwordless email OTP. Poems are public or password-protected. **`docs/PLAN.md` is the source of truth** for requirements (R1–R10, N1–N9), phases, architecture decisions and the traceability matrix. Update its status table when a phase lands.
 
 ## Commands
 
@@ -49,6 +49,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - `dal.ts`: the **only** place that maps a request to an editor (`getCurrentEditor`, `requireEditor`, `requireOnboardedEditor`) and sets/clears the cookie (`startSession`/`endSession`, usable from Server Actions only). Every Server Action must re-authorize through the DAL. Never trust `useActionState`'s `prev` state for identity, because it comes from the client.
 - An editor with `pen_name` null hasn't onboarded yet. The pen name is the author's section label on the board, and the slug is used in public URLs.
 - `/admin/profile` renames via `updateProfile` (`profile.ts`), which never touches the slug: it is in every `/p/[author]/[poem]` link, so it is fixed once onboarding sets it. Device management (`listSessions`, `revokeSession`, `revokeOtherSessions` in `sessions.ts`) is scoped by editor; the current session's id comes from the DAL (`requireOnboardedSession`). Results never include `token_hash`.
+
+**Naming.** The product is "InkBoard" in everything users see. Internal identifiers keep `poemhub` on purpose: the `poemhub_session`/`poemhub_unlock` cookies (renaming signs everyone out / drops unlocks), the `poemhub-avatar-NN` avatar seeds (renaming changes every avatar), database names, `@seed.poemhub.test` demo accounts and the package name.
 
 **Emails** (`src/server/email.ts`, content in `src/server/email-templates.ts` as pure functions). `sendOtpEmail` and `sendSignInAlertEmail` share one delivery path; tests mock both (`outbox`, `alerts` in `tests/support/outbox.ts`), and the E2E outbox records alerts as `{ kind: "sign-in-alert" }` lines (`alertsFor()` helper).
 - Code emails are built for client code detection: keep the code unbroken and alone on its line, and add **no other 4–8 digit numbers** (a test checks). Non-code emails must not contain the word "code".

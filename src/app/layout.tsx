@@ -13,7 +13,7 @@ const serif = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: { default: "PoemHub", template: "%s · PoemHub" },
+  title: { default: "InkBoard", template: "%s · InkBoard" },
   description: "A living board of poems, catalogued by author.",
 };
 

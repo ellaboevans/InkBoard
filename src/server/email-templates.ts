@@ -6,7 +6,8 @@
  * (Gmail's "Copy code", Apple Mail's AutoFill from Mail, Outlook) can find the
  * code reliably. Those features are heuristic and not under a sender's
  * control, so we give them the clearest possible signals:
- *  - "code" and the code itself in the subject and in the first line,
+ *  - "code" and the code itself in the preview text and the first line (the
+ *    subject is the fixed "Your InkBoard One Time Password", by choice),
  *  - the code alone on its own line, bold, as one unbroken run of digits
  *    (spacing is visual only, never spaces between the digits),
  *  - a plain-text part with the same structure,
@@ -55,10 +56,10 @@ function frame({ preheader, body, appUrl }: { preheader: string; body: string; a
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER}">
 <tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:${CARD};border:1px solid ${BORDER};border-radius:16px">
-<tr><td style="padding:32px 32px 8px;font-family:Georgia,'Times New Roman',serif;font-size:20px;color:${INK}">PoemHub</td></tr>
+<tr><td style="padding:32px 32px 8px;font-family:Georgia,'Times New Roman',serif;font-size:20px;color:${INK}">InkBoard</td></tr>
 ${body}
 <tr><td style="padding:24px 32px 32px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:${MUTED}">
-This is an automated message from <a href="${escapeHtml(appUrl)}" style="color:${MUTED}">PoemHub</a>. Please don't reply.
+This is an automated message from <a href="${escapeHtml(appUrl)}" style="color:${MUTED}">InkBoard</a>. Please don't reply.
 </td></tr>
 </table>
 </td></tr>
@@ -71,23 +72,23 @@ const sans = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
 
 /** The sign-in code email. `code` is the 6-digit OTP. */
 export function otpEmail({ code, appUrl, ttlMinutes }: { code: string; appUrl: string; ttlMinutes: number }): EmailMessage {
-  const subject = `${code} is your PoemHub sign-in code`;
+  const subject = "Your InkBoard One Time Password";
   const text = [
-    "Your PoemHub sign-in code is:",
+    "Your InkBoard sign-in code is:",
     "",
     code,
     "",
     `It expires in ${ttlMinutes} minutes and can only be used once.`,
     "If you didn't try to sign in, you can ignore this email. Nobody can sign in without this code.",
     "",
-    "PoemHub",
+    "InkBoard",
     appUrl,
   ].join("\n");
   const html = frame({
     appUrl,
-    preheader: `Your PoemHub sign-in code is ${code}. It expires in ${ttlMinutes} minutes.`,
+    preheader: `Your InkBoard sign-in code is ${code}. It expires in ${ttlMinutes} minutes.`,
     body: `
-<tr><td style="padding:8px 32px 0;font-family:${sans};font-size:16px;line-height:24px;color:${INK}">Your PoemHub sign-in code is:</td></tr>
+<tr><td style="padding:8px 32px 0;font-family:${sans};font-size:16px;line-height:24px;color:${INK}">Your InkBoard sign-in code is:</td></tr>
 <tr><td style="padding:16px 32px">
 <p style="margin:0;padding:16px 0;text-align:center;background:${PAPER};border:1px solid ${BORDER};border-radius:12px;font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:8px;color:${INK}"><strong>${escapeHtml(code)}</strong></p>
 </td></tr>
@@ -126,11 +127,11 @@ export function signInAlertEmail(d: SignInAlertDetails): EmailMessage {
   const profileUrl = new URL("/admin/profile", d.appUrl).href;
   const when = formatAlertTime(d.at);
   const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
-  const subject = "New sign-in to your PoemHub account";
+  const subject = "New sign-in to your InkBoard account";
   const text = [
     greeting,
     "",
-    "Your PoemHub account was just signed in to from a network we haven't seen you use before.",
+    "Your InkBoard account was just signed in to from a network we haven't seen you use before.",
     "",
     `Device: ${d.device}`,
     `IP address: ${d.ip}`,
@@ -140,9 +141,9 @@ export function signInAlertEmail(d: SignInAlertDetails): EmailMessage {
     "",
     "If it wasn't you:",
     `1. Open your profile and sign that device out under "Signed-in devices": ${profileUrl}`,
-    "2. Secure your email account. Signing in to PoemHub needs access to your inbox, so whoever signed in can read your email.",
+    "2. Secure your email account. Signing in to InkBoard needs access to your inbox, so whoever signed in can read your email.",
     "",
-    "PoemHub",
+    "InkBoard",
   ].join("\n");
 
   const row = (label: string, value: string) =>
@@ -153,7 +154,7 @@ export function signInAlertEmail(d: SignInAlertDetails): EmailMessage {
     body: `
 <tr><td style="padding:8px 32px 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:32px;color:${INK}">New sign-in to your account</td></tr>
 <tr><td style="padding:12px 32px 0;font-family:${sans};font-size:15px;line-height:23px;color:${INK}">
-${escapeHtml(greeting)}<br>Your PoemHub account was just signed in to from a network we haven't seen you use before.
+${escapeHtml(greeting)}<br>Your InkBoard account was just signed in to from a network we haven't seen you use before.
 </td></tr>
 <tr><td style="padding:16px 32px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER};border:1px solid ${BORDER};border-radius:12px;padding:10px 16px">
@@ -164,7 +165,7 @@ ${row("When", when)}
 </td></tr>
 <tr><td style="padding:0 32px;font-family:${sans};font-size:14px;line-height:22px;color:${INK}">
 <strong>If this was you</strong>, there's nothing to do.<br><br>
-<strong>If it wasn't you</strong>, sign that device out under "Signed-in devices" on your profile, then secure your email account: signing in to PoemHub needs access to your inbox.
+<strong>If it wasn't you</strong>, sign that device out under "Signed-in devices" on your profile, then secure your email account: signing in to InkBoard needs access to your inbox.
 </td></tr>
 <tr><td style="padding:20px 32px 0">
 <a href="${escapeHtml(profileUrl)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:${ACCENT};color:#ffffff;font-family:${sans};font-size:14px;font-weight:600;text-decoration:none">Review signed-in devices</a>

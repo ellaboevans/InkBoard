@@ -1,4 +1,4 @@
-# PoemHub
+# InkBoard
 
 A public canvas board of poems, catalogued by author. Editors sign in with a one-time email code and decide, poem by poem, whether it is public or password-protected.
 

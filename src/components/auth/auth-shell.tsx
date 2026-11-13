@@ -24,7 +24,7 @@ export function AuthShell({
             <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <FeatherIcon className="size-4" aria-hidden />
             </span>
-            PoemHub
+            InkBoard
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-center">

@@ -14,6 +14,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { StatusBadge } from "@/components/poem-badges";
 import { SpecialLetters } from "@/components/special-letters";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -32,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BODY_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
 import { toggleEmphasis } from "@/lib/poem-markdown";
+import { POEM_LANGUAGES, type PoemLanguage } from "@/lib/poem-languages";
 import type { PoemErrors } from "@/server/poems";
 import { useOnceToast } from "@/hooks/use-once-toast";
 import { unstable_rethrow } from "next/navigation";
@@ -70,6 +72,7 @@ export type PoemFormPoem = {
   title: string;
   body: string;
   visibility: "public" | "private";
+  language: PoemLanguage | null;
   status: "draft" | "published";
   hasPassword: boolean;
 };
@@ -115,6 +118,8 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
   const [title, setTitle] = useState(poem?.title ?? "");
   const [body, setBody] = useState(poem?.body ?? "");
   const [isPrivate, setIsPrivate] = useState(poem?.visibility === "private");
+  // "" = not set (the select's first option).
+  const [language, setLanguage] = useState<string>(poem?.language ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [hasPassword, setHasPassword] = useState(poem?.hasPassword ?? false);
@@ -122,6 +127,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
     title: poem?.title ?? "",
     body: poem?.body ?? "",
     isPrivate: poem?.visibility === "private",
+    language: poem?.language ?? "",
   });
 
   // After a successful save, the current values become the "saved" snapshot.
@@ -129,7 +135,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
   if (seenState !== state) {
     setSeenState(state);
     if (state.savedAt) {
-      setSaved({ title, body, isPrivate });
+      setSaved({ title, body, isPrivate, language });
       setPassword("");
       setHasPassword(state.visibility === "private");
     }
@@ -140,6 +146,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
     title !== saved.title ||
     body !== saved.body ||
     isPrivate !== saved.isPrivate ||
+    language !== saved.language ||
     password !== "";
   // Client-side checks give instant feedback; the server re-validates everything.
   const [clientErrors, setClientErrors] = useState<PoemErrors | null>(null);
@@ -292,7 +299,32 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
             isPrivate={isPrivate}
             published={status === "published"}
             penName={penName}
+            language={language || null}
           />
+          <section className="grid gap-2 rounded-xl border bg-card p-4">
+            <Label htmlFor="language" className="text-sm font-medium">
+              Language
+            </Label>
+            <NativeSelect
+              id="language"
+              name="language"
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              aria-describedby={errors.language ? "language-error language-help" : "language-help"}
+              aria-invalid={errors.language ? true : undefined}
+            >
+              <NativeSelectOption value="">Not set</NativeSelectOption>
+              {POEM_LANGUAGES.map((l) => (
+                <NativeSelectOption key={l.code} value={l.code}>
+                  {l.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <p id="language-help" className="text-xs text-muted-foreground">
+              Shown on the poem, and tells screen readers how to read it.
+            </p>
+            <FieldError id="language-error" message={errors.language} />
+          </section>
           <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="text-sm font-medium">Publishing</h2>
             <p className="text-sm text-muted-foreground">

@@ -169,6 +169,8 @@ export const poems = pgTable(
     /** Plain text; whitespace and line breaks are significant. */
     body: text("body").notNull(),
     visibility: poemVisibility("visibility").notNull().default("public"),
+    /** BCP 47 tag from src/lib/poem-languages.ts; null = not set. Rendered as `lang`. */
+    language: text("language"),
     /**
      * scrypt hash. Required for private poems whose author is in per_poem mode;
      * null (unused) in shared mode. Enforced by triggers, see

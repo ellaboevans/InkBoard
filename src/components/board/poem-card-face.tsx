@@ -1,6 +1,7 @@
 import { cn } from "cn";
 import { LockIcon } from "lucide-react";
 import { PoemText } from "@/components/poem/poem-text";
+import { languageName } from "@/lib/poem-languages";
 
 /**
  * How a poem looks as a card on the board. Shared by the board canvas and the
@@ -21,6 +22,7 @@ export function PoemCardFace({
   isPrivate,
   excerpt,
   hasMore,
+  lang,
   className,
   style,
   ...rest
@@ -29,7 +31,9 @@ export function PoemCardFace({
   isPrivate: boolean;
   excerpt: string | null;
   hasMore: boolean;
-} & Omit<React.ComponentProps<"div">, "title">) {
+  /** The poem's language tag (src/lib/poem-languages.ts): `lang` on its title and text, plus a label. */
+  lang?: string | null;
+} & Omit<React.ComponentProps<"div">, "title" | "lang">) {
   return (
     <div
       data-card=""
@@ -41,15 +45,26 @@ export function PoemCardFace({
       {...rest}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 font-serif text-[19px] leading-snug">{title}</h3>
-        {isPrivate && (
-          <span
-            className="mt-0.5 flex shrink-0 items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
-            aria-hidden
-          >
-            <LockIcon className="size-3" />
-            Private
-          </span>
+        <h3 lang={lang ?? undefined} className="min-w-0 font-serif text-[19px] leading-snug">
+          {title}
+        </h3>
+        {(languageName(lang) || isPrivate) && (
+          <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
+            {languageName(lang) && (
+              <span className="rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
+                {languageName(lang)}
+              </span>
+            )}
+            {isPrivate && (
+              <span
+                className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
+                aria-hidden
+              >
+                <LockIcon className="size-3" />
+                Private
+              </span>
+            )}
+          </div>
         )}
       </div>
       {isPrivate ? (
@@ -63,7 +78,7 @@ export function PoemCardFace({
           <p className="text-xs text-muted-foreground">Enter the password to read</p>
         </div>
       ) : (
-        <p className="mt-2 flex-1 overflow-hidden font-serif text-[14.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
+        <p lang={lang ?? undefined} className="mt-2 flex-1 overflow-hidden font-serif text-[14.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground [mask-image:linear-gradient(to_bottom,black_70%,transparent)]">
           {excerpt !== null && <PoemText text={excerpt} truncated={hasMore} />}
           {hasMore && "\n…"}
         </p>

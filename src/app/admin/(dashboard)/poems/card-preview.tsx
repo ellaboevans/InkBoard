@@ -20,12 +20,15 @@ export function CardPreview({
   isPrivate,
   published,
   penName,
+  language,
 }: {
   title: string;
   body: string;
   isPrivate: boolean;
   published: boolean;
   penName: string;
+  /** The chosen language tag, or null; only applied to real text, not placeholders. */
+  language: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const shownTitle = title.trim() || "Untitled poem";
@@ -49,6 +52,7 @@ export function CardPreview({
           className="relative shrink-0"
           style={{ width: CARD_W, height: CARD_H }}
           isPrivate={isPrivate}
+          lang={text ? language : null}
           excerpt={text ? excerpt : "Start writing — your first lines appear here."}
           hasMore={hasMore}
           title={
@@ -92,7 +96,7 @@ export function CardPreview({
                 Readers see this after entering the password.
               </p>
             )}
-            {text ? <PoemBody body={text} /> : <p className="text-muted-foreground">Nothing written yet.</p>}
+            {text ? <PoemBody body={text} lang={language} /> : <p className="text-muted-foreground">Nothing written yet.</p>}
           </article>
         </DialogContent>
       </Dialog>

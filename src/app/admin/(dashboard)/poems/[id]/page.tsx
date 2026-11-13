@@ -41,6 +41,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
         title: poem.title,
         body: poem.body,
         visibility: poem.visibility,
+        language: poem.language,
         status: poem.status,
         hasPassword: poem.hasPassword,
       }}

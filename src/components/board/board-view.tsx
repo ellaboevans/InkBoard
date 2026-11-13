@@ -1,6 +1,7 @@
 "use client";
 
 import { PoemText } from "@/components/poem/poem-text";
+import { languageName } from "@/lib/poem-languages";
 import { FeatherIcon, LayoutGridIcon, LockIcon } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -49,13 +50,21 @@ function BoardList({ sections, onCanvasView }: { sections: BoardSection[]; onCan
                   <li key={p.id}>
                     <Link href={`/p/${s.slug}/${p.slug}`} className="group block rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring">
                       <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
-                        {p.title}
+                        <span lang={p.language ?? undefined}>{p.title}</span>
                         {p.visibility === "private" && (
                           <LockIcon className="size-3.5 text-muted-foreground" aria-label="password protected" />
                         )}
+                        {languageName(p.language) && (
+                          <span className="rounded-full border px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
+                            {languageName(p.language)}
+                          </span>
+                        )}
                       </span>
                       {p.excerpt && (
-                        <span className="mt-1 line-clamp-2 block font-serif text-sm whitespace-pre-line text-muted-foreground">
+                        <span
+                          lang={p.language ?? undefined}
+                          className="mt-1 line-clamp-2 block font-serif text-sm whitespace-pre-line text-muted-foreground"
+                        >
                           <PoemText text={p.excerpt} truncated={p.hasMore} />
                         </span>
                       )}

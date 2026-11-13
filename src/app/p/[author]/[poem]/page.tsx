@@ -59,6 +59,7 @@ async function PoemJsonLd({ params }: Pick<Props, "params">) {
     url: absoluteUrl(`/p/${p.authorSlug}/${p.slug}`),
     author: { "@type": "Person", name: p.penName, url: absoluteUrl(`/a/${p.authorSlug}`) },
     ...(p.publishedAt && { datePublished: p.publishedAt }),
+    ...(p.language && { inLanguage: p.language }),
     isAccessibleForFree: p.visibility === "public",
     ...(p.visibility === "public" && p.body && { text: stripPoemMarkdown(p.body) }),
     publisher: { "@type": "Organization", name: SITE_NAME, url: absoluteUrl("/") },

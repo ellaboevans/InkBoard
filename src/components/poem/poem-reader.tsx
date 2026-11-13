@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DialogTitle } from "@/components/ui/dialog";
+import { languageName } from "@/lib/poem-languages";
 import { PoemBody } from "./poem-body";
 import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
@@ -37,29 +38,42 @@ export async function PoemReader({
   return (
     <article>
       <header className="mb-8 sm:mb-10">
-        <PoemTitle inDialog={inDialog}>{poem.title}</PoemTitle>
+        <PoemTitle inDialog={inDialog} lang={poem.language}>
+          {poem.title}
+        </PoemTitle>
         <p className="mt-3 text-muted-foreground">
           by{" "}
           <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">
             {poem.penName}
           </Link>
           {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
+          {languageName(poem.language) && <> · in {languageName(poem.language)}</>}
         </p>
       </header>
       {poem.visibility === "public" ? (
-        <PoemBody body={poem.body ?? ""} />
+        <PoemBody body={poem.body ?? ""} lang={poem.language} />
       ) : (
         // Per-reader: reads the unlock cookie, so it streams in separately.
         <Suspense fallback={<div className="h-48 animate-pulse rounded-2xl bg-muted" />}>
-          <PrivatePoem author={author} slug={slug} penName={poem.penName} sharedPassword={poem.sharedPassword} />
+          <PrivatePoem
+            author={author}
+            slug={slug}
+            penName={poem.penName}
+            sharedPassword={poem.sharedPassword}
+            lang={poem.language}
+          />
         </Suspense>
       )}
     </article>
   );
 }
 
-function PoemTitle({ inDialog, children }: { inDialog: boolean; children: React.ReactNode }) {
-  const h1 = <h1 className="font-serif text-3xl leading-tight tracking-tight sm:text-5xl">{children}</h1>;
+function PoemTitle({ inDialog, lang, children }: { inDialog: boolean; lang: string | null; children: React.ReactNode }) {
+  const h1 = (
+    <h1 lang={lang ?? undefined} className="font-serif text-3xl leading-tight tracking-tight sm:text-5xl">
+      {children}
+    </h1>
+  );
   return inDialog ? <DialogTitle asChild>{h1}</DialogTitle> : h1;
 }
 
@@ -81,11 +95,14 @@ async function PrivatePoem({
   slug,
   penName,
   sharedPassword,
+  lang,
 }: {
   author: string;
   slug: string;
   penName: string;
   sharedPassword: boolean;
+  /** Only the unlocked poem text gets it; the unlock form is English UI. */
+  lang: string | null;
 }) {
   const body = await getUnlockedBody(author, slug);
   if (body !== null) {
@@ -95,7 +112,7 @@ async function PrivatePoem({
           <LockOpenIcon className="size-3.5" aria-hidden />
           Unlocked on this device
         </p>
-        <PoemBody body={body} />
+        <PoemBody body={body} lang={lang} />
       </>
     );
   }

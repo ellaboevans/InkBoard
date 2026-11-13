@@ -5,6 +5,8 @@ export type BoardPoem = {
   title: string;
   slug: string;
   visibility: "public" | "private";
+  /** BCP 47 tag (src/lib/poem-languages.ts) for the card's `lang`; null = not set. */
+  language: string | null;
   /** First few lines of a public poem. Always null for private poems (N1). */
   excerpt: string | null;
   /** True when a public poem continues past the excerpt. */
@@ -24,6 +26,7 @@ export type ReaderPoem = {
   penName: string;
   authorSlug: string;
   visibility: "public" | "private";
+  language: string | null;
   /** Full text of a public poem; always null for private ones (see unlock.ts). */
   body: string | null;
   /** Private poems: true when the author uses one password for all of them. */

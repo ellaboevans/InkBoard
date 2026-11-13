@@ -30,6 +30,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       title: poems.title,
       slug: poems.slug,
       visibility: poems.visibility,
+      language: poems.language,
       excerpt: sql<string | null>`CASE WHEN ${isPublic} THEN
         left(array_to_string((${lines})[1:${sql.raw(String(EXCERPT_LINES))}], E'\\n'), ${EXCERPT_CHARS})
       END`,
@@ -71,6 +72,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       title: row.title,
       slug: row.slug,
       visibility: row.visibility,
+      language: row.language,
       excerpt: row.excerpt,
       hasMore: row.hasMore,
     });
@@ -90,6 +92,7 @@ export async function loadReaderPoem(
       penName: editors.penName,
       authorSlug: editors.slug,
       visibility: poems.visibility,
+      language: poems.language,
       body: sql<string | null>`CASE WHEN ${isPublic} THEN ${poems.body} END`,
       sharedPassword: sql<boolean>`${editors.passwordMode} = 'shared'`,
       publishedAt: poems.publishedAt,
@@ -143,6 +146,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
       title: poems.title,
       slug: poems.slug,
       visibility: poems.visibility,
+      language: poems.language,
       excerpt: sql<string | null>`CASE WHEN ${isPublic} THEN
         left(array_to_string((${lines})[1:${sql.raw(String(EXCERPT_LINES))}], E'\\n'), ${EXCERPT_CHARS})
       END`,

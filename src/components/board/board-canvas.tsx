@@ -629,6 +629,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
       isPrivate={isPrivate}
       excerpt={poem.excerpt}
+      lang={poem.language}
       hasMore={poem.hasMore}
       title={
         <Link

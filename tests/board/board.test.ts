@@ -80,6 +80,8 @@ describe("loadBoardSections", () => {
       title: "Locked",
       slug: "locked",
       visibility: "private",
+      // Like the title, the language is shown for private poems; the text never is.
+      language: null,
       excerpt: null,
       hasMore: false,
     });

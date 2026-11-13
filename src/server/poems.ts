@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { toNfc } from "@/lib/letters";
+import { POEM_LANGUAGE_CODES, type PoemLanguage } from "@/lib/poem-languages";
 import { normalizePoemBody } from "@/lib/poem-text";
 import { getDb } from "@/db";
 import { editors, poems } from "@/db/schema";
@@ -41,6 +42,12 @@ const inputSchema = z.object({
         .max(BODY_MAX, `Poems can be at most ${BODY_MAX.toLocaleString("en")} characters`),
     ),
   visibility: z.enum(["public", "private"], "Choose who can read this poem"),
+  /** Optional; "" (the "Not set" option) means untagged. */
+  language: z
+    .string()
+    .optional()
+    .transform((l) => (l ? l : null))
+    .pipe(z.enum(POEM_LANGUAGE_CODES, "Choose a language from the list").nullable()),
   status: z.enum(["draft", "published"]),
   /** Empty = keep the current password (edits) / none (public poems). */
   password: z
@@ -100,6 +107,7 @@ const summaryColumns = {
   title: poems.title,
   slug: poems.slug,
   visibility: poems.visibility,
+  language: sql<PoemLanguage | null>`${poems.language}`,
   status: poems.status,
   publishedAt: poems.publishedAt,
   createdAt: poems.createdAt,
@@ -114,6 +122,7 @@ export type EditorPoem = {
   slug: string;
   body: string;
   visibility: "public" | "private";
+  language: PoemLanguage | null;
   status: "draft" | "published";
   publishedAt: Date | null;
   createdAt: Date;
@@ -218,6 +227,7 @@ export async function createPoem(
             slug: await uniquePoemSlug(tx, editorId, data.title),
             body: data.body,
             visibility: data.visibility,
+            language: data.language,
             passwordHash: data.visibility === "private" && !shared ? typedHash : null,
             status: data.status,
             publishedAt: data.status === "published" ? sql`now()` : null,
@@ -289,6 +299,7 @@ export async function updatePoem(
             title: data.title,
             body: data.body,
             visibility: data.visibility,
+            language: data.language,
             status: data.status,
             ...(retitledDraft && { slug: await uniquePoemSlug(tx, editorId, data.title, poemId) }),
             ...(data.status === "published" && {

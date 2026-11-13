@@ -23,6 +23,7 @@ function readForm(formData: FormData) {
     title: str("title") ?? "",
     body: str("body") ?? "",
     visibility: str("visibility"),
+    language: str("language"),
     // Which submit button was pressed ("Save draft" / "Publish" / …)
     status: str("status"),
     password: str("password"),

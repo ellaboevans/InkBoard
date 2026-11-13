@@ -156,6 +156,7 @@ async function Author({ params }: Pick<Props, "params">) {
                   style={{ height: CARD_H }}
                   isPrivate={p.visibility === "private"}
                   excerpt={p.excerpt}
+                  lang={p.language}
                   hasMore={p.hasMore}
                   title={
                     <Link href={`/p/${a.slug}/${p.slug}`} className={cardTitleClass}>

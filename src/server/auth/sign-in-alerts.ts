@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/db";
-import { signInLocations } from "@/db/schema";
+import { signInDevices, signInLocations } from "@/db/schema";
 import { describeUserAgent } from "@/lib/user-agent";
 import { hmac } from "@/server/crypto";
 import { sendSignInAlertEmail } from "@/server/email";
@@ -50,11 +50,49 @@ export async function recordSignInLocation(editorId: string, ip: string | null |
   return other ? "new" : "first";
 }
 
+export type SignInDevice =
+  /** The editor's first recorded browser (new account, or first since device alerts shipped). */
+  | "first"
+  /** A browser this editor has signed in from before. */
+  | "known"
+  /** A browser we haven't seen for this editor: worth telling them. */
+  | "new";
+
 /**
- * After a successful sign-in: record where it came from and, if that network
- * is new for this editor, email them a security notice. The email is sent
- * after the response (like sign-in codes) and capped per day; a failed send is
- * logged, never surfaced to the person signing in.
+ * Remember the browser (an HMAC of its device-cookie id) of a successful
+ * sign-in and say whether it's new for this editor. Pass the id from
+ * deviceIdForSignIn(); a freshly issued id is never known.
+ */
+export async function recordSignInDevice(editorId: string, deviceId: string): Promise<SignInDevice> {
+  const deviceKey = hmac("sign-in-device", deviceId);
+  const db = getDb();
+  const result = (await db.execute(sql`
+    INSERT INTO sign_in_devices (editor_id, device_key)
+    VALUES (${editorId}, ${deviceKey})
+    ON CONFLICT (editor_id, device_key) DO UPDATE SET last_seen_at = now()
+    RETURNING (xmax = 0) AS inserted
+  `)) as unknown as { rows: { inserted: boolean }[] };
+  if (!result.rows[0]?.inserted) return "known";
+
+  const [other] = await db
+    .select({ id: signInDevices.id })
+    .from(signInDevices)
+    .where(and(eq(signInDevices.editorId, editorId), ne(signInDevices.deviceKey, deviceKey)))
+    .limit(1);
+  return other ? "new" : "first";
+}
+
+/** What was new about a sign-in that triggered an alert. */
+export type SignInAlertReason = "device" | "network" | "both";
+
+/**
+ * After a successful sign-in: record which browser and network it came from
+ * and, if either is new for this editor, email them a security notice. A new
+ * device on the same Wi-Fi shares the network's public IP, which is why
+ * devices are tracked too. The first browser and network ever recorded stay
+ * quiet (nothing to compare against). The email is sent after the response
+ * (like sign-in codes) and capped per day; a failed send is logged, never
+ * surfaced to the person signing in.
  */
 export async function notifyIfNewSignIn(input: {
   editorId: string;
@@ -62,18 +100,24 @@ export async function notifyIfNewSignIn(input: {
   penName: string | null;
   ip: string | null | undefined;
   userAgent: string | null | undefined;
-}): Promise<SignInLocation> {
-  const location = await recordSignInLocation(input.editorId, input.ip);
-  if (location !== "new") return location;
+  deviceId: string;
+}): Promise<{ network: SignInLocation; device: SignInDevice; alerted: boolean }> {
+  const network = await recordSignInLocation(input.editorId, input.ip);
+  const device = await recordSignInDevice(input.editorId, input.deviceId);
+  const reason: SignInAlertReason | null =
+    network === "new" && device === "new" ? "both" : network === "new" ? "network" : device === "new" ? "device" : null;
+  const result = { network, device, alerted: false };
+  if (!reason) return result;
 
   const limit = await rateLimit(`signin-alert:${input.editorId}`, ALERTS_PER_DAY, 86400);
-  if (!limit.allowed) return location;
+  if (!limit.allowed) return result;
 
   const details = {
     penName: input.penName,
     device: describeUserAgent(input.userAgent),
-    ip: input.ip!,
+    ip: input.ip ?? "Unknown",
     at: new Date(),
+    reason,
   };
   after(async () => {
     try {
@@ -82,5 +126,5 @@ export async function notifyIfNewSignIn(input: {
       console.error("Failed to send new sign-in alert", err);
     }
   });
-  return location;
+  return { ...result, alerted: true };
 }

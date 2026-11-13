@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getRequestMeta, startSession } from "@/server/auth/dal";
+import { deviceIdForSignIn, getRequestMeta, startSession } from "@/server/auth/dal";
 import { requestOtp, verifyLinkToken, verifyOtp } from "@/server/auth/otp";
 import type { Editor } from "@/db/schema";
 import { notifyIfNewSignIn } from "@/server/auth/sign-in-alerts";
@@ -108,7 +108,7 @@ export async function linkSignInAction(_prev: LinkSignInState, formData: FormDat
   return {};
 }
 
-/** Start the session, send the new-network notice if needed, and go to the dashboard. */
+/** Start the session, send the new-device/network notice if needed, and go to the dashboard. */
 async function completeSignIn(editor: Editor, ip: string | null, userAgent: string | null): Promise<never> {
   await startSession(editor.id);
   // Security notice if this network is new for the editor. Best effort:
@@ -120,6 +120,7 @@ async function completeSignIn(editor: Editor, ip: string | null, userAgent: stri
       penName: editor.penName,
       ip,
       userAgent,
+      deviceId: (await deviceIdForSignIn()).id,
     });
   } catch (err) {
     console.error("Couldn't check for a new sign-in location", err);

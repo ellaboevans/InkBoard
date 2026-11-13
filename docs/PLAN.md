@@ -86,6 +86,7 @@ Phase 9 adds:
 
 ```
 sign_in_locations  id · editor_id → editors · ip_key (HMAC of the network, never the IP) · first_seen_at · last_seen_at
+sign_in_devices    id · editor_id → editors · device_key (HMAC of the device-cookie id) · first_seen_at · last_seen_at
                    UNIQUE (editor_id, ip_key)
 ```
 
@@ -308,12 +309,12 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
   - No other 4–8 digit numbers in the message, so a detector can't pick the wrong one (tested).
   - `Auto-Submitted` / `X-Auto-Response-Suppress` headers; no images or tracking.
   - Detection itself is heuristic and up to the client. It also requires SPF, DKIM and DMARC on the sending domain (docs/DEPLOY.md §3). We don't add an `OTP-Token` header: we couldn't confirm any standard or client support, and it would copy the code into more logs.
-- **New sign-in alert** (`src/server/auth/sign-in-alerts.ts`, `signInAlertEmail`): after a successful sign-in from a network (IPv4 address or IPv6 /64) not seen before for that editor, they get an email with the device ("Chrome on macOS"), IP address and time (UTC), and what to do if it wasn't them: sign the device out under Signed-in devices, and secure their email.
-  - No alert on the first sign-in ever (or the first after this shipped), on known networks, or without a client IP. At most 5 alerts per editor per day.
-  - `sign_in_locations` stores only an HMAC of the network, never the IP. Rows unused for a year are pruned by the cleanup cron.
+- **New sign-in alert** (`src/server/auth/sign-in-alerts.ts`, `signInAlertEmail`): after a successful sign-in from a device (browser, recognised by a long-lived random cookie) or a network (IPv4 address or IPv6 /64) not seen before for that editor, they get an email that says which was new with the device ("Chrome on macOS"), IP address and time (UTC), and what to do if it wasn't them: sign the device out under Signed-in devices, and secure their email.
+  - Networks alone missed a new machine on the same Wi-Fi (same public IP), so devices were added. No alert for the first device or network ever recorded (or the first after each shipped), or on a known device and network. A new device is caught even without a client IP. At most 5 alerts per editor per day.
+  - `sign_in_locations` stores only an HMAC of the network, never the IP; `sign_in_devices` only an HMAC of the device id. Rows unused for a year are pruned by the cleanup cron.
   - Sent after the response (like codes); a failure is logged and never blocks the sign-in.
   - The alert never says "code", so clients don't offer to "copy" the date in it (tested).
-- **Tests:** template tests (subject, unbroken code, no other digit runs, escaping, UTC time), alert logic (first, known, new, IPv6 /64, unknown IP, per editor, no raw IP stored, daily cap), cleanup, and E2E for a sign-in from a second network.
+- **Tests:** template tests (subject, unbroken code, no other digit runs, escaping, UTC time), alert logic (first, known, new, IPv6 /64, unknown IP, per editor, no raw IP stored, daily cap), cleanup, and E2E for a sign-in from a second network and from a second device on the same network.
 
 ### Phase 10: SEO and link sharing ✅
 - **Logo icons:** the favicon is the InkBoard logo (white Feather on the ink-red tile) instead of the Next.js default: `src/app/icon.svg`, a multi-size `favicon.ico` (16/32/48) generated from it, and a 180px `apple-icon` for iPhone home screens. A web manifest uses the same icons and the paper colour.

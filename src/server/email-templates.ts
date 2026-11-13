@@ -70,11 +70,17 @@ function frame({
   body,
   appUrl,
   footer,
+  automated = true,
+  wordmark = { size: 22, lineHeight: 28 },
 }: {
   preheader: string;
   body: string;
   appUrl: string;
   footer: string;
+  /** False for a personal note (the welcome), which doesn't say replies go unread. */
+  automated?: boolean;
+  /** "InkBoard" beside the logo. */
+  wordmark?: { size: number; lineHeight: number };
 }) {
   const home = escapeHtml(new URL("/", appUrl).href);
   const logo = `cid:${EMAIL_LOGO_CID}`;
@@ -97,7 +103,7 @@ function frame({
 <a href="${home}" style="text-decoration:none;color:${C.ink}">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
 <td style="vertical-align:middle"><img src="${logo}" width="36" height="36" alt="" style="display:block;border:0;border-radius:9px"></td>
-<td style="vertical-align:middle;padding-left:12px;font-family:${SERIF};font-size:22px;line-height:28px;color:${C.ink}">InkBoard</td>
+<td style="vertical-align:middle;padding-left:12px;font-family:${SERIF};font-size:${wordmark.size}px;line-height:${wordmark.lineHeight}px;color:${C.ink}">InkBoard</td>
 </tr></table>
 </a>
 </td></tr>
@@ -108,7 +114,7 @@ ${body}
 </td></tr>
 <tr><td style="padding:24px 8px 0;font-family:${SANS};font-size:12px;line-height:19px;color:${C.faint}">
 ${footer}<br>
-Sent by <a href="${home}" style="color:${C.faint};text-decoration:underline">${host}</a>. This is an automated message; replies aren't read.
+Sent by <a href="${home}" style="color:${C.faint};text-decoration:underline">${host}</a>.${automated ? " This is an automated message; replies aren't read." : ""}
 </td></tr>
 </table>
 </td></tr>
@@ -117,13 +123,13 @@ Sent by <a href="${home}" style="color:${C.faint};text-decoration:underline">${h
 </html>`;
 }
 
-const heading = (text: string) =>
-  `<tr><td style="padding:40px 40px 0;font-family:${SERIF};font-size:30px;line-height:36px;font-weight:400;color:${C.ink}">${text}</td></tr>`;
-const para = (html: string, { top = 12, size = 16, color = C.ink } = {}) =>
-  `<tr><td style="padding:${top}px 40px 0;font-family:${SANS};font-size:${size}px;line-height:${Math.round(size * 1.55)}px;color:${color}">${html}</td></tr>`;
-const button = (href: string, label: string) => `<tr><td style="padding:16px 40px 0">
+const heading = (text: string, { size = 30, lineHeight = 36 } = {}) =>
+  `<tr><td style="padding:40px 40px 0;font-family:${SERIF};font-size:${size}px;line-height:${lineHeight}px;font-weight:400;color:${C.ink}">${text}</td></tr>`;
+const para = (html: string, { top = 12, size = 16, color = C.ink, lineHeight = Math.round(size * 1.55) } = {}) =>
+  `<tr><td style="padding:${top}px 40px 0;font-family:${SANS};font-size:${size}px;line-height:${lineHeight}px;color:${color}">${html}</td></tr>`;
+const button = (href: string, label: string, { size = 15 } = {}) => `<tr><td style="padding:16px 40px 0">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-radius:10px;background:${C.primary}">
-<a href="${escapeHtml(href)}" style="display:inline-block;padding:14px 26px;font-family:${SANS};font-size:15px;line-height:20px;font-weight:600;color:${C.onPrimary};text-decoration:none;border-radius:10px">${label}</a>
+<a href="${escapeHtml(href)}" style="display:inline-block;padding:14px 26px;font-family:${SANS};font-size:${size}px;line-height:20px;font-weight:600;color:${C.onPrimary};text-decoration:none;border-radius:10px">${label}</a>
 </td></tr></table>
 </td></tr>`;
 const divider = (top = 32) =>
@@ -189,7 +195,15 @@ export type SignInAlertDetails = {
   ip: string;
   at: Date;
   appUrl: string;
+  /** What was new: the browser, the network, or both. */
+  reason: "device" | "network" | "both";
 };
+
+const ALERT_WHAT = {
+  device: "a device",
+  network: "a network",
+  both: "a device and network",
+} as const;
 
 /** e.g. "Thu, 12 Nov 2026 at 21:49 UTC" (spelled-out date, no bare 4-digit year next to a code). */
 export function formatAlertTime(at: Date): string {
@@ -201,7 +215,7 @@ export function formatAlertTime(at: Date): string {
 }
 
 /**
- * "Someone signed in from a new network" security notice. It deliberately
+ * "Someone signed in from a new device or network" security notice. It deliberately
  * never says "code": with a date in the body, a client's code detector could
  * otherwise offer to "copy" the year as if it were a sign-in code.
  */
@@ -213,7 +227,7 @@ export function signInAlertEmail(d: SignInAlertDetails): EmailMessage {
   const text = [
     greeting,
     "",
-    "Your InkBoard account was just signed in to from a network we haven't seen you use before.",
+    `Your InkBoard account was just signed in to from ${ALERT_WHAT[d.reason]} we haven't seen you use before.`,
     "",
     `Device: ${d.device}`,
     `IP address: ${d.ip}`,
@@ -236,11 +250,11 @@ export function signInAlertEmail(d: SignInAlertDetails): EmailMessage {
   const html = frame({
     appUrl: d.appUrl,
     preheader: `New sign-in from ${d.device}. If this wasn't you, sign that device out.`,
-    footer: "We send this whenever your account is signed in to from a new network.",
+    footer: "We send this whenever your account is signed in to from a new device or network.",
     body: `
 <tr><td style="padding:40px 40px 0"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${C.well};font-family:${SANS};font-size:12px;line-height:16px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:${C.primary}">Security notice</span></td></tr>
 <tr><td style="padding:14px 40px 0;font-family:${SERIF};font-size:30px;line-height:36px;color:${C.ink}">New sign-in to your account</td></tr>
-${para(`${escapeHtml(greeting)} your InkBoard account was just signed in to from a network we haven't seen you use before.`, { top: 14 })}
+${para(`${escapeHtml(greeting)} your InkBoard account was just signed in to from ${ALERT_WHAT[d.reason]} we haven't seen you use before.`, { top: 14 })}
 <tr><td style="padding:20px 40px 0">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.line};border-bottom:1px solid ${C.line}">
 ${row("Device", d.device)}
@@ -257,6 +271,88 @@ ${step(2, "Secure your email account. Signing in to InkBoard needs access to you
 </table>
 </td></tr>
 ${button(profileUrl, "Review signed-in devices")}
+${bottomSpace}`,
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+export type WelcomeDetails = {
+  penName: string;
+  /** The editor's public author page slug (/a/<slug>). */
+  slug: string;
+  appUrl: string;
+};
+
+/** Who signs the welcome email. */
+export const WELCOME_SIGNATURE = { name: "Evans Elabo", role: "Creator, InkBoard" };
+
+/**
+ * Sent once, when a newcomer finishes onboarding (their first sign-in). A
+ * personal note from the founder: what InkBoard is for and what they can do.
+ * Like the sign-in alert, it never says "code" and has no 4–8 digit numbers.
+ */
+export function welcomeEmail(d: WelcomeDetails): EmailMessage {
+  const newPoemUrl = new URL("/admin/poems/new", d.appUrl).href;
+  const authorUrl = new URL(`/a/${encodeURIComponent(d.slug)}`, d.appUrl).href;
+  const profileUrl = new URL("/admin/profile", d.appUrl).href;
+  const boardUrl = new URL("/", d.appUrl).href;
+  const subject = `Welcome to InkBoard, ${d.penName}`;
+
+  const features: [string, string, string][] = [
+    ["Write and publish", "Draft as long as you like, preview the card readers will see, and publish to the board when it's ready.", "Line breaks and indentation stay exactly as you type them, with *italic* and **bold** for emphasis."],
+    ["Keep some poems private", "Lock any poem with a password, one per poem or one for all of them, and share it only with the readers you choose.", "Everyone else sees the title and a lock."],
+    ["Your author page", "Your poems gather in your own section of the board and on your author page.", "Pick an avatar, add a short bio and links, and pin the poem you want readers to meet first."],
+    ["Share anywhere", "Every published poem has its own link with a share card, so it looks right when you post it.", ""],
+  ];
+
+  const text = [
+    `Hi ${d.penName},`,
+    "",
+    "Welcome to InkBoard. I'm glad you're here.",
+    "",
+    "InkBoard is a quiet, open board of poems, grouped by author, that anyone can wander through. Here's what you can do:",
+    "",
+    ...features.flatMap(([title, a, b]) => [`- ${title}: ${a}${b ? ` ${b}` : ""}`]),
+    "",
+    `Write your first poem: ${newPoemUrl}`,
+    `Your author page: ${authorUrl}`,
+    `Set up your profile: ${profileUrl}`,
+    "",
+    "If anything feels off, or you have an idea that would make InkBoard better for you, I'd love to hear it.",
+    "",
+    "Happy writing,",
+    WELCOME_SIGNATURE.name,
+    WELCOME_SIGNATURE.role,
+    "",
+    boardUrl,
+  ].join("\n");
+
+  const feature = ([title, a, b]: [string, string, string]) =>
+    `<tr><td style="padding:18px 0 0;width:28px;vertical-align:top"><div style="width:8px;height:8px;margin-top:8px;border-radius:4px;background:${C.primary}"></div></td><td style="padding:18px 0 0;font-family:${SANS};font-size:14px;line-height:22px;color:${C.ink}"><strong style="font-family:${SERIF};font-size:16px;line-height:24px;font-weight:600">${escapeHtml(title)}</strong><br><span style="color:${C.muted}">${escapeHtml(a)}${b ? ` ${escapeHtml(b)}` : ""}</span></td></tr>`;
+  const link = (href: string, label: string) =>
+    `<a href="${escapeHtml(href)}" style="color:${C.primary};text-decoration:underline">${label}</a>`;
+
+  const html = frame({
+    appUrl: d.appUrl,
+    automated: false,
+    wordmark: { size: 20, lineHeight: 26 },
+    preheader: "What you can do on InkBoard, and where to start.",
+    footer: "You're receiving this because you just created your InkBoard account. It's the only welcome note we send.",
+    body: `
+${heading(`Welcome, ${escapeHtml(d.penName)}`, { size: 26, lineHeight: 32 })}
+${para("I'm glad you're here. InkBoard is a quiet, open board of poems, grouped by author, that anyone can wander through. Here's what you can do:", { top: 14, size: 15, lineHeight: 24 })}
+<tr><td style="padding:4px 40px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+${features.map(feature).join("\n")}
+</table>
+</td></tr>
+${button(newPoemUrl, "Write your first poem", { size: 14 })}
+${para(`Or ${link(profileUrl, "set up your profile")} first, and see ${link(authorUrl, "your author page")}.`, { top: 14, size: 13, lineHeight: 21, color: C.muted })}
+${divider()}
+${para("If anything feels off, or you have an idea that would make InkBoard better for you, I'd love to hear it.", { top: 24, size: 15, lineHeight: 24 })}
+${para("Happy writing,", { top: 20, size: 15, lineHeight: 24 })}
+<tr><td style="padding:6px 40px 0;font-family:${SERIF};font-size:15px;line-height:22px;font-weight:600;color:${C.muted}">${escapeHtml(WELCOME_SIGNATURE.name)}</td></tr>
+${para(escapeHtml(WELCOME_SIGNATURE.role), { top: 2, size: 13, color: C.muted })}
 ${bottomSpace}`,
   });
   return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };

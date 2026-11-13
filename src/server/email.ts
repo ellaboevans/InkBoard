@@ -60,6 +60,6 @@ export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlert
   await deliver(
     to,
     message,
-    { kind: "sign-in-alert", device: details.device, ip: details.ip },
+    { kind: "sign-in-alert", device: details.device, ip: details.ip, reason: details.reason },
   );
 }

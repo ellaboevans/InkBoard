@@ -10,7 +10,7 @@ import { safeEqual, sha256 } from "./crypto";
  * the instant it expires.
  */
 
-export type CleanupResult = { otps: number; sessions: number; rateLimits: number; signInLocations: number };
+export type CleanupResult = { otps: number; sessions: number; rateLimits: number; signInLocations: number; signInDevices: number };
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const db = getDb();
@@ -35,11 +35,16 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const signInLocations = await db.execute(sql`
     DELETE FROM sign_in_locations WHERE last_seen_at < now() - interval '1 year'
   `);
+  // Known browsers: same rule. (The device cookie itself lasts two years.)
+  const signInDevices = await db.execute(sql`
+    DELETE FROM sign_in_devices WHERE last_seen_at < now() - interval '1 year'
+  `);
   return {
     otps: count(otps),
     sessions: count(sessions),
     rateLimits: count(rateLimits),
     signInLocations: count(signInLocations),
+    signInDevices: count(signInDevices),
   };
 }
 

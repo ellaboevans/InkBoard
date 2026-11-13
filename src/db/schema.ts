@@ -133,6 +133,25 @@ export const signInLocations = pgTable(
   (t) => [uniqueIndex("sign_in_locations_editor_ip_key").on(t.editorId, t.ipKey)],
 );
 
+/**
+ * Browsers an editor has signed in from: an HMAC of the random id in the
+ * long-lived device cookie (DEVICE_COOKIE), never the id itself. A sign-in
+ * from a browser without a known id triggers a new-device alert.
+ */
+export const signInDevices = pgTable(
+  "sign_in_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    deviceKey: text("device_key").notNull(),
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("sign_in_devices_editor_device_key").on(t.editorId, t.deviceKey)],
+);
+
 export const poemVisibility = pgEnum("poem_visibility", ["public", "private"]);
 export const poemStatus = pgEnum("poem_status", ["draft", "published"]);
 

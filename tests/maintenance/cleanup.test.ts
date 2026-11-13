@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { editors, emailOtps, rateLimits, sessions, signInLocations } from "@/db/schema";
+import { editors, emailOtps, rateLimits, sessions, signInDevices, signInLocations } from "@/db/schema";
 import { cleanupExpiredRows, isAuthorizedCron } from "@/server/maintenance";
 
 const db = getDb();
@@ -30,13 +30,18 @@ describe("cleanupExpiredRows", () => {
       { editorId: ed.id, ipKey: "stale", lastSeenAt: ago("13 months") },
       { editorId: ed.id, ipKey: "recent", lastSeenAt: ago("11 months") },
     ]);
+    await db.insert(signInDevices).values([
+      { editorId: ed.id, deviceKey: "stale", lastSeenAt: ago("13 months") },
+      { editorId: ed.id, deviceKey: "recent", lastSeenAt: ago("11 months") },
+    ]);
 
-    expect(await cleanupExpiredRows()).toEqual({ otps: 2, sessions: 1, rateLimits: 1, signInLocations: 1 });
+    expect(await cleanupExpiredRows()).toEqual({ otps: 2, sessions: 1, rateLimits: 1, signInLocations: 1, signInDevices: 1 });
     expect((await db.select().from(emailOtps)).map((r) => r.codeHash).sort()).toEqual(["just-expired", "live"]);
     expect((await db.select().from(sessions)).map((r) => r.tokenHash).sort()).toEqual(["live", "recent"]);
     expect((await db.select().from(rateLimits)).map((r) => r.key)).toEqual(["today"]);
     expect((await db.select().from(signInLocations)).map((r) => r.ipKey)).toEqual(["recent"]);
-    expect(await cleanupExpiredRows()).toEqual({ otps: 0, sessions: 0, rateLimits: 0, signInLocations: 0 });
+    expect((await db.select().from(signInDevices)).map((r) => r.deviceKey)).toEqual(["recent"]);
+    expect(await cleanupExpiredRows()).toEqual({ otps: 0, sessions: 0, rateLimits: 0, signInLocations: 0, signInDevices: 0 });
   });
 });
 

@@ -10,8 +10,8 @@ vi.mock("@/server/email", async () => {
     sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
       outbox.push({ to, code, linkToken });
     }),
-    sendSignInAlertEmail: vi.fn(async (to: string, d: { device: string; ip: string; penName: string | null }) => {
-      alerts.push({ to, device: d.device, ip: d.ip, penName: d.penName });
+    sendSignInAlertEmail: vi.fn(async (to: string, d: { device: string; ip: string; penName: string | null; reason: string }) => {
+      alerts.push({ to, device: d.device, ip: d.ip, penName: d.penName, reason: d.reason });
     }),
   };
 });

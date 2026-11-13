@@ -3,7 +3,8 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { env } from "@/env";
-import { SESSION_COOKIE } from "./cookie";
+import { generateToken } from "@/server/crypto";
+import { DEVICE_COOKIE, SESSION_COOKIE } from "./cookie";
 import { clientIpFromForwardedFor } from "./ip";
 import {
   createSession,
@@ -87,6 +88,26 @@ export async function startSession(editorId: string): Promise<void> {
     ...cookieOptions,
     expires: expiresAt,
   });
+}
+
+const DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60;
+
+/**
+ * This browser's device id for new-device alerts (Server Actions only). Reads
+ * the device cookie, or issues one if it's missing or malformed. `issued` is
+ * true when the browser had no usable id, i.e. it's new to us.
+ */
+export async function deviceIdForSignIn(): Promise<{ id: string; issued: boolean }> {
+  const jar = await cookies();
+  const existing = jar.get(DEVICE_COOKIE)?.value;
+  if (existing && /^[A-Za-z0-9_-]{43}$/.test(existing)) {
+    // Refresh the expiry so a device in regular use is never forgotten.
+    jar.set(DEVICE_COOKIE, existing, { ...cookieOptions, maxAge: DEVICE_COOKIE_MAX_AGE });
+    return { id: existing, issued: false };
+  }
+  const id = generateToken();
+  jar.set(DEVICE_COOKIE, id, { ...cookieOptions, maxAge: DEVICE_COOKIE_MAX_AGE });
+  return { id, issued: true };
 }
 
 /** Server Actions / Route Handlers only. */

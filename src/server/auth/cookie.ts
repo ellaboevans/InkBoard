@@ -9,3 +9,14 @@ export const SESSION_COOKIE =
   process.env.NODE_ENV === "production"
     ? "__Host-poemhub_session"
     : "poemhub_session";
+
+/**
+ * Long-lived random id for this browser, used only to tell an editor when
+ * their account is signed in to from a device it hasn't seen (sign-in-alerts.ts).
+ * Not tied to a session: it survives sign-out, so signing back in on the same
+ * browser stays quiet. Same `__Host-` rule as the session cookie.
+ */
+export const DEVICE_COOKIE =
+  process.env.NODE_ENV === "production"
+    ? "__Host-poemhub_device"
+    : "poemhub_device";

@@ -69,6 +69,17 @@ describe("new sign-in alert email", () => {
     ip: "203.0.113.5",
     at,
     appUrl: "https://poemhub.example",
+    reason: "network",
+  });
+
+  it("names what was new: the device, the network, or both", () => {
+    const base = { penName: null, device: "Chrome on macOS", ip: "203.0.113.5", at, appUrl: "https://poemhub.example" };
+    for (const [reason, what] of [["device", "a device"], ["network", "a network"], ["both", "a device and network"]] as const) {
+      const m = signInAlertEmail({ ...base, reason });
+      for (const part of [m.text, visibleText(m.html)]) {
+        expect(part).toContain(`signed in to from ${what} we haven't seen you use before`);
+      }
+    }
   });
 
   it("says what happened, from which device and network, and when", () => {

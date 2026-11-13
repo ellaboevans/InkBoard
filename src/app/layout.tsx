@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
+import { Analytics } from "@/components/analytics";
 import { Toaster } from "@/components/toaster";
 import { BASE_OPEN_GRAPH, BRAND, SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
@@ -44,6 +45,7 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
         {/* Poem overlay over the board (src/app/@modal). */}
         {modal}
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );

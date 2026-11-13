@@ -133,6 +133,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
 
+**Analytics:** Vercel Web Analytics via `src/components/analytics.tsx` (root layout), production builds only. Its `beforeSend` strips query and fragment from every URL: the sign-in link token is in the fragment, so keep that if you touch it.
+
 **Cleanup cron:** `GET /api/cron/cleanup` (`vercel.json`, daily) calls `cleanupExpiredRows()` in `src/server/maintenance.ts`. It needs `Authorization: Bearer $CRON_SECRET`. Deployment steps are in `docs/DEPLOY.md`.
 
 **Rate limiting** (`src/server/rate-limit.ts`) is a single atomic Postgres upsert per call into `rate_limits` (fixed window). Keys look like `otp:req:email:<sha256>`, `otp:cooldown:<sha256>`, `otp:req:ip:<ip>`, `otp:verify:email-ip:{h,d}:<sha256>:<bucket>`, `otp:verify:email:{h,d}:<sha256>`. Verify limits are checked in tiers (IP → email+client → email): a client over its own budget must never count against the shared per-email cap, or one client could lock an editor out. About 1% of calls also prune rows older than 2 days. Tests clear rows by key prefix to skip cooldowns.

@@ -31,6 +31,9 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 ### Cron
 `vercel.json` schedules `/api/cron/cleanup` daily at 04:17 UTC. It deletes expired sign-in codes, expired sessions and stale rate-limit rows. It returns 503 until `CRON_SECRET` is set, and 401 for any other caller. Run history is under Project → Cron Jobs.
 
+### Web Analytics
+`<Analytics />` (`src/components/analytics.tsx`, in the root layout) records cookieless page views in production builds only. Turn it on under Project → Analytics → Enable; until then `/_vercel/insights/script.js` returns 404 and nothing is recorded. The script and its beacons use our own origin, so the CSP needs no change. URLs are reduced to their path before sending (no query, no fragment), so sign-in link tokens never reach Vercel.
+
 ## 3. Resend (sign-in codes and security emails)
 
 1. Create an API key at <https://resend.com/api-keys> (permission: *Sending access*), and set it as `RESEND_API_KEY`.
@@ -49,6 +52,7 @@ There is no fallback, locally or in production: without `RESEND_API_KEY` the app
 - [ ] Search for the poem title with ⌘K.
 - [ ] Response headers on `/` include `Content-Security-Policy` and `Strict-Transport-Security`.
 - [ ] Trigger the cron once from the Cron Jobs page. It returns `{"ok":true,…}`.
+- [ ] Open a few pages, then check Project → Analytics: the visits appear within a minute or two.
 - [ ] (Optional) Demo content: **don't** seed production. To try it on a preview branch, run `DATABASE_URL=<preview branch URL> pnpm db:seed` locally.
 
 ## Operations

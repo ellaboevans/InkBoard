@@ -11,6 +11,10 @@ import { AVATARS, avatarUrl, type AvatarId } from "@/lib/avatars";
 import { notify, withErrorToast } from "@/lib/notify";
 import { BIO_MAX, LINKS_MAX, PEN_NAME_MAX, PEN_NAME_MIN, TAGLINE_MAX } from "@/lib/profile-limits";
 import { saveProfileAction, type ProfileState } from "./actions";
+import { SpecialLetters } from "@/components/special-letters";
+
+/** Fields the Special letters bar types into (the last one used). */
+const PEN_NAME_AND_BIO = ["bio", "penName"];
 
 type Values = {
   penName: string;
@@ -169,6 +173,7 @@ export function ProfileForm({
             />
             {errorFor("bio") && <FieldError>{errorFor("bio")}</FieldError>}
           </Field>
+          <SpecialLetters fields={PEN_NAME_AND_BIO} />
         </FieldGroup>
       </FieldSet>
 

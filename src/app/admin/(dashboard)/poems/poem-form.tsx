@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { StatusBadge } from "@/components/poem-badges";
+import { SpecialLetters } from "@/components/special-letters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -37,6 +38,9 @@ import { unstable_rethrow } from "next/navigation";
 import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
 import { CardPreview } from "./card-preview";
+
+/** Fields the Special letters bar types into (the last one used). */
+const BODY_AND_TITLE = ["body", "title"];
 
 /**
  * ⌘B / ⌘I on a Mac, Ctrl+B / Ctrl+I elsewhere: toggle `**` / `*` around the
@@ -277,6 +281,7 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
                 {body.length.toLocaleString("en")} / {BODY_MAX.toLocaleString("en")}
               </p>
             </div>
+            <SpecialLetters fields={BODY_AND_TITLE} className="mt-1" />
           </div>
         </div>
 

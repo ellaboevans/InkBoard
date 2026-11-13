@@ -339,7 +339,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | Twi / Akan (Fante) | Ɛ ɛ, Ɔ ɔ | rarely written |
 | Ewe | Ɖ ɖ, Ɛ ɛ, Ƒ ƒ, Ɣ ɣ, Ŋ ŋ, Ɔ ɔ, Ʋ ʋ | acute, grave, tilde (nasal), caron, macron |
 | Ga | Ɛ ɛ, Ŋ ŋ, Ɔ ɔ | acute, grave (optional) |
-| Nzema | Ɛ ɛ, Ɔ ɔ (letter list to confirm with a Nzema writer before 11b) | |
+| Nzema | Ɛ ɛ, Ɔ ɔ: the same letters as Akan (confirmed by the product owner), so it shares the Akan tab | |
 | IPA | the full IPA set (Latin Extended-B, IPA Extensions, combining diacritics) | |
 
 **Phase 11a: render and store correctly** ✅ (no visible change for existing poems)
@@ -351,10 +351,17 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - **Tests:** real Ewe, Twi, Nzema and Ga lines through save (NFC), excerpt, slug and search (with and without the letters, upper and lower case, with tone marks), and `search_normalize()` checked against `SEARCH_FOLD`.
 - **Checked:** typecheck, lint, production build, 257 Vitest tests, and E2E for board, poems, author page, search, profile and the full accessibility scan. On a production build, Chrome reported Gentium/Andika for every in-scope letter in regular, italic and bold, including tone-marked ɔ̃ ɛ́ ŋ̀, and no system-font fallback; the reading page and a poem's share card were checked visually.
 
-**Phase 11b: typing them** (preview for the product owner before building)
-- A "Special letters" bar under the poem field (also usable for title and pen name): tabs for Twi/Akan, Ewe, Ga, Nzema. A click inserts at the cursor with native undo (same path as ⌘B/⌘I). Tone-mark buttons add a mark to the letter before the cursor. The last tab is remembered per browser.
-- An **IPA** tab for linguists, with search by name ("open-mid back rounded" → ɔ), kept apart so the language tabs stay short.
-- A short help note: Gboard (Android/iOS) has Akan, Ewe and Ga keyboards; SIL Keyman covers macOS and Windows.
+**Phase 11b: typing them** ✅ (preview approved with changes, see below)
+- A **Special letters** bar, closed by default, under the poem field and under the profile's pen name and bio (and onboarding's pen name). It types into whichever of its fields was used last (e.g. title or poem).
+- **Tabs: Akan, Ewe, Ga, IPA.** Akan covers Twi, Fante and Nzema, which use the same letters (decided with the product owner: no separate Twi or Nzema tab).
+  - Akan: ɛ ɔ. Ewe: ɖ ɛ ƒ ɣ ŋ ɔ ʋ. Ga: ɛ ŋ ɔ. A **Capitals** toggle works like Shift (one letter).
+  - **Tone marks** (high, low, nasal, rising, falling, mid) on Ewe and Ga only; Akan tone marks wait until the product owner knows which are used.
+  - **IPA** for linguists: grouped symbols (vowels, consonants, implosives/clicks, stress/length/tone letters, diacritics), searchable by name.
+- Clicks insert at the cursor through the browser's editing path, so ⌘Z undoes them and length limits hold. Tone marks and diacritics attach to the letter before the cursor. Every key has a spoken name. The last tab is remembered per browser.
+- A help line: Gboard (Android/iPhone) has Akan, Ewe and Ga keyboards; SIL Keyman covers Mac and Windows.
+- **Font fix found in the preview:** Newsreader draws ƒ as the slanted florin sign, so Ƒ ƒ come from Gentium (and Andika in sans) even though the main fonts have them.
+- **Accessibility:** axe scans of the editor with the bar open (Ewe tab with tone marks, IPA tab) and of the profile found the shared tab labels at 4.16:1; raised to 6.7:1 (`text-foreground/75`).
+- **Checked:** typecheck, lint, 265 Vitest tests (letter data, Unicode marks, IPA search), E2E for the bar in onboarding, the poem editor (title and poem: letters, capitals, tone marks, undo, the refused mark, IPA search) and the profile (remembered tab, pen name, bio), plus the full accessibility, auth, poems and profile specs. On a production build, Chrome reported Gentium/Andika for ƒ Ƒ and the Ghanaian letters, and Newsreader/Geist for plain Latin.
 
 **Phase 11c (optional, later): a poem's language.** Editors can tag a poem's language, set as `lang` on the poem so screen readers pronounce it correctly, and readers could browse by language.
 
@@ -373,7 +380,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
-| R12 Ghanaian languages and IPA | 11 | 🚧 11a ✅ (fonts, share cards, NFC, slugs, search); 11b (typing) and 11c (poem language) planned |
+| R12 Ghanaian languages and IPA | 11 | ✅ 11a (fonts, share cards, NFC, slugs, search) and 11b (Special letters bar); 11c (poem language) optional, not started |
 | N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |

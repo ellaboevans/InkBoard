@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label";
 import { notify, withErrorToast } from "@/lib/notify";
 import { PEN_NAME_MAX, PEN_NAME_MIN } from "@/lib/profile-limits";
 import { completeOnboardingAction, type OnboardingState } from "../actions";
+import { SpecialLetters } from "@/components/special-letters";
+
+const PEN_NAME = ["penName"];
 
 export function OnboardingForm() {
   const [state, action, pending] = useActionState<OnboardingState, FormData>(
@@ -34,6 +37,7 @@ export function OnboardingForm() {
           required
           autoFocus
         />
+        <SpecialLetters fields={PEN_NAME} />
       </div>
       {state.error && (
         <p id="penName-error" role="alert" className="text-sm text-destructive">

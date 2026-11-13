@@ -53,6 +53,32 @@ const serifExt = localFont({
     { path: "../assets/fonts/web/GentiumBookPlus-BoldItalic.woff2", weight: "700", style: "italic" },
   ],
 });
+/*
+ * Ƒ ƒ (U+0191-0192) come from the SIL fonts even though Newsreader and Geist
+ * have them: they draw ƒ as the slanted florin currency sign, so Ewe words
+ * like "ƒe" looked italic mid-line (found in the Phase 11b preview). Same
+ * files as above, so nothing extra is downloaded; listed first in the stacks.
+ */
+const sansF = localFont({
+  preload: false,
+  adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+0191-0192" }],
+  src: [
+    { path: "../assets/fonts/web/Andika-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../assets/fonts/web/Andika-Bold.woff2", weight: "700", style: "normal" },
+  ],
+});
+const serifF = localFont({
+  preload: false,
+  adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+0191-0192" }],
+  src: [
+    { path: "../assets/fonts/web/GentiumBookPlus-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../assets/fonts/web/GentiumBookPlus-Italic.woff2", weight: "400", style: "italic" },
+    { path: "../assets/fonts/web/GentiumBookPlus-Bold.woff2", weight: "700", style: "normal" },
+    { path: "../assets/fonts/web/GentiumBookPlus-BoldItalic.woff2", weight: "700", style: "italic" },
+  ],
+});
 
 // Icons, the manifest and the default share image come from file conventions
 // in this folder (icon.svg, favicon.ico, apple-icon.tsx, manifest.ts,
@@ -73,20 +99,21 @@ export const metadata: Metadata = {
 };
 
 /**
- * `main, ext, main's fallback`. next/font follows each font
+ * `ƒ override, main, ext, main's fallback`. next/font follows each font
  * with a metric-matched local fallback (e.g. Times New Roman), which keeps
  * text from jumping while the web font loads. Left in place it would also
  * answer for Ɛ/Ɔ/… before Gentium or Andika (measured in Chrome), so the
  * extension font goes between the main font and those fallbacks.
  */
-function fontStack(main: { style: { fontFamily: string } }, ext: { style: { fontFamily: string } }) {
+type LoadedFont = { style: { fontFamily: string } };
+const family = (f: LoadedFont) => f.style.fontFamily.split(/,\s*/)[0];
+function fontStack(override: LoadedFont, main: LoadedFont, ext: LoadedFont) {
   const [mainFamily, ...mainFallbacks] = main.style.fontFamily.split(/,\s*/);
-  const [extFamily, ...extFallbacks] = ext.style.fontFamily.split(/,\s*/);
-  return [mainFamily, extFamily, ...mainFallbacks, ...extFallbacks].join(", ");
+  return [family(override), mainFamily, family(ext), ...mainFallbacks].join(", ");
 }
 const fontStacks = {
-  "--font-sans-stack": fontStack(sans, sansExt),
-  "--font-serif-stack": fontStack(serif, serifExt),
+  "--font-sans-stack": fontStack(sansF, sans, sansExt),
+  "--font-serif-stack": fontStack(serifF, serif, serifExt),
 } as React.CSSProperties;
 
 export const viewport: Viewport = { themeColor: BRAND.paper, colorScheme: "light" };

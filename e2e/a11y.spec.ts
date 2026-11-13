@@ -79,6 +79,12 @@ test("admin screens", async ({ page }) => {
 
   await page.goto("/admin/poems/new");
   await scan(page, "new poem");
+  // Special letters bar open: a language tab with tone marks, then IPA.
+  await page.getByRole("button", { name: "Special letters" }).click();
+  await page.getByRole("tab", { name: "Ewe" }).click();
+  await scan(page, "new poem: special letters (Ewe)");
+  await page.getByRole("tab", { name: "IPA" }).click();
+  await scan(page, "new poem: special letters (IPA)");
   await page.getByRole("textbox", { name: "Poem" }).fill("a line\n\n  indented");
   await page.getByRole("region", { name: "Card preview" }).getByRole("button").click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -121,6 +127,8 @@ test("admin screens", async ({ page }) => {
   await page.goto("/admin/profile");
   await expect(page.getByRole("heading", { name: "Signed-in devices" })).toBeVisible();
   await scan(page, "profile");
+  await page.getByRole("button", { name: "Special letters" }).click();
+  await scan(page, "profile: special letters");
 });
 
 test("board, list view, search and reading", async ({ page }) => {

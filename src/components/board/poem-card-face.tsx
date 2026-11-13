@@ -56,12 +56,16 @@ export function PoemCardFace({
               </span>
             )}
             {isPrivate && (
+              // Icon only, to leave the title more room. Screen readers get
+              // "(password protected)" from the title and "Enter the password"
+              // below, so the pill stays hidden from them.
               <span
-                className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
+                data-lock-badge=""
+                title="Password protected"
+                className="flex size-5 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
                 aria-hidden
               >
                 <LockIcon className="size-3" />
-                Private
               </span>
             )}
           </div>

@@ -49,7 +49,7 @@ test("published poems appear in their author's section; private text never reach
   const card = (name: string) =>
     section.locator("[data-card]").filter({ has: page.getByRole("link", { name, exact: true }) });
   await expect(card(`Open ${id}`)).toContainText(`first line ${id}`);
-  await expect(card(`Locked ${id} (password protected)`)).toContainText("Private");
+  await expect(card(`Locked ${id} (password protected)`).locator("[data-lock-badge]")).toBeVisible();
   await expect(page.getByText(`Draft ${id}`)).toHaveCount(0);
 
   const html = await page.content();

@@ -1,4 +1,5 @@
 import { ExternalLinkIcon, FeatherIcon, PlusIcon } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AdminBreadcrumb } from "@/components/admin/admin-breadcrumb";
@@ -22,6 +23,9 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { avatarIdFor } from "@/lib/avatars";
 import { getCurrentEditor } from "@/server/auth/dal";
+
+// The editor dashboard is private: keep it out of search results.
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 /**
  * Editor dashboard shell (shadcn sidebar-08: inset variant). On desktop the

@@ -124,6 +124,12 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 
 **Accessibility.** `e2e/a11y.spec.ts` runs axe (WCAG 2.2 A/AA) on every screen (light only). Add new screens or states there. Error text uses `--destructive`, tuned to ≥4.5:1 on paper and on its own tint, so check contrast if you change it. ARIA lets a listbox contain only options and groups, so put palette messages outside `CommandList`.
 
+**SEO & sharing.** Site identity, brand hex colours and `siteUrl()` (APP_URL, else Vercel's production domain) live in `src/lib/site.ts`. Icons are file conventions in `src/app`: `icon.svg` (the Feather logo tile), `favicon.ico` (generated from it, 16/32/48), `apple-icon.tsx`; plus `manifest.ts`, `robots.ts`, `sitemap.ts` (board data, cached under BOARD_TAG).
+- Share cards: `opengraph-image.tsx` at the root, per poem and per author, built from `src/components/brand/og-card.tsx`. Private poems show only title/author, never text (N1). Satori needs **static** fonts (`src/assets/fonts`), not variable ones.
+- Never put a relative `alternates.canonical` or `openGraph.url` in the root layout: on the intercepted overlay route it resolves against the request path and fails the build. Pages set their own canonical.
+- Next replaces a child's `openGraph`/`twitter` object instead of merging it, so spread `BASE_OPEN_GRAPH` and repeat `card: "summary_large_image"`.
+- `/admin` and `/sign-in` are `noindex`. JSON-LD goes through `JsonLd` (`src/components/seo/json-ld.tsx`), which escapes `<`.
+
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
 
 **Cleanup cron:** `GET /api/cron/cleanup` (`vercel.json`, daily) calls `cleanupExpiredRows()` in `src/server/maintenance.ts`. It needs `Authorization: Bearer $CRON_SECRET`. Deployment steps are in `docs/DEPLOY.md`.

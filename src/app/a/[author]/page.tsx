@@ -7,6 +7,8 @@ import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face"
 import { Button } from "@/components/ui/button";
 import { avatarIdFor, avatarUrl } from "@/lib/avatars";
 import { CARD_H } from "@/lib/board-layout";
+import { JsonLd } from "@/components/seo/json-ld";
+import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
 
 type Props = PageProps<"/a/[author]">;
@@ -14,8 +16,36 @@ type Props = PageProps<"/a/[author]">;
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { author } = await params;
   const a = await getAuthorPage(author);
-  if (!a) return { title: "Author not found" };
-  return { title: a.penName, description: a.tagline ?? `Poems by ${a.penName} on InkBoard.` };
+  if (!a) return { title: "Author not found", robots: { index: false } };
+  const url = `/a/${a.slug}`;
+  const title = `${a.penName}: poems`;
+  const description = a.tagline ?? `Poems by ${a.penName} on ${SITE_NAME}.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { ...BASE_OPEN_GRAPH, type: "profile", url, title, description },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
+
+/** schema.org Person for the author; profile fields only, never the email. */
+async function AuthorJsonLd({ params }: Pick<Props, "params">) {
+  const { author } = await params;
+  const a = await getAuthorPage(author);
+  if (!a) return null;
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: absoluteUrl(`/a/${a.slug}`),
+    mainEntity: {
+      "@type": "Person",
+      name: a.penName,
+      ...(a.tagline && { description: a.tagline }),
+      ...(a.links.length > 0 && { sameAs: a.links }),
+    },
+  };
+  return <JsonLd data={data} />;
 }
 
 /** An author's public page: who they are, their links, and their poems. */
@@ -31,6 +61,9 @@ export default function AuthorPublicPage({ params }: Props) {
         </Button>
         <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-muted" />}>
           <Author params={params} />
+        </Suspense>
+        <Suspense>
+          <AuthorJsonLd params={params} />
         </Suspense>
       </div>
     </main>

@@ -6,7 +6,11 @@ import { getCurrentEditor } from "@/server/auth/dal";
 import { FlashToast } from "@/components/flash-toast";
 import { SignInForm } from "./sign-in-form";
 
-export const metadata: Metadata = { title: "Editor sign in" };
+export const metadata: Metadata = {
+  title: "Editor sign in",
+  alternates: { canonical: "/sign-in" },
+  robots: { index: false, follow: true },
+};
 
 export default function SignInPage({ searchParams }: PageProps<"/sign-in">) {
   return (

@@ -5,7 +5,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { requireEditor } from "@/server/auth/dal";
 import { OnboardingForm } from "./onboarding-form";
 
-export const metadata: Metadata = { title: "Welcome" };
+export const metadata: Metadata = { title: "Welcome", robots: { index: false, follow: false } };
 
 export default function OnboardingPage() {
   return (

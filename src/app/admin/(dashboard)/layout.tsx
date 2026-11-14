@@ -1,10 +1,10 @@
 import { ExternalLinkIcon, FeatherIcon, PlusIcon } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
 import { AdminBreadcrumb } from "@/components/admin/admin-breadcrumb";
 import { NavMain, NavMainItems } from "@/components/admin/nav-main";
 import { NavUser } from "@/components/admin/nav-user";
+import { SidebarLink } from "@/components/admin/sidebar-link";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -41,7 +41,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="lg" asChild tooltip="InkBoard dashboard">
-                  <Link href="/admin">
+                  <SidebarLink href="/admin">
                     <span className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                       <FeatherIcon className="size-4" aria-hidden />
                     </span>
@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
                       <span className="truncate font-serif text-base">InkBoard</span>
                       <span className="truncate text-xs text-muted-foreground">Editor</span>
                     </span>
-                  </Link>
+                  </SidebarLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -63,10 +63,10 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
                     tooltip="New poem"
                     className="bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
                   >
-                    <Link href="/admin/poems/new">
+                    <SidebarLink href="/admin/poems/new">
                       <PlusIcon />
                       <span>New poem</span>
-                    </Link>
+                    </SidebarLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -78,10 +78,10 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild size="sm" tooltip="View the board">
-                    <Link href="/">
+                    <SidebarLink href="/">
                       <ExternalLinkIcon />
                       <span>View the board</span>
-                    </Link>
+                    </SidebarLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>

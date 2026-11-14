@@ -1,7 +1,6 @@
 "use client";
 
 import { FileTextIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   SidebarGroup,
@@ -10,6 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { SidebarLink } from "./sidebar-link";
 
 const ITEMS = [
   { title: "Poems", href: "/admin", icon: FileTextIcon, match: (p: string) => p === "/admin" || p.startsWith("/admin/poems") },
@@ -33,10 +33,10 @@ export function NavMainItems({ pathname }: { pathname: string | null }) {
           return (
             <SidebarMenuItem key={href}>
               <SidebarMenuButton asChild isActive={active} tooltip={title}>
-                <Link href={href} aria-current={active ? "page" : undefined}>
+                <SidebarLink href={href} aria-current={active ? "page" : undefined}>
                   <Icon />
                   <span>{title}</span>
-                </Link>
+                </SidebarLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           );

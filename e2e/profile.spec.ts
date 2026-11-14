@@ -162,6 +162,18 @@ test("dashboard filters, search and the phone drawer", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Toggle Sidebar" }).click();
   await expect(page.getByRole("dialog").getByRole("link", { name: "Settings" })).toBeVisible();
+  // Following a link closes the drawer, so the new page isn't hidden behind it.
+  await page.getByRole("dialog").getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/admin\/settings$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // Same for the links in the account menu.
+  await page.getByRole("button", { name: "Toggle Sidebar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Account menu:/ }).click();
+  await page.getByRole("menuitem", { name: "Profile" }).click();
+  await expect(page).toHaveURL(/\/admin\/profile$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Toggle Sidebar" }).click();
   await page.getByRole("dialog").getByRole("button", { name: /^Account menu:/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in\?signed-out=1$/);

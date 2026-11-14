@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronsUpDownIcon, Loader2Icon, LogOutIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
-import Link from "next/link";
 import { useTransition } from "react";
 import { signOutAction } from "@/app/admin/actions";
 import {
@@ -14,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { SidebarLink } from "./sidebar-link";
 import { avatarUrl, type AvatarId } from "@/lib/avatars";
 import { notify } from "@/lib/notify";
 
@@ -77,16 +77,16 @@ export function NavUser({ user }: { user: User }) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/admin/profile">
+                <SidebarLink href="/admin/profile">
                   <UserRoundIcon />
                   Profile
-                </Link>
+                </SidebarLink>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/admin/settings">
+                <SidebarLink href="/admin/settings">
                   <SettingsIcon />
                   Settings
-                </Link>
+                </SidebarLink>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

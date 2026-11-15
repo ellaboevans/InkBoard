@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 // Atom feeds (docs/PLAN.md, Phase 12): one for the board, one per author,
 // found by autodiscovery and linked from the author page.
@@ -17,7 +17,7 @@ async function publish(page: Page, title: string, body: string, opts: { language
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(opts.password);
   }
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  await expectBackOnList(page, 45_000);
 }
 
 async function fetchFeed(request: APIRequestContext, path: string) {

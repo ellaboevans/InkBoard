@@ -149,3 +149,19 @@ export async function toastContrast(page: Page, title: string, withDescription =
     };
   });
 }
+
+/**
+ * After "Publish to board" (a new poem, or a draft's first publish): the editor
+ * is back on their list, with the "Poem published" toast; the flash params
+ * (`?published=…`, `&first-publish=1`) are stripped once shown.
+ */
+export async function expectBackOnList(page: Page, timeout = 45_000) {
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Poem published" })).toBeVisible({ timeout });
+  await expect(page).toHaveURL(/\/admin$/);
+}
+
+/** The id of the editor's poem with this title (for going back to its edit page). */
+export async function poemIdByTitle(title: string): Promise<string> {
+  const { rows } = await sql(`SELECT id FROM poems WHERE title = '${title.replace(/'/g, "''")}'`);
+  return rows[0].id as string;
+}

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -14,7 +14,7 @@ async function publish(page: Page, title: string, body: string, password?: strin
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
   }
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 }
 
 const world = (page: Page) => page.locator("[data-lod]");
@@ -258,7 +258,7 @@ test("light Markdown: italic and bold on cards and in the reader, typed or via s
   await page.getByRole("textbox", { name: "Title" }).fill(`Formatted ${id}`);
   await poem.fill(`a *moth* rehearses\n**its one** argument\n* * *\n\\*not italic\\*`);
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 
   await openBoard(page);
   const card = page

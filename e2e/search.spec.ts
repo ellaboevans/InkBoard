@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -10,7 +10,7 @@ async function publish(page: Page, title: string, body: string) {
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "Poem" }).fill(body);
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 }
 
 async function openBoard(page: Page) {

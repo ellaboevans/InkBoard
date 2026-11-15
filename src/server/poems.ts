@@ -87,6 +87,8 @@ export type PoemMutationResult =
       poem: { id: string; slug: string; status: "draft" | "published" };
       /** This save published the editor's first poem ever (the install nudge's writer card, Phase 15). */
       firstPublish: boolean;
+      /** This save put this poem on the board for the first time (the editor goes back to their list). */
+      publishedNow: boolean;
     }
   | { ok: false; errors: PoemErrors };
 
@@ -286,7 +288,7 @@ export async function createPoem(
           // Throwing rolls the whole save back; caught below as a form error.
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true, poem, firstPublish };
+        return { ok: true, poem, firstPublish, publishedNow: data.status === "published" };
       }),
     ),
   );
@@ -395,7 +397,7 @@ export async function updatePoem(
           const full = await placePoem(tx, poemId, placed?.collectionId ?? null, data.collection);
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true as const, poem, firstPublish };
+        return { ok: true as const, poem, firstPublish, publishedNow: data.status === "published" && !current.publishedAt };
       }),
     ),
   );

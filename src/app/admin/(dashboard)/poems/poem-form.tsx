@@ -36,8 +36,6 @@ import { toggleEmphasis } from "@/lib/poem-markdown";
 import { POEM_LANGUAGES, type PoemLanguage } from "@/lib/poem-languages";
 import type { PoemErrors } from "@/server/poems";
 import { useOnceToast } from "@/hooks/use-once-toast";
-import { FirstPublishFlash } from "@/components/install/install-nudge";
-import { noteFirstPublish } from "@/lib/install-store";
 import { unstable_rethrow } from "next/navigation";
 import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
@@ -87,8 +85,6 @@ type Props = {
   poem?: PoemFormPoem;
   deleteAction?: () => Promise<void>;
   justCreated?: boolean;
-  /** Redirected here by the editor's first-ever publish (`?first-publish=1`): show the writer's install card. */
-  justPublishedFirst?: boolean;
   /** The author's choice in Settings; "shared" hides the per-poem password. */
   passwordMode: "per_poem" | "shared";
   /** Shown in the card preview's reading view ("by …"). */
@@ -105,7 +101,6 @@ export function PoemForm({
   poem,
   deleteAction,
   justCreated,
-  justPublishedFirst = false,
   passwordMode,
   penName,
   history,
@@ -124,8 +119,6 @@ export function PoemForm({
           next.status === "published" ? "Saved and published" : "Draft saved",
           next.status === "published" ? "Readers see the update on the board right away." : "Only you can see drafts.",
         );
-        // From the action's result, like the toast: once per save, never from an effect.
-        if (next.firstPublish) noteFirstPublish();
       } else if (next.errors) {
         notify.error("Couldn't save the poem", next.errors.form ?? "Fix the highlighted fields and try again.");
       }
@@ -235,7 +228,6 @@ export function PoemForm({
 
   return (
     <div className="grid gap-6">
-      <FirstPublishFlash active={justPublishedFirst} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/admin">

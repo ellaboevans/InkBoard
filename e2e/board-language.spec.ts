@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { renderedToastTitle, signOut, signUpAs, sql } from "./helpers";
+import { renderedToastTitle, signOut, signUpAs, sql, expectBackOnList } from "./helpers";
 
 // Browsing the board by language (docs/PLAN.md, Phase 11c): a filter in the
 // toolbar, kept in the URL (?lang=ee), followed by the list view and the
@@ -18,7 +18,7 @@ async function publish(page: Page, title: string, body: string, language: string
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
   }
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  await expectBackOnList(page, 45_000);
 }
 
 async function openBoard(page: Page, url = "/") {

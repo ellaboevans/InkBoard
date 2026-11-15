@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { renderedToastTitle, signOut, signUpAs, sql } from "./helpers";
+import { expectBackOnList, poemIdByTitle, renderedToastTitle, signOut, signUpAs, sql } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -33,14 +33,14 @@ test("create a public draft, then publish it", async ({ page }) => {
   const { rows } = await sql(`SELECT body, status FROM poems WHERE id = '${id}'`);
   expect(rows[0]).toEqual({ body, status: "draft" });
 
+  // Its first publish finishes the job: back to the list, the poem marked.
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Saved and published")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
-
-  await page.getByRole("link", { name: "All poems" }).click();
+  await expectBackOnList(page);
   const row = page.getByRole("row", { name: /Fog/ });
+  await expect(row).toContainText("Just published");
   await expect(row).toContainText("Published");
   await expect(row).toContainText("Public");
+  expect((await sql(`SELECT status FROM poems WHERE id = '${id}'`)).rows[0].status).toBe("published");
 });
 
 test("private poems require a password and never expose its hash", async ({ page }) => {
@@ -57,15 +57,15 @@ test("private poems require a password and never expose its hash", async ({ page
 
   await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("open-sesame");
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
-  const id = poemIdFromUrl(page);
+  await expectBackOnList(page);
+  const id = await poemIdByTitle(title);
 
   const { rows } = await sql(`SELECT visibility, password_hash, password_version FROM poems WHERE id = '${id}'`);
   expect(rows[0].visibility).toBe("private");
   expect(rows[0].password_hash).toMatch(/^scrypt\$/);
 
-  // Reload: the form knows a password exists, but the page carries no hash.
-  await page.reload();
+  // Its edit page: the form knows a password exists, but the page carries no hash.
+  await page.goto(`/admin/poems/${id}`);
   await expect(page.getByLabel("New password").filter({ visible: true })).toHaveAttribute("placeholder", "Leave blank to keep current");
   expect(await page.content()).not.toContain(rows[0].password_hash);
   expect(await page.content()).not.toContain("scrypt$");
@@ -74,6 +74,8 @@ test("private poems require a password and never expose its hash", async ({ page
   await page.getByRole("textbox", { name: "Poem" }).fill("A garden inclosed\nis my sister, my spouse");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByText("Saved and published")).toBeVisible();
+  // Wait for the save to settle (the form resets its fields from the result) before typing again.
+  await expect(page.getByText("Unsaved changes")).toHaveCount(0);
   const after = (await sql(`SELECT password_hash, password_version FROM poems WHERE id = '${id}'`)).rows[0];
   expect(after).toEqual({ password_hash: rows[0].password_hash, password_version: rows[0].password_version });
 
@@ -111,6 +113,8 @@ test("pressing Enter saves without publishing a draft", async ({ page }) => {
 
   // Published poem: Enter keeps it published.
   await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+  await page.goto(`/admin/poems/${id}`);
   await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
   await page.getByRole("textbox", { name: "Title" }).fill("Enter Key, final");
   await page.getByRole("textbox", { name: "Title" }).press("Enter");
@@ -236,8 +240,9 @@ test("history: view an earlier version, restore it, save; readers never see hist
   await signUpAs(page, email, pen);
   await writePoem(page, `Kept ${id}`, good);
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
-  const poemId = poemIdFromUrl(page);
+  await expectBackOnList(page);
+  const poemId = await poemIdByTitle(`Kept ${id}`);
+  await page.goto(`/admin/poems/${poemId}`);
   const history = page.getByRole("region", { name: "History" });
   await expect(history).toContainText("Earlier versions appear here");
 
@@ -321,15 +326,118 @@ test("toast titles appear exactly as written, not title-cased", async ({ page })
   // Titles are sentence case on purpose (Sileo would show "Saved And Published").
   // renderedToastTitle reads innerText, which applies CSS text-transform.
   await signUpAs(page, `case-${unique()}@example.com`, "Wren Case");
-  await writePoem(page, `Solstice ${unique()}`, "shortest day —\nthe cat follows");
+  const title = `Solstice ${unique()}`;
+  await writePoem(page, title, "shortest day —\nthe cat follows");
   await page.getByRole("button", { name: "Save draft" }).click();
   expect(await renderedToastTitle(page, "Poem created")).toBe("Poem created");
 
   await page.getByRole("button", { name: "Publish to board" }).click();
+  expect(await renderedToastTitle(page, "Poem published")).toBe("Poem published");
+
+  // Saving an already-published poem stays on its page, with its own toast.
+  await page.goto(`/admin/poems/${await poemIdByTitle(title)}`);
+  await page.getByRole("button", { name: "Save changes" }).click();
   expect(await renderedToastTitle(page, "Saved and published")).toBe("Saved and published");
 
   // An error toast, from the editor's own validation.
   await page.getByRole("textbox", { name: "Title" }).fill("");
   await page.getByRole("button", { name: "Save changes" }).click();
   expect(await renderedToastTitle(page, "Couldn't save the poem")).toBe("Couldn't save the poem");
+});
+
+test("publishing a new poem goes back to the list: toast, the row marked, in view and focused", async ({ browser }) => {
+  for (const { width, reducedMotion } of [
+    { width: 1280, reducedMotion: "no-preference" as const },
+    { width: 375, reducedMotion: "reduce" as const },
+  ]) {
+    const context = await browser.newContext({ viewport: { width, height: 800 }, reducedMotion });
+    const page = await context.newPage();
+    const id = unique();
+    await signUpAs(page, `listed-${id}@example.com`, `Wren Listed ${id}`);
+    // A longer list, so "in view" means something.
+    for (let i = 0; i < 6; i++) {
+      await writePoem(page, `Older ${i} ${id}`, "an older line");
+      await page.getByRole("button", { name: "Save draft" }).click();
+      await expect(page.getByText("Poem created")).toBeVisible();
+    }
+    const title = `Solstice ${id}`;
+    await writePoem(page, title, "shortest day —\nthe cat follows");
+    await page.getByRole("button", { name: "Publish to board" }).click();
+
+    await expectBackOnList(page);
+    const toast = page.locator("[data-sileo-toast]").filter({ hasText: "Poem published" });
+    await expect(toast).toContainText(`“${title}” is on the board now.`);
+    // Whichever of the table (desktop) and the cards (phone) is showing.
+    const marked = page.locator(`[data-just-published]`).filter({ visible: true });
+    await expect(marked).toHaveCount(1);
+    await expect(marked).toContainText(title);
+    await expect(marked).toContainText("Just published"); // a text cue, not colour alone
+    await expect(marked).toBeInViewport();
+    await expect(marked.getByRole("link", { name: new RegExp(`^${title}`) })).toBeFocused();
+    // Motion only for those who allow it: the tint fades; with reduced motion it stays, unanimated.
+    const animation = await marked.evaluate((el) => getComputedStyle(el).animationName);
+    expect(animation).toBe(reducedMotion === "reduce" ? "none" : "just-published-fade");
+    await context.close();
+  }
+});
+
+test("Save draft on a new poem opens its editor; saving a published poem stays there", async ({ page }) => {
+  await signUpAs(page, `stay-${unique()}@example.com`, "Wren Stays");
+  const title = `Draft Day ${unique()}`;
+  await writePoem(page, title, "still writing");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/poems\/[0-9a-f-]{36}$/);
+  const id = poemIdFromUrl(page);
+
+  // First publish: to the list. Then, back in the editor, saving changes stays put.
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+  await page.goto(`/admin/poems/${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("still writing, now on the board");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/admin/poems/${id}$`));
+  // Unpublishing and publishing again isn't a first publish: it stays too.
+  await page.getByRole("button", { name: "Unpublish" }).click();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Draft saved" })).toBeVisible();
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/admin/poems/${id}$`));
+});
+
+test("Back after publishing never reopens the form, recreates the poem or shows a stale list", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `back-${id}@example.com`, `Wren Back ${id}`);
+  const count = async (title: string) =>
+    (await sql(`SELECT count(*)::int AS n FROM poems WHERE title = '${title}'`)).rows[0].n as number;
+
+  // A new poem, published straight away.
+  const first = `Straight Out ${id}`;
+  await page.getByRole("link", { name: "Write a poem" }).click();
+  await expect(page).toHaveURL(/\/admin\/poems\/new$/);
+  await page.getByRole("textbox", { name: "Title" }).fill(first);
+  await page.getByRole("textbox", { name: "Poem" }).fill("one line");
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin$/); // the list, not /admin/poems/new
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveCount(0);
+  await expect(page.getByRole("row", { name: new RegExp(first) }).filter({ visible: true })).toContainText("Published");
+  expect(await count(first)).toBe(1);
+
+  // A draft, then published from its editor: Back doesn't return to that (now stale) draft either.
+  const second = `Slow Burn ${id}`;
+  await page.getByRole("main").getByRole("link", { name: "New poem" }).click();
+  await page.getByRole("textbox", { name: "Title" }).fill(second);
+  await page.getByRole("textbox", { name: "Poem" }).fill("a draft first");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("button", { name: "Publish to board" })).toHaveCount(0);
+  await expect(page.getByRole("row", { name: new RegExp(second) }).filter({ visible: true })).toContainText("Published");
+  expect(await count(second)).toBe(1);
 });

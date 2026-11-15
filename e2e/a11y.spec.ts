@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { latestCode, renderedToastTitle, requestCode, signUpAs, sql, toastContrast } from "./helpers";
+import { latestCode, renderedToastTitle, requestCode, signUpAs, sql, toastContrast, expectBackOnList } from "./helpers";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -42,7 +42,7 @@ async function publish(page: Page, title: string, body: string, password?: strin
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
   }
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 }
 
 async function openBoard(page: Page) {
@@ -97,6 +97,9 @@ test("admin screens", async ({ page }) => {
 
   await publish(page, `Seen ${id}`, "a line\n  indented");
   await publish(page, `Hidden ${id}`, "kept", "a11y-pass");
+  // Publishing lands on the list; open the poem again to edit it.
+  await page.getByRole("link", { name: new RegExp(`^Hidden ${id}`) }).filter({ visible: true }).click();
+  await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
   await scan(page, "edit poem");
   await page.getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
@@ -226,7 +229,7 @@ test("board filtered by language", async ({ page }) => {
   await page.getByRole("textbox", { name: "Poem" }).fill("Ŋutifafa na wò");
   await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 
   await page.goto("/?lang=ee");
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
@@ -393,8 +396,10 @@ test("toasts: success, error and info", async ({ page }) => {
   await page.getByRole("textbox", { name: "Title" }).fill(`Solstice ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("shortest day —\nthe cat follows");
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
-  // A second save, so the History panel has a version to restore (for the info toast).
+  await expectBackOnList(page);
+  // Back into the editor: a second save, so the History panel has a version to restore (for the info toast).
+  await page.getByRole("link", { name: new RegExp(`^Solstice ${id}`) }).filter({ visible: true }).click();
+  await expect(page.getByRole("button", { name: "Unpublish" })).toBeVisible();
   await page.getByRole("textbox", { name: "Poem" }).fill("shortest day —\nthe cat follows\nthe last square of sun");
   await page.getByRole("button", { name: "Save changes" }).click();
 
@@ -459,4 +464,19 @@ test("offline: the indicator and the offline page", async ({ context, page }) =>
   await page.setViewportSize({ width: 375, height: 740 });
   await scan(page, "offline page: saved poems, phone");
   await page.evaluate(() => caches.delete("inkboard-pages-a11y"));
+});
+
+test("dashboard: the row of a poem just published", async ({ browser }) => {
+  // Reduced motion keeps the tint (it fades otherwise), so axe measures the tinted row.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  const id = unique();
+  await signUpAs(page, `a11y-published-${id}@example.com`, `Listed Poet ${id}`);
+  await publish(page, `Night Letters ${id}`, "dear lamp,\nstay up with me");
+  await expect(page.locator("[data-just-published]").filter({ visible: true })).toContainText("Just published");
+  await scan(page, "dashboard: just published");
+  await page.setViewportSize({ width: 375, height: 740 });
+  await expect(page.locator("[data-just-published]").filter({ visible: true })).toContainText("Just published");
+  await scan(page, "dashboard: just published, phone");
+  await context.close();
 });

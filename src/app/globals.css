@@ -181,3 +181,19 @@
 [data-sileo-viewport] [data-sileo-description] {
   color: var(--foreground);
 }
+
+/* Editor dashboard: the row of a poem just published (poems-table.tsx). The
+   tint is on for everyone; people who allow motion see it fade after a few
+   seconds. The "Just published" badge and the leading bar stay either way. */
+.just-published-fade {
+  background-color: color-mix(in oklch, var(--accent) 70%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .just-published-fade {
+    animation: just-published-fade 4.5s ease-out forwards;
+  }
+}
+@keyframes just-published-fade {
+  0%, 55% { background-color: color-mix(in oklch, var(--accent) 70%, transparent); }
+  100% { background-color: transparent; }
+}

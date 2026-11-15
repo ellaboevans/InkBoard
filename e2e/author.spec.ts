@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -16,7 +16,7 @@ test("an author's public page shows their profile and poems, pinned first", asyn
       await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
     }
     await page.getByRole("button", { name: "Publish to board" }).click();
-    await expect(page.getByText("Poem created")).toBeVisible();
+    await expectBackOnList(page);
   };
   await publish(`First ${id}`, "an early line");
   await publish(`Second ${id}`, "a later line");

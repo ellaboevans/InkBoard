@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 // Collections (docs/PLAN.md, Phase 14): an editor groups poems into an ordered
 // sequence; readers step through the published ones with previous/next.
@@ -16,7 +16,8 @@ async function publish(page: Page, title: string, body: string, opts: { password
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(opts.password);
   }
   await page.getByRole("button", { name: opts.draft ? "Save draft" : "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  if (opts.draft) await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  else await expectBackOnList(page);
 }
 
 test("an editor builds an ordered collection; a reader steps through it", async ({ page }) => {

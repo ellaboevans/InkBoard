@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { accountButton, latestCode, requestCode, signUpAs, sql, typeCode } from "./helpers";
+import { accountButton, latestCode, requestCode, signUpAs, sql, typeCode, expectBackOnList } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -15,7 +15,7 @@ test("renaming updates the board and header but keeps poem links working", async
   await page.getByRole("textbox", { name: "Title" }).fill(`Kept ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("a line that stays");
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
   const { rows } = await sql(
     `SELECT e.slug, p.slug AS poem FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.title = 'Kept ${id}'`,
   );
@@ -94,7 +94,7 @@ test("rich profile: avatar, tagline, links and a pinned poem", async ({ page }) 
     await page.getByRole("textbox", { name: "Title" }).fill(title);
     await page.getByRole("textbox", { name: "Poem" }).fill("a line");
     await page.getByRole("button", { name: "Publish to board" }).click();
-    await expect(page.getByText("Poem created")).toBeVisible();
+    await expectBackOnList(page);
   }
 
   // Pin from the poems list.
@@ -144,7 +144,7 @@ test("dashboard filters, search and the phone drawer", async ({ page }) => {
   await page.getByRole("textbox", { name: "Title" }).fill(`Live ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("out now");
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 
   await page.goto("/admin");
   const stats = page.getByRole("main").locator("dl");

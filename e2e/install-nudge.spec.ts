@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type BrowserContextOptions, type Locator, type Page } from "@playwright/test";
-import { accountButton, signUpAs, sql } from "./helpers";
+import { accountButton, signUpAs, sql, expectBackOnList } from "./helpers";
 
 /*
  * The "install InkBoard" nudge (docs/PLAN.md, Phase 15). Chromium's
@@ -90,7 +90,7 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
     await page.getByRole("textbox", { name: "Title" }).fill(title);
     await page.getByRole("textbox", { name: "Poem" }).fill("shortest day —\nthe cat follows\nthe last square of sun");
     await page.getByRole("button", { name: "Publish to board" }).click();
-    await expect(page.getByText("Poem created")).toBeVisible();
+    await expectBackOnList(page);
   }
   await context.close();
 });
@@ -292,7 +292,9 @@ test("editors: the writer card right after their first-ever publish, not after l
   await expect(page.getByText("Poem created")).toBeVisible();
   await expect(card(page)).toHaveCount(0); // a draft isn't a publish
 
+  // Publishing the draft: back on the list (Phase 15's writer card follows the editor there).
   await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
   const region = page.getByRole("region", { name: "Write from your home screen" });
   await expect(region).toBeVisible();
   await expect(region).toContainText("Your poems one tap away, ready when a line arrives.");
@@ -309,13 +311,13 @@ test("editors: the writer card right after their first-ever publish, not after l
   await page.getByRole("textbox", { name: "Title" }).fill(`Second ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("another");
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
   await page.waitForTimeout(800);
   await expect(card(page)).toHaveCount(0);
   await context.close();
 });
 
-test("first publish at creation also arms the writer card (flash param, stripped)", async ({ browser }) => {
+test("first publish at creation shows the writer card on the list (flash param, stripped)", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await fakeInstallPrompt(context);
   const page = await context.newPage();
@@ -325,6 +327,8 @@ test("first publish at creation also arms the writer card (flash param, stripped
   await page.getByRole("textbox", { name: "Title" }).fill(`Straight out ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("published at once");
   await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+  await expect(page.locator('[data-install-slot="editor"] [data-install-card="writer"]')).toBeVisible();
   // Desktop copy for writers.
   await expect(page.getByRole("region", { name: "Install InkBoard" })).toContainText("Your poems in their own window");
   await expect(page).not.toHaveURL(/first-publish/);
@@ -404,7 +408,7 @@ test("wide screens: with a language filter and the Authors list open, the card c
   await editor.getByRole("textbox", { name: "Poem" }).fill("ŋdi nyuie");
   await editor.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
   await editor.getByRole("button", { name: "Publish to board" }).click();
-  await expect(editor.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(editor);
   await setup.close();
 
   for (const width of [640, 700, 768, 1024, 1280]) {

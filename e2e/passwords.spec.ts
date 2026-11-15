@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -14,7 +14,7 @@ async function writePrivate(page: Page, title: string, body: string, password?: 
   await page.getByRole("switch", { name: "Password protected" }).click();
   if (password) await passwordInput(page, "Password").fill(password);
   await page.getByRole("button", { name: "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible();
+  await expectBackOnList(page);
 }
 
 async function setShared(page: Page, password: string) {

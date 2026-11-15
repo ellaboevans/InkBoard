@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 // Collections, round 2 (docs/PLAN.md, Phase 14): the public collection page,
 // links to it, the board badge, share card and sitemap.
@@ -17,7 +17,8 @@ async function publish(page: Page, title: string, body: string, opts: { password
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(opts.password);
   }
   await page.getByRole("button", { name: opts.draft ? "Save draft" : "Publish to board" }).click();
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  if (opts.draft) await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  else await expectBackOnList(page);
 }
 
 async function createCollection(page: Page, title: string, intro: string, poems: string[]) {

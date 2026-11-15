@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql } from "./helpers";
+import { signUpAs, sql, expectBackOnList } from "./helpers";
 
 // A poem's language (docs/PLAN.md, Phase 11c): chosen in the editor, shown as
 // a label, and set as `lang` on the poem's title and text (never on UI).
@@ -17,8 +17,7 @@ async function publish(page: Page, title: string, body: string, language: string
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
   }
   await page.getByRole("button", { name: "Publish to board" }).click();
-  // The first Server Action of a fresh dev server compiles on demand (see signUpAs).
-  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  await expectBackOnList(page, 45_000);
 }
 
 test("the editor's language reaches the board, the reading page and search engines", async ({ page }) => {

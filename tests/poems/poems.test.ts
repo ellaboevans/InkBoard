@@ -282,3 +282,27 @@ describe("firstPublish (install nudge, Phase 15)", () => {
     expect(results.filter(Boolean)).toHaveLength(1);
   });
 });
+
+describe("publishedNow (back to the list after a poem first goes on the board)", () => {
+  const save = async (id: string, status: "draft" | "published") => {
+    const res = await updatePoem(ada, id, input({ status }));
+    if (!res.ok) throw new Error("save failed");
+    return res.publishedNow;
+  };
+
+  it("is true when a poem is created published, false for a draft", async () => {
+    const published = await createPoem(ada, input({ title: "Straight Out", status: "published" }));
+    const draft = await createPoem(ada, input({ title: "Still Writing" }));
+    expect(published.ok && published.publishedNow).toBe(true);
+    expect(draft.ok && draft.publishedNow).toBe(false);
+  });
+
+  it("is true only for a draft's first publish, not for later saves or republishing", async () => {
+    const draft = await create();
+    expect(await save(draft.id, "draft")).toBe(false);
+    expect(await save(draft.id, "published")).toBe(true);
+    expect(await save(draft.id, "published")).toBe(false);
+    await save(draft.id, "draft"); // unpublished
+    expect(await save(draft.id, "published")).toBe(false); // it has been on the board before
+  });
+});

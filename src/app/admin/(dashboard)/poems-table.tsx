@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CircleCheckIcon,
   ExternalLinkIcon,
   LinkIcon,
   Loader2Icon,
@@ -11,9 +12,10 @@ import {
   SearchIcon,
   Trash2Icon,
 } from "lucide-react";
+import { cn } from "cn";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { StatusBadge, VisibilityBadge } from "@/components/poem-badges";
 import {
   AlertDialog,
@@ -61,14 +63,33 @@ export function PoemsTable({
   poems,
   authorSlug,
   pinnedPoemId,
+  justPublishedId = null,
 }: {
   poems: DashboardPoem[];
   authorSlug: string;
   pinnedPoemId: string | null;
+  /** The poem the editor just published (`?published=<id>`): marked, scrolled into view and focused. */
+  justPublishedId?: string | null;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [deleting, setDeleting] = useState<DashboardPoem | null>(null);
+
+  // Once, right after the redirect: bring the new row into view and put focus
+  // on its link (whichever of the table and the phone list is showing). The
+  // ref survives StrictMode and <Activity> re-shows, so it never repeats.
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!justPublishedId || announced.current === justPublishedId) return;
+    announced.current = justPublishedId;
+    const link = [...document.querySelectorAll<HTMLElement>(`[data-just-published="${justPublishedId}"] a[href]`)].find((el) =>
+      el.checkVisibility(),
+    );
+    if (!link) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    link.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    link.focus({ preventScroll: true });
+  }, [justPublishedId]);
 
   const shown = useMemo(() => {
     const test = FILTERS.find((f) => f.value === filter)!.test;
@@ -131,7 +152,11 @@ export function PoemsTable({
               </TableHeader>
               <TableBody>
                 {shown.map((poem) => (
-                  <TableRow key={poem.id} className="relative">
+                  <TableRow
+                    key={poem.id}
+                    data-just-published={poem.id === justPublishedId ? poem.id : undefined}
+                    className={cn("relative", poem.id === justPublishedId && JUST_PUBLISHED_ROW)}
+                  >
                     <TableCell className="max-w-0 pl-4 font-serif text-base">
                       {/* Stretched link: the whole row opens the editor, one tab stop. */}
                       <Link
@@ -139,6 +164,7 @@ export function PoemsTable({
                         className="flex items-center gap-2 after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
                       >
                         <span className="truncate">{poem.title}</span>
+                        {poem.id === justPublishedId && <JustPublishedBadge />}
                         {poem.id === pinnedPoemId && <PinnedBadge />}
                       </Link>
                     </TableCell>
@@ -161,15 +187,22 @@ export function PoemsTable({
           {/* Phones: cards */}
           <ul className="grid gap-3 md:hidden">
             {shown.map((poem) => (
-              <li key={poem.id} className="relative flex items-start gap-3 rounded-xl border bg-card p-4">
+              <li
+                key={poem.id}
+                data-just-published={poem.id === justPublishedId ? poem.id : undefined}
+                className={cn("relative flex items-start gap-3 rounded-xl border bg-card p-4", poem.id === justPublishedId && JUST_PUBLISHED_ROW)}
+              >
                 <div className="grid min-w-0 flex-1 gap-2">
                   <Link
                     href={`/admin/poems/${poem.id}`}
                     className="font-serif text-lg leading-snug after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
                   >
                     {poem.title}
+                    {/* Inside the link, so its name says it; the visible badge is below. */}
+                    {poem.id === justPublishedId && <span className="sr-only">, just published</span>}
                   </Link>
                   <div className="flex flex-wrap items-center gap-2">
+                    {poem.id === justPublishedId && <JustPublishedBadge />}
                     <StatusBadge status={poem.status} />
                     <VisibilityBadge visibility={poem.visibility} />
                     {poem.id === pinnedPoemId && <PinnedBadge />}
@@ -187,6 +220,23 @@ export function PoemsTable({
 
       <DeleteDialog poem={deleting} onClose={() => setDeleting(null)} />
     </div>
+  );
+}
+
+/*
+ * The just-published row: a text badge (so it never relies on colour), a
+ * primary bar on its leading edge, and a tint that fades out after a few
+ * seconds, but only for people who allow motion (globals.css,
+ * .just-published-fade); with reduced motion the tint simply stays.
+ */
+const JUST_PUBLISHED_ROW = "shadow-[inset_3px_0_0_var(--primary)] just-published-fade";
+
+function JustPublishedBadge() {
+  return (
+    <Badge className="shrink-0 font-sans">
+      <CircleCheckIcon aria-hidden />
+      Just published
+    </Badge>
   );
 }
 

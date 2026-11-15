@@ -10,6 +10,7 @@ import { StatCards } from "@/components/admin/stat-cards";
 import { listEditorPoems } from "@/server/poems";
 import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
+import { FirstPublishFlash } from "@/components/install/install-nudge";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -37,10 +38,24 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     visibility: p.visibility,
     updatedLabel: dateFormat.format(p.updatedAt),
   }));
+  // Just published (from the editor, `?published=<id>`): only one of this editor's own rows.
+  const justPublished = typeof flash.published === "string" ? rows.find((r) => r.id === flash.published) : undefined;
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8">
       {flash.deleted === "1" && <FlashToast param="deleted" title="Poem deleted" />}
+      {justPublished && (
+        // Keyed by the poem: this page stays mounted in <Activity> between visits, and
+        // useOnceToast's guard would otherwise swallow the toast for the next poem.
+        <FlashToast
+          key={justPublished.id}
+          param="published"
+          title="Poem published"
+          description={`“${justPublished.title}” is on the board now.`}
+        />
+      )}
+      {/* The writer's install card after a first-ever publish (Phase 15): consumed once, then stripped. */}
+      <FirstPublishFlash active={flash["first-publish"] === "1"} />
       {flash["signed-in"] === "1" && (
         <FlashToast param="signed-in" title="Signed in" description={`Welcome back, ${editor.penName}.`} />
       )}
@@ -68,7 +83,12 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
       {poems.length === 0 ? (
         <EmptyState />
       ) : (
-        <PoemsTable poems={rows} authorSlug={editor.slug} pinnedPoemId={profile?.pinnedPoemId ?? null} />
+        <PoemsTable
+          poems={rows}
+          authorSlug={editor.slug}
+          pinnedPoemId={profile?.pinnedPoemId ?? null}
+          justPublishedId={justPublished?.id ?? null}
+        />
       )}
     </div>
   );

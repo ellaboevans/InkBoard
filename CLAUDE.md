@@ -141,6 +141,14 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Avatars: ids in `src/lib/avatars.ts` are stored in `editors.avatar`. Never reorder or remove them; append only. SVGs come only from `renderAvatarSvg` (server) via `/avatars/[id]`.
 - Profile fields: validate in `updateProfile` (`profile.ts`). Links are https-only and normalised. A pinned poem must be the editor's own published poem (an editor-scoped query, like poems).
 
+**Install nudge** (docs/PLAN.md Phase 15; look: `docs/mockups/install-prompt/`). Rules are pure in `src/lib/install-nudge.ts`; state lives in the module-level store `src/lib/install-store.ts` (read with `useSyncExternalStore`; actions are called from event handlers, never from render or effects); UI in `src/components/install/install-nudge.tsx`.
+- `beforeinstallprompt` is caught by the inline `INSTALL_CAPTURE_SCRIPT` in the root layout's `<head>` (before hydration) and parked on `window.__inkboardInstallPrompt`. Keep that script static, and keep the constant in the pure module: a value imported from a `"use client"` module into a server component is a client reference, not the string.
+- The card renders once (`InstallNudgeHost`, root layout) and is portalled into slots: `board-bottom` (in the board's bottom column with the zoom bar, so they can't overlap), `board-top` (under the toolbar from 640px, its tail pointing at the install button, which must stay the toolbar's **last** item), `editor` (dashboard). Don't position the card yourself; add a slot.
+- No install button in the phone toolbar. Never show anything when running installed (display-mode or `navigator.standalone`) or after `appinstalled`.
+- "First-ever publish" comes from the save transaction (`firstPublish` in `poems.ts`'s result), not from the client.
+- E2E: simulate Chromium with a synthetic `beforeinstallprompt` dispatched on `DOMContentLoaded` from an init script, and seed `localStorage["inkboard-install"]` for a returning visit (guard it with "if not set", or reloads reset dismissals).
+- **Manifest icons** are GET route handlers under `src/app/icons/` drawn by `appIconResponse` (`src/components/brand/app-icon.tsx`); they prerender. The maskable one is full-bleed with the glyph inside the 80% safe zone.
+
 **Accessibility.** `e2e/a11y.spec.ts` runs axe (WCAG 2.2 A/AA) on every screen (light only). Add new screens or states there. Error text uses `--destructive`, tuned to ≥4.5:1 on paper and on its own tint, so check contrast if you change it. ARIA lets a listbox contain only options and groups, so put palette messages outside `CommandList`.
 
 **SEO & sharing.** Site identity, brand hex colours and `siteUrl()` (APP_URL, else Vercel's production domain) live in `src/lib/site.ts`. Icons are file conventions in `src/app`: `icon.svg` (the Feather logo tile), `favicon.ico` (generated from it, 16/32/48), `apple-icon.tsx`; plus `manifest.ts`, `robots.ts`, `sitemap.ts` (board data, cached under BOARD_TAG).

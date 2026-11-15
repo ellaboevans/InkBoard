@@ -11,6 +11,7 @@ import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
 import { unlockPoemAction } from "./unlock-actions";
 import { UnlockForm } from "./unlock-form";
+import { PoemOpened } from "@/components/install/install-nudge";
 
 /*
  * The reading view, shared by the full page (/p/[author]/[poem]) and the
@@ -50,6 +51,8 @@ export async function PoemReader({
           {poem.title}
         </PoemTitle>
         {inDialog && <OverlayPoemShown titleId={titleId} />}
+        {/* Two poems opened is one of the install nudge's triggers (idempotent per poem). */}
+        <PoemOpened id={`${poem.authorSlug}/${poem.slug}`} />
         <p className="mt-3 text-muted-foreground">
           by{" "}
           <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">

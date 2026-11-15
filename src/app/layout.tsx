@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
+import { InstallNudgeHost } from "@/components/install/install-nudge";
 import { Toaster } from "@/components/toaster";
+import { INSTALL_CAPTURE_SCRIPT } from "@/lib/install-nudge";
 import { BASE_OPEN_GRAPH, BRAND, SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -125,10 +127,16 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
       className={`${mono.variable} h-full antialiased`}
       style={fontStacks}
     >
+      <head>
+        {/* Catches `beforeinstallprompt` before hydration (install nudge, docs/PLAN.md Phase 15). Static, so prerendering is unaffected. */}
+        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         {children}
         {/* Poem overlay over the board (src/app/@modal). */}
         {modal}
+        {/* Client-only: renders nothing until the browser says a card is due. */}
+        <InstallNudgeHost />
         <Toaster />
         <Analytics />
       </body>

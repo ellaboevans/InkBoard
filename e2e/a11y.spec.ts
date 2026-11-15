@@ -303,3 +303,82 @@ test("board, list view, search and reading", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
   await scan(page, "poem not found");
 });
+
+test("install nudge: every card state", async ({ browser }) => {
+  // Chromium's beforeinstallprompt, simulated; this load counts as a second visit.
+  const prompt = () =>
+    addEventListener("DOMContentLoaded", () => {
+      const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & Record<string, unknown>;
+      e.prompt = async () => {};
+      e.userChoice = Promise.resolve({ outcome: "dismissed" });
+      dispatchEvent(e);
+    });
+  const returning = () => {
+    if (localStorage.getItem("inkboard-install")) return;
+    const hourAgo = Date.now() - 3_600_000;
+    localStorage.setItem("inkboard-install", JSON.stringify({ visits: 1, visitStart: hourAgo, lastSeen: hourAgo, poems: [] }));
+  };
+  const id = unique();
+
+  // A writer: their first publish shows the writer card (phone, Chromium).
+  const writer = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36",
+  });
+  await writer.addInitScript(prompt);
+  let page = await writer.newPage();
+  await signUpAs(page, `a11y-install-${id}@example.com`, `Install Poet ${id}`);
+  await publish(page, `Night Letters ${id}`, "dear lamp,\nstay up with me");
+  await expect(page.getByRole("region", { name: "Write from your home screen" })).toBeVisible();
+  await scan(page, "install: writer card (phone)");
+  await writer.close();
+
+  const states: { name: string; region: string; options: Parameters<typeof browser.newContext>[0]; chromium: boolean }[] = [
+    { name: "install: Chromium card, desktop", region: "Install InkBoard", options: { viewport: { width: 1280, height: 800 } }, chromium: true },
+    {
+      name: "install: Chromium card, phone",
+      region: "Put InkBoard on your home screen",
+      options: {
+        viewport: { width: 375, height: 740 },
+        isMobile: true,
+        hasTouch: true,
+        userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Mobile Safari/537.36",
+      },
+      chromium: true,
+    },
+    {
+      name: "install: iPhone instructions",
+      region: "Put InkBoard on your home screen",
+      options: {
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+      },
+      chromium: false,
+    },
+    {
+      name: "install: Mac Safari instructions",
+      region: "Add InkBoard to your Dock",
+      options: {
+        viewport: { width: 1280, height: 800 },
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Safari/605.1.15",
+      },
+      chromium: false,
+    },
+  ];
+  for (const state of states) {
+    const context = await browser.newContext(state.options);
+    if (state.chromium) await context.addInitScript(prompt);
+    await context.addInitScript(returning);
+    page = await context.newPage();
+    await openBoard(page);
+    await expect(page.getByRole("region", { name: state.region })).toBeVisible();
+    await scan(page, state.name);
+    await context.close();
+  }
+});

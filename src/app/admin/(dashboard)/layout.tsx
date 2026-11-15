@@ -23,6 +23,7 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { avatarIdFor } from "@/lib/avatars";
 import { getCurrentEditor } from "@/server/auth/dal";
+import { InstallSlot } from "@/components/install/install-nudge";
 
 // The editor dashboard is private: keep it out of search results.
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -102,6 +103,11 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
             </Suspense>
           </header>
           <div className="flex-1 px-4 py-6 md:px-8 md:py-8">{children}</div>
+          {/* The writer's install card (after a first publish, or from the account menu): bottom on phones, bottom-right on wide screens. */}
+          <InstallSlot
+            kind="editor"
+            className="pointer-events-none fixed inset-x-4 bottom-4 z-40 flex justify-center empty:hidden sm:right-6 sm:left-auto sm:w-[23.25rem]"
+          />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

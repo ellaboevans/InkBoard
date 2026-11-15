@@ -16,6 +16,7 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/c
 import { SidebarLink } from "./sidebar-link";
 import { avatarUrl, type AvatarId } from "@/lib/avatars";
 import { notify } from "@/lib/notify";
+import { InstallMenuItem } from "@/components/install/install-nudge";
 
 type User = { penName: string; email: string; avatarId: AvatarId };
 
@@ -88,6 +89,8 @@ export function NavUser({ user }: { user: User }) {
                   Settings
                 </SidebarLink>
               </DropdownMenuItem>
+              {/* Only where installing is possible (and not in the installed app). */}
+              <InstallMenuItem />
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem

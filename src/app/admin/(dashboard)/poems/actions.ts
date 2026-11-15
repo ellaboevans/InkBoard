@@ -12,6 +12,8 @@ export type PoemFormState = {
   savedAt?: number;
   status?: "draft" | "published";
   visibility?: "public" | "private";
+  /** This save published the editor's first poem ever: the form arms the writer's install card. */
+  firstPublish?: boolean;
 };
 
 function readForm(formData: FormData) {
@@ -46,7 +48,7 @@ export async function createPoemAction(
   const res = await createPoem(editor.id, readForm(formData));
   if (!res.ok) return { errors: res.errors };
   invalidate(res.poem.id);
-  redirect(`/admin/poems/${res.poem.id}?created=1`);
+  redirect(`/admin/poems/${res.poem.id}?created=1${res.firstPublish ? "&first-publish=1" : ""}`);
 }
 
 export async function updatePoemAction(
@@ -69,6 +71,7 @@ export async function updatePoemAction(
     savedAt: Date.now(),
     status: res.poem.status,
     visibility: input.visibility === "private" ? "private" : "public",
+    ...(res.firstPublish && { firstPublish: true }),
   };
 }
 

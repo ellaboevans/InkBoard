@@ -247,3 +247,38 @@ describe("deletePoem", () => {
     expect(await deletePoem(ada, poem.id)).toBe(false);
   });
 });
+
+describe("firstPublish (install nudge, Phase 15)", () => {
+  const save = async (id: string, status: "draft" | "published", editorId = ada) => {
+    const res = await updatePoem(editorId, id, input({ status }));
+    if (!res.ok) throw new Error("save failed");
+    return res.firstPublish;
+  };
+
+  it("is true only for the save that publishes an editor's first poem", async () => {
+    const draft = await create();
+    expect(await save(draft.id, "draft")).toBe(false);
+    expect(await save(draft.id, "published")).toBe(true);
+    // Saving it again, or unpublishing and republishing, isn't a first.
+    expect(await save(draft.id, "published")).toBe(false);
+    await save(draft.id, "draft");
+    expect(await save(draft.id, "published")).toBe(false);
+    // Nor is publishing a second poem.
+    const res = await createPoem(ada, input({ title: "Second", status: "published" }));
+    expect(res.ok && res.firstPublish).toBe(false);
+  });
+
+  it("is per editor, and true when a poem is created already published", async () => {
+    await create(ada, { status: "published" });
+    const res = await createPoem(eve, input({ status: "published" }));
+    expect(res.ok && res.firstPublish).toBe(true);
+    const draft = await createPoem(eve, input({ title: "A draft" }));
+    expect(draft.ok && draft.firstPublish).toBe(false);
+  });
+
+  it("can't be claimed twice by concurrent publishes", async () => {
+    const [a, b] = [await create(), await create(ada, { title: "Other" })];
+    const results = await Promise.all([save(a.id, "published"), save(b.id, "published")]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+});

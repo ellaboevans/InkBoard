@@ -31,7 +31,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
   // Scoped to the signed-in editor: someone else's poem is simply "not found".
   const poem = await getEditorPoem(editor.id, id);
   if (!poem) notFound();
-  const { created, version } = await searchParams;
+  const { created, version, "first-publish": firstPublish } = await searchParams;
   const [passwordMode, collections, revisions, selected] = await Promise.all([
     getPasswordMode(editor.id),
     collectionOptions(editor.id),
@@ -48,6 +48,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
       action={updatePoemAction.bind(null, poem.id)}
       deleteAction={deletePoemAction.bind(null, poem.id)}
       justCreated={created === "1"}
+      justPublishedFirst={firstPublish === "1"}
       passwordMode={passwordMode}
       penName={editor.penName}
       collections={collections}

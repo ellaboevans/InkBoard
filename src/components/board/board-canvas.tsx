@@ -37,6 +37,7 @@ import { BoardSearch } from "./board-search";
 import type { BoardFilter } from "./board-view";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 import { pluralCount } from "@/lib/plural";
+import { InstallSlot, InstallToolbarButton } from "@/components/install/install-nudge";
 
 /*
  * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
@@ -498,7 +499,7 @@ export function BoardCanvas({
           only gets the space right of its left edge (half the screen), so
           its text wraps word by word on phones. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-4">
-      <header className="flex items-start justify-between gap-2">
+      <header className="relative flex items-start justify-between gap-2">
         <Link
           href="/"
           className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
@@ -541,7 +542,14 @@ export function BoardCanvas({
               <span className="max-sm:sr-only">Editor sign in</span>
             </Link>
           </Button>
+          {/* Last, so the install card below can point its tail at it (docs/PLAN.md, Phase 15). */}
+          <InstallToolbarButton />
         </div>
+        {/* Wide screens: the install card hangs from the toolbar's right edge. */}
+        <InstallSlot
+          kind="board-top"
+          className="pointer-events-none absolute top-full right-0 mt-2.5 w-[23.25rem] max-w-full empty:hidden"
+        />
       </header>
 
       <LanguageFilterStatus filter={filter} total={total} selectId="board-language" className="self-center" />
@@ -565,9 +573,16 @@ export function BoardCanvas({
         onPickPoem={pickPoem}
       />
 
-      {/* Centred by a full-width row, not left-1/2 (see the top overlays). */}
-      <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-center">
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border bg-background/90 p-1 shadow-sm backdrop-blur">
+      {/* Centred by a full-width column, not left-1/2 (see the top overlays).
+          Phones: the install card shares this column with the zoom bar, so the
+          two can't overlap; on iPhone Safari it goes below, its arrow pointing
+          at Safari's Share button. */}
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 flex flex-col items-center gap-3">
+      <InstallSlot
+        kind="board-bottom"
+        className="flex w-full justify-center empty:hidden has-[[data-install-pointer]]:order-last has-[[data-install-pointer]]:mb-1"
+      />
+      <div data-zoom-bar className="pointer-events-auto flex items-center gap-1 rounded-xl border bg-background/90 p-1 shadow-sm backdrop-blur">
         <Button variant="ghost" size="icon-sm" onClick={() => zoomCenter(0.8)} aria-label="Zoom out">
           <MinusIcon />
         </Button>
@@ -794,6 +809,7 @@ function Minimap({
   return (
     <div
       aria-hidden
+      data-minimap
       className="absolute right-4 bottom-4 hidden overflow-hidden rounded-xl border bg-background/90 p-2 shadow-sm backdrop-blur md:block"
     >
       <svg

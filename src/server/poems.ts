@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, like, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNotNull, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { toNfc } from "@/lib/letters";
 import { POEM_LANGUAGE_CODES, type PoemLanguage } from "@/lib/poem-languages";
@@ -82,7 +82,12 @@ export type PoemField = keyof PoemInput;
 export type PoemErrors = Partial<Record<PoemField | "form", string>>;
 
 export type PoemMutationResult =
-  | { ok: true; poem: { id: string; slug: string; status: "draft" | "published" } }
+  | {
+      ok: true;
+      poem: { id: string; slug: string; status: "draft" | "published" };
+      /** This save published the editor's first poem ever (the install nudge's writer card, Phase 15). */
+      firstPublish: boolean;
+    }
   | { ok: false; errors: PoemErrors };
 
 function parse(raw: unknown) {
@@ -212,6 +217,21 @@ async function withSlugRetry<T>(write: () => Promise<T>): Promise<T> {
  * makes slug allocation race-free; other editors are unaffected, and foreign
  * key checks (KEY SHARE) don't conflict with it.
  */
+/**
+ * Whether none of the editor's poems (other than `exceptId`) was ever
+ * published. Call under the editor lock, so two saves can't both be "first".
+ * A deleted poem doesn't count, so an editor who deleted every published poem
+ * gets the writer card again; that's harmless.
+ */
+async function nothingPublishedYet(tx: Tx, editorId: string, exceptId?: string) {
+  const [row] = await tx
+    .select({ id: poems.id })
+    .from(poems)
+    .where(and(eq(poems.editorId, editorId), isNotNull(poems.publishedAt), exceptId ? ne(poems.id, exceptId) : undefined))
+    .limit(1);
+  return !row;
+}
+
 async function lockPasswordMode(tx: Tx, editorId: string) {
   const [row] = await tx
     .select({ mode: editors.passwordMode })
@@ -244,6 +264,7 @@ export async function createPoem(
         if (data.collection && !(await lockCollections(tx, editorId, [data.collection])).has(data.collection)) {
           return { ok: false, errors: { collection: NO_SUCH_COLLECTION } };
         }
+        const firstPublish = data.status === "published" && (await nothingPublishedYet(tx, editorId));
         const [poem] = await tx
           .insert(poems)
           .values({
@@ -265,7 +286,7 @@ export async function createPoem(
           // Throwing rolls the whole save back; caught below as a form error.
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true, poem };
+        return { ok: true, poem, firstPublish };
       }),
     ),
   );
@@ -339,6 +360,8 @@ export async function updatePoem(
         // enter the password again if it's republished. (Shared-mode grants
         // cover the author as a whole and are revoked from Settings.)
         const unpublishing = current.status === "published" && data.status === "draft";
+        const firstPublish =
+          data.status === "published" && !current.publishedAt && (await nothingPublishedYet(tx, editorId, poemId));
         const revoke = unpublishing && !password?.passwordVersion
           ? { passwordVersion: sql`${poems.passwordVersion} + 1` }
           : undefined;
@@ -372,7 +395,7 @@ export async function updatePoem(
           const full = await placePoem(tx, poemId, placed?.collectionId ?? null, data.collection);
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true as const, poem };
+        return { ok: true as const, poem, firstPublish };
       }),
     ),
   );

@@ -211,6 +211,10 @@ test("collections: admin pages and the reading page's navigation", async ({ page
   const dialog = page.getByRole("dialog", { name: `First ${id}` });
   await expect(dialog.getByRole("navigation", { name: new RegExp(`^Sequence ${id}, part`) })).toBeVisible();
   await scan(page, "overlay: collection navigation");
+  // After a step: the same dialog, now showing the next poem.
+  await dialog.getByRole("navigation", { name: new RegExp(`^Sequence ${id}, part`) }).getByRole("link", { name: /^Next:/ }).click();
+  await expect(page.getByRole("dialog", { name: /^(Second|Third)/ })).toBeVisible();
+  await scan(page, "overlay: after stepping to the next poem");
   await page.keyboard.press("Escape");
 });
 

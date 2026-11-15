@@ -256,3 +256,123 @@ test("a dropped order that can't be saved rolls back with an error", async ({ pa
   // Rolled back to what the server has: A, B (C has gone).
   await expect(list.getByRole("listitem")).toHaveText([new RegExp(`A ${id}`), new RegExp(`B ${id}`)]);
 });
+
+test("stepping through a collection in the overlay keeps the same dialog open and still", async ({ page }) => {
+  test.setTimeout(240_000); // two widths, a private poem to unlock, and cold Server Actions
+  const id = unique();
+  const email = `cyc-step-${id}@example.com`;
+  const cycle = `Steps ${id}`;
+  const [one, two, three] = [`First ${id}`, `Second ${id}`, `Third ${id}`];
+  await signUpAs(page, email, `Step Poet ${id}`);
+  await publish(page, one, "first poem text");
+  await publish(page, two, `secret second text ${id}`, { password: "second-pass" });
+  await publish(page, three, "third poem text");
+  await page.goto("/admin/collections");
+  await page.getByRole("button", { name: "New collection" }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Title" }).fill(cycle);
+  await page.getByRole("dialog").getByRole("button", { name: "Create collection" }).click();
+  await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  for (const t of [one, three, two]) {
+    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: t });
+    await page.getByRole("button", { name: "Add to collection" }).click();
+    await expect(page.getByRole("button", { name: `Remove “${t}” from the collection` })).toBeVisible();
+  }
+
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+    const world = page.locator("[data-lod]");
+    // From the board via search, which flies to the card and focuses it: a
+    // click can't reach a card outside the viewport (the board is shared with
+    // the other tests' poems).
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: "Search the board" });
+    await palette.getByRole("combobox").fill(one);
+    await palette.getByRole("option", { name: new RegExp(one) }).press("Enter");
+    const card = page.getByRole("link", { name: one, exact: true });
+    await expect(card).toBeFocused();
+    // Wait for the camera to settle, then remember where it is.
+    await expect.poll(async () => {
+      const a = await world.evaluate((el) => (el as HTMLElement).style.transform);
+      await page.waitForTimeout(150);
+      return a === (await world.evaluate((el) => (el as HTMLElement).style.transform));
+    }).toBe(true);
+    const camera = await world.evaluate((el) => (el as HTMLElement).style.transform);
+
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: one });
+    await expect(dialog).toBeVisible();
+    // Opening animates, as before. Then tag the dialog node and count any replayed animation.
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+    await page.evaluate(() => {
+      const el = document.querySelector('[data-slot="dialog-content"]') as HTMLElement & { __tag?: string };
+      el.__tag = "same-node";
+      const w = window as unknown as { __replays: number };
+      w.__replays = 0;
+      document.addEventListener(
+        "animationstart",
+        (e) => {
+          const t = e.target as HTMLElement;
+          if (t.matches('[data-slot="dialog-content"], [data-slot="dialog-overlay"]')) w.__replays++;
+        },
+        true,
+      );
+    });
+    const sameNode = () =>
+      page.evaluate(() => (document.querySelector('[data-slot="dialog-content"]') as HTMLElement & { __tag?: string }).__tag);
+    const focusedText = () => page.evaluate(() => `${document.activeElement?.tagName}:${document.activeElement?.textContent}`);
+    await expect.poll(focusedText).toBe(`H1:${one}`);
+
+    const nav = () => page.getByRole("dialog").getByRole("navigation", { name: new RegExp(`^${cycle}, part`) });
+    const where = `at ${width}px`;
+
+    // Next: same dialog node, no replayed animation, named by the new poem, focus on its title.
+    await nav().getByRole("link", { name: new RegExp(`^Next:\\s*${three}$`) }).click();
+    await expect(page.getByRole("dialog", { name: three }), where).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText(`Part 2 of 3 · ${cycle}`);
+    await expect.poll(focusedText, where).toBe(`H1:${three}`);
+    expect(await sameNode(), where).toBe("same-node");
+    expect(await page.evaluate(() => (window as unknown as { __replays: number }).__replays), where).toBe(0);
+    // Only one dialog is exposed, and it's scrolled to the top.
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+    expect(await page.locator("[data-poem-scroll]").evaluate((el) => el.scrollTop)).toBe(0);
+    // The title's description is its "Part n of m" line.
+    await expect(page.getByRole("dialog").getByRole("heading", { level: 1, name: three })).toHaveAccessibleDescription(`Part 2 of 3 · ${cycle}`);
+
+    // Onto the private poem: title only, then unlock it right there.
+    await nav().getByRole("link", { name: new RegExp(`^Next:\\s*${two}`) }).click();
+    const locked = page.getByRole("dialog", { name: two });
+    await expect(locked).toContainText("Part 3 of 3");
+    await expect.poll(focusedText, where).toBe(`H1:${two}`);
+    if (width === 375) {
+      // Not unlocked yet: its text is nowhere in the page (N1).
+      expect(await page.content()).not.toContain(`secret second text ${id}`);
+      await locked.getByLabel("Password", { exact: true }).fill("second-pass");
+      await locked.getByRole("button", { name: "Unlock poem" }).click();
+      await expect(locked).toContainText(`secret second text ${id}`);
+    } else {
+      // Unlocked on this device already (the 375px pass): the text shows.
+      await expect(locked).toContainText(`secret second text ${id}`);
+    }
+    expect(await sameNode(), where).toBe("same-node");
+
+    // Previous, twice: back to the first poem, still the same dialog.
+    await nav().getByRole("link", { name: new RegExp(`^Previous:\\s*${three}$`) }).click();
+    await expect(page.getByRole("dialog", { name: three })).toBeVisible();
+    await expect.poll(focusedText, where).toBe(`H1:${three}`);
+    await nav().getByRole("link", { name: new RegExp(`^Previous:\\s*${one}$`) }).click();
+    await expect(page.getByRole("dialog", { name: one })).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText(`Part 1 of 3 · ${cycle}`);
+    await expect.poll(focusedText, where).toBe(`H1:${one}`);
+    expect(await sameNode(), where).toBe("same-node");
+    expect(await page.evaluate(() => (window as unknown as { __replays: number }).__replays), where).toBe(0);
+
+    // Escape (at 375) or Back (at 1280): one step back to the board, same pan and zoom.
+    if (width === 375) await page.keyboard.press("Escape");
+    else await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await world.evaluate((el) => (el as HTMLElement).style.transform), where).toBe(camera);
+  }
+});

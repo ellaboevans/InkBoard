@@ -1,6 +1,5 @@
 import { ExpandIcon } from "lucide-react";
 import { Suspense } from "react";
-import { PoemModal } from "@/components/poem/poem-modal";
 import { PoemReader, PoemReaderSkeleton } from "@/components/poem/poem-reader";
 import { Button } from "@/components/ui/button";
 
@@ -9,20 +8,23 @@ import { Button } from "@/components/ui/button";
  * overlay, keeping the board (and its pan/zoom position) underneath. The URL
  * still changes, so it can be shared; opening that URL directly, or
  * refreshing, renders the full page instead.
+ *
+ * Only the poem lives here; the dialog shell is in ../../layout.tsx, so
+ * stepping to another poem swaps this page and nothing else.
  */
 export default function PoemOverlay({ params }: PageProps<"/p/[author]/[poem]">) {
   return (
-    <PoemModal
-      toolbar={
+    <>
+      {/* Sticky at the top of the dialog's scroll area; per poem, since it needs the URL. */}
+      <div className="sticky top-0 z-10 -mx-6 mb-8 flex items-center justify-between gap-2 border-b bg-popover px-4 py-2.5 pr-12 sm:-mx-10 sm:mb-10">
         <Suspense fallback={<span className="h-8" />}>
           <FullPageLink params={params} />
         </Suspense>
-      }
-    >
+      </div>
       <Suspense fallback={<PoemReaderSkeleton inDialog />}>
         <PoemReader params={params} inDialog />
       </Suspense>
-    </PoemModal>
+    </>
   );
 }
 

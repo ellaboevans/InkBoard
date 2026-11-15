@@ -22,9 +22,18 @@ import type { ReaderCollection, ReaderCollectionPoem } from "@/lib/board-types";
  * A plain router link in the overlay too: /a/… isn't intercepted, so it
  * leaves the overlay for the page (the overlay clears via @modal/[...catchAll]).
  */
-export function CollectionPart({ collection, authorSlug }: { collection: ReaderCollection; authorSlug: string }) {
+export function CollectionPart({
+  collection,
+  authorSlug,
+  id,
+}: {
+  collection: ReaderCollection;
+  authorSlug: string;
+  /** The overlay's title points aria-describedby here, so "Part n of m" is announced with it. */
+  id?: string;
+}) {
   return (
-    <p className="mb-3 text-sm text-muted-foreground">
+    <p id={id} className="mb-3 text-sm text-muted-foreground">
       Part {collection.part} of {collection.parts} ·{" "}
       <Link
         href={`/a/${authorSlug}/c/${collection.slug}`}
@@ -107,6 +116,11 @@ function NeighbourLink({
       rel={rel}
       title={poem.title}
       replace
+      scroll={false}
+      onClick={(e) => {
+        // The overlay scrolls inside the dialog, not the window: start the next poem at the top.
+        e.currentTarget.closest("[data-poem-scroll]")?.scrollTo({ top: 0 });
+      }}
       className={className}
     >
       {content}

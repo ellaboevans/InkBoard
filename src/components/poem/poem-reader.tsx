@@ -2,9 +2,10 @@ import { LockOpenIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { DialogTitle } from "@/components/ui/dialog";
 import { languageName } from "@/lib/poem-languages";
+import { OVERLAY_LOADING_ID, poemTitleId } from "@/lib/poem-overlay";
 import { CollectionNav, CollectionPart } from "./collection-nav";
+import { OverlayPoemLoading, OverlayPoemShown } from "./overlay-poem-shown";
 import { PoemBody } from "./poem-body";
 import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
@@ -26,9 +27,10 @@ export async function PoemReader({
 }: {
   params: Promise<{ author: string; poem: string }>;
   /**
-   * In the board overlay, the poem title is the dialog's title. Radix gives
-   * it an id unique to this dialog instance, so a previous overlay kept
-   * hidden in <Activity> can't lend the dialog its (stale) name.
+   * In the board overlay (src/app/@modal/(.)p): the h1 gets an id from this
+   * poem's author and slug, which the overlay shell's aria-labelledby points
+   * at for the current URL, so a poem kept hidden in <Activity> can never
+   * lend the dialog its (stale) name; and the title is focused when shown.
    */
   inDialog?: boolean;
 }) {
@@ -36,13 +38,18 @@ export async function PoemReader({
   const poem = await getReaderPoem(author, slug);
   if (!poem) notFound();
 
+  // In the overlay the h1 names the dialog (src/lib/poem-overlay.ts), and is
+  // focused when this poem is shown; "Part n of m" is read with it.
+  const titleId = poemTitleId(poem.authorSlug, poem.slug);
+  const partId = poem.collection ? `${titleId}--part` : undefined;
   return (
     <article>
       <header className="mb-8 sm:mb-10">
-        {poem.collection && <CollectionPart collection={poem.collection} authorSlug={poem.authorSlug} />}
-        <PoemTitle inDialog={inDialog} lang={poem.language}>
+        {poem.collection && <CollectionPart id={partId} collection={poem.collection} authorSlug={poem.authorSlug} />}
+        <PoemTitle inDialog={inDialog} lang={poem.language} id={inDialog ? titleId : undefined} describedBy={inDialog ? partId : undefined}>
           {poem.title}
         </PoemTitle>
+        {inDialog && <OverlayPoemShown titleId={titleId} />}
         <p className="mt-3 text-muted-foreground">
           by{" "}
           <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">
@@ -71,20 +78,45 @@ export async function PoemReader({
   );
 }
 
-function PoemTitle({ inDialog, lang, children }: { inDialog: boolean; lang: string | null; children: React.ReactNode }) {
-  const h1 = (
-    <h1 lang={lang ?? undefined} className="font-serif text-3xl leading-tight tracking-tight sm:text-5xl">
+function PoemTitle({
+  inDialog,
+  lang,
+  id,
+  describedBy,
+  children,
+}: {
+  inDialog: boolean;
+  lang: string | null;
+  id?: string;
+  describedBy?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <h1
+      id={id}
+      lang={lang ?? undefined}
+      aria-describedby={describedBy}
+      // Focusable from script only (OverlayPoemShown), so it can't be tabbed to.
+      tabIndex={inDialog ? -1 : undefined}
+      className="font-serif text-3xl leading-tight tracking-tight outline-none sm:text-5xl"
+    >
       {children}
     </h1>
   );
-  return inDialog ? <DialogTitle asChild>{h1}</DialogTitle> : h1;
 }
 
 export function PoemReaderSkeleton({ inDialog = false }: { inDialog?: boolean }) {
   return (
     <div className="grid animate-pulse gap-4" aria-busy>
-      {/* Radix needs a title while the poem loads; replaced by the real one. */}
-      {inDialog && <DialogTitle className="sr-only">Loading poem</DialogTitle>}
+      {/* Names the overlay while the poem loads (poem-modal.tsx). */}
+      {inDialog && (
+        <>
+          <span id={OVERLAY_LOADING_ID} className="sr-only">
+            Loading poem
+          </span>
+          <OverlayPoemLoading />
+        </>
+      )}
       <div className="h-10 w-2/3 rounded-md bg-muted" />
       <div className="h-4 w-40 rounded bg-muted" />
       <div className="mt-6 h-48 rounded-xl bg-muted" />

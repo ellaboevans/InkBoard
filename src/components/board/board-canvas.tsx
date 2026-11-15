@@ -186,7 +186,15 @@ export function BoardCanvas({
   // Position before first paint so there's no flash of an unpositioned board.
   // Fit everything if that's still readable; otherwise (big boards, phones)
   // start at a reading zoom on the first shelf, A–Z order.
+  // Only when the board's extent actually changes (first render, a language
+  // filter): a server refresh (e.g. unlocking a poem in the overlay) brings a
+  // new but identical layout object, and must not reset the reader's pan/zoom.
+  const fittedBounds = useRef<string | null>(null);
   useLayoutEffect(() => {
+    const b = layout.bounds;
+    const key = `${b.x},${b.y},${b.w},${b.h}`;
+    if (fittedBounds.current === key) return;
+    fittedBounds.current = key;
     const fit = fitCamera(layout.bounds);
     cam.current =
       fit.k >= INITIAL_MIN_K

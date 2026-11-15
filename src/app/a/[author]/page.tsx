@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { avatarIdFor, avatarUrl } from "@/lib/avatars";
 import { CARD_H } from "@/lib/board-layout";
 import { JsonLd } from "@/components/seo/json-ld";
+import { AuthorFeedLink } from "@/components/feeds/feed-link";
+import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
 
@@ -23,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url },
+    alternates: { canonical: url, ...feedAlternates(a) },
     openGraph: { ...BASE_OPEN_GRAPH, type: "profile", url, title, description },
     twitter: { card: "summary_large_image", title, description },
   };
@@ -109,6 +111,9 @@ async function Author({ params }: Pick<Props, "params">) {
             {a.poems.length} {a.poems.length === 1 ? "poem" : "poems"}
             {privateCount > 0 && <> · {privateCount} password protected</>}
             {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
+          </p>
+          <p>
+            <AuthorFeedLink slug={a.slug} penName={a.penName} />
           </p>
           {a.bio && <p className="max-w-2xl leading-relaxed whitespace-pre-line">{a.bio}</p>}
           {a.links.length > 0 && (

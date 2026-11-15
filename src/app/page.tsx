@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { BoardView } from "@/components/board/board-view";
 import { JsonLd } from "@/components/seo/json-ld";
+import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { getBoardSections } from "@/server/board-cache";
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/" },
+  alternates: { canonical: "/", ...feedAlternates() },
   openGraph: { ...BASE_OPEN_GRAPH, type: "website", url: "/" },
 };
 

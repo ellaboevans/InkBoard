@@ -39,6 +39,8 @@ async function warmUp() {
     ["/admin/settings"],
     ["/admin/profile"],
     ["/a/warm-up"],
+    ["/feed.xml"],
+    ["/a/warm-up/feed.xml"],
     ["/avatars/a01"],
     ["/api/search?q=warm"],
     ["/p/warm-up/warm-up"],

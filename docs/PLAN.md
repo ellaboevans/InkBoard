@@ -66,6 +66,7 @@ account; every later sign-in sends a fresh code.
 | Search | Postgres FTS (GIN expression indexes on `to_tsvector('simple', search_normalize(…))`) on poem **title** and author **pen name**, plus `pg_trgm` for typo-tolerant matches | R10 without an external service; bodies are excluded (N1). |
 | Private unlock | Server Action verifies password → adds a grant to one signed (HMAC) cookie, 12h expiry. A grant covers one poem (`p:<poemId>:<password_version>`) or, in shared mode, all of an author's private poems (`a:<editorId>:<shared_password_version>`) | Stateless, revocable on password change (N6). |
 | Rate limiting | Fixed-window counters in a Postgres table (`rate_limits`) | Works on serverless without adding Redis; can be swapped for Upstash later. |
+| Feeds | **Atom 1.0** (`/feed.xml`, `/a/[author]/feed.xml`), not RSS 2.0 | Per-entry `xml:lang` for a poem's language (RSS has one channel-wide `<language>`); standard `published` *and* `updated`; `<author><name>` is a name, while RSS's `<author>` must be an email, which we never expose. |
 | SEO & sharing | Next.js metadata file conventions (`icon.svg`, `favicon.ico`, `apple-icon`, `opengraph-image`, `robots`, `sitemap`, `manifest`); share cards rendered with `ImageResponse` | No third-party service or CSP change; cards and sitemap reuse the cached board data. |
 
 ### Data model
@@ -117,6 +118,8 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /api/cron/cleanup      Daily cleanup of expired rows (Bearer CRON_SECRET)
 /robots.txt            Crawl rules: everything except /admin and /api/
 /sitemap.xml           Board, author pages and published poems
+/feed.xml              Atom feed: the newest 50 published poems on the board
+/a/[author]/feed.xml   Atom feed: one author's newest 50 published poems
 /manifest.webmanifest  Web app manifest (name, colours, icons)
 /opengraph-image       Share cards; also under /p/[author]/[poem] and /a/[author]
 /icon.svg, /favicon.ico, /apple-icon   Logo icons
@@ -369,6 +372,17 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - **Search engines:** `inLanguage` in the poem's JSON-LD.
 - **Browsing by language:** a *Language* filter in the board toolbar (and the list view): All languages, plus only the languages at least one published poem uses. Picking one keeps only that language's poems, drops authors left with none, and lays the shelves out again with no gaps (`src/lib/board-filter.ts` + the pure `layoutBoard`). The choice is in the URL (`/?lang=ee`; All removes it; an unknown or unused value means All), so reloads and shared links keep it. The list view, minimap, Authors index and *Fit* follow it; search still covers everything (a filtered-out author says so, a filtered-out poem opens directly). A status line ("Showing Ewe poems · 7", a live region) has *Show all languages*. `/` stays prerendered with one cached board for every language: the client reads `?lang` behind Suspense and filters, and the static shell is the unfiltered board. Tests: `tests/board/filter.test.ts`, `e2e/board-language.spec.ts`, a11y scan of the filtered board and list.
 
+### Phase 12: Feeds ✅
+Readers can follow InkBoard, or one poet, in a feed reader, with no account and no email list.
+- **Feeds** (Atom 1.0, see the architecture table for why not RSS): `/feed.xml` for the whole board and `/a/[author]/feed.xml` per author (404 for unknown or not-yet-onboarded authors). The newest 50 published poems by `published_at` each. Served as `application/atom+xml; charset=utf-8`.
+- **Entries:** title, author (pen name and author page, never the email), the absolute `/p/…` link, `published` and `updated` (the poem's last save, never earlier than publishing), a permanent `urn:uuid:<poem id>` id, and, when set, the language as `xml:lang` on the title and text plus a `<category>` ("Ewe").
+  - **Public poems:** the full text as `type="html"`: the light Markdown rendered as `<em>`/`<strong>` only, everything else escaped, line breaks as `<br>`, indentation and runs of spaces as non-breaking spaces. Characters XML 1.0 forbids are dropped.
+  - **Private poems:** the title, with a fixed English line ("This poem is password protected…") as `type="text"`. Their text is cut in SQL (`CASE WHEN visibility = 'public'`), so it never reaches the builder (N1).
+  - Drafts and poems by editors without a pen name never appear.
+- **Code:** `src/lib/atom-feed.ts` (pure XML builder), `src/server/feeds.ts` (framework-free loader), `getSiteFeed`/`getAuthorFeed` in `board-cache.ts` (`"use cache"`, `BOARD_TAG`, so a publish, edit, unpublish or rename shows up at once), and two route handlers. `/feed.xml` is prerendered at build time like `/`. URLs come from `siteUrl()`.
+- **Discovery:** `<link rel="alternate" type="application/atom+xml">` via `feedAlternates()` (`src/lib/feed-links.ts`): the board's feed on `/`; the author's feed then the board's on author pages and poem pages. Author pages have a visible "Follow … in a feed reader" link to the author's feed (`AuthorFeedLink`). `robots.txt` doesn't block either feed, and no CSP change was needed (same origin, no scripts).
+- **Tests:** builder unit tests (escaping, Markdown, whitespace, language, private entries, empty feeds) and loader integration tests (drafts and non-onboarded editors excluded, no private text or email, ordering, the 50 limit, author scoping). E2E fetches both feeds and parses them with the browser's XML parser, follows an unpublish, a retitle and a rename, checks autodiscovery on the board, author and poem pages, the author-page link and robots.txt.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
@@ -385,14 +399,14 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
 | R12 Ghanaian languages and IPA | 11 | ✅ 11a (fonts, share cards, NFC, slugs, search), 11b (Special letters bar), 11c (poem language tag, browse by language) |
-| N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
+| N1 Private body never leaked | 3, 4, 5, 12 | ✅ board, reading page, unlock, search and feeds tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
 | N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
 | N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
 | N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
-| N8 Board caching | 3 | ✅ tag-invalidated on every admin save (E2E) |
+| N8 Board caching | 3, 12 | ✅ tag-invalidated on every admin save (E2E); feeds share the tag |
 | N9 No user enumeration | 1 | ✅ tested |
 
 ## 6. Decisions and open questions

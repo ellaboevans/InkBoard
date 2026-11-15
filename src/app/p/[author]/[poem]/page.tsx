@@ -6,6 +6,7 @@ import { PoemReader, PoemReaderSkeleton } from "@/components/poem/poem-reader";
 import { Button } from "@/components/ui/button";
 import { JsonLd } from "@/components/seo/json-ld";
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
+import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
 
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url },
+    alternates: { canonical: url, ...feedAlternates({ slug: p.authorSlug, penName: p.penName }) },
     authors: [{ name: p.penName, url: `/a/${p.authorSlug}` }],
     openGraph: {
       ...BASE_OPEN_GRAPH,

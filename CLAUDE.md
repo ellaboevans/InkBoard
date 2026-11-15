@@ -132,6 +132,13 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Next replaces a child's `openGraph`/`twitter` object instead of merging it, so spread `BASE_OPEN_GRAPH` and repeat `card: "summary_large_image"`.
 - `/admin` and `/sign-in` are `noindex`. JSON-LD goes through `JsonLd` (`src/components/seo/json-ld.tsx`), which escapes `<`.
 
+**Feeds** (Atom, `/feed.xml` and `/a/[author]/feed.xml`; docs/PLAN.md Phase 12). `src/lib/atom-feed.ts` builds the XML (pure), `src/server/feeds.ts` loads rows, `getSiteFeed`/`getAuthorFeed` in `board-cache.ts` cache them under BOARD_TAG.
+- Same reader rules as the board: published only, pen name required, `CASE WHEN visibility = 'public'` for the body, never the email. A private entry gets `PRIVATE_ENTRY_TEXT` only.
+- Poem HTML in a feed comes only from `poemToHtml` (escape first, then `<em>`/`<strong>`, `<br>`, `&#160;`). Don't add other tags or pass raw text through.
+- Entry ids are `urn:uuid:<poem id>`: feed readers dedupe on them, so never change the scheme.
+- Visible link: `AuthorFeedLink` (`src/components/feeds/`, author page). Feed links are plain `<a type="application/atom+xml">`, never `next/link`.
+- Pages advertise feeds with `...feedAlternates(author?)` inside their own `alternates` (Next replaces, not merges, a parent's `alternates`). Keep feeds out of `/api/`, which robots.txt blocks.
+
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.
 
 **Analytics:** Vercel Web Analytics via `src/components/analytics.tsx` (root layout), production builds only. Its `beforeSend` strips query and fragment from every URL: the sign-in link token is in the fragment, so keep that if you touch it.

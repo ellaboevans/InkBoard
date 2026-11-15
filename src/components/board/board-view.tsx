@@ -4,24 +4,86 @@ import { PoemText } from "@/components/poem/poem-text";
 import { languageName } from "@/lib/poem-languages";
 import { FeatherIcon, LayoutGridIcon, LockIcon } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  boardLanguages,
+  filterSectionsByLanguage,
+  LANG_PARAM,
+  parseLanguageFilter,
+  withLanguageParam,
+  type LanguageOption,
+} from "@/lib/board-filter";
 import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
 import { BoardCanvas } from "./board-canvas";
+import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 
-/** Canvas by default, with a plain list as an accessible alternative (N7). */
+/**
+ * Canvas by default, with a plain list as an accessible alternative (N7).
+ *
+ * The language filter (`/?lang=ee`) is read with useSearchParams, which must
+ * sit behind Suspense to keep `/` prerendered (Cache Components). The static
+ * shell holds the whole board (no filter); the client then renders the
+ * filtered one. The board data itself stays one cached list for every
+ * language, narrowed here (src/lib/board-filter.ts).
+ */
 export function BoardView({ sections }: { sections: BoardSection[] }) {
-  const [mode, setMode] = useState<"canvas" | "list">("canvas");
   if (sections.length === 0) return <EmptyBoard />;
-  return mode === "canvas" ? (
-    <BoardCanvas sections={sections} onListView={() => setMode("list")} />
-  ) : (
-    <BoardList sections={sections} onCanvasView={() => setMode("canvas")} />
+  return (
+    <Suspense fallback={<Board sections={sections} language={null} />}>
+      <UrlBoard sections={sections} />
+    </Suspense>
   );
 }
 
-function BoardList({ sections, onCanvasView }: { sections: BoardSection[]; onCanvasView: () => void }) {
+function UrlBoard({ sections }: { sections: BoardSection[] }) {
+  const pathname = usePathname();
+  const params = useSearchParams();
+  // The board stays mounted under the poem overlay (/p/…), whose URL has no
+  // ?lang. Only follow the URL on the board itself, or opening a poem would
+  // re-lay out the board behind it.
+  const fromUrl = pathname === "/" ? params.get(LANG_PARAM) : undefined;
+  const [raw, setRaw] = useState<string | null>(fromUrl ?? null);
+  if (fromUrl !== undefined && fromUrl !== raw) setRaw(fromUrl);
+  return <Board sections={sections} language={raw} />;
+}
+
+function Board({ sections, language }: { sections: BoardSection[]; language: string | null }) {
+  const [mode, setMode] = useState<"canvas" | "list">("canvas");
+  const options = useMemo(() => boardLanguages(sections), [sections]);
+  const active = parseLanguageFilter(language, options);
+  const shown = useMemo(() => filterSectionsByLanguage(sections, active), [sections, active]);
+  const filter: BoardFilter = {
+    options,
+    active,
+    // Native history: Next syncs useSearchParams, with no server round trip.
+    onChange: (code) => window.history.pushState(null, "", `/${withLanguageParam(window.location.search, code)}`),
+  };
+  return mode === "canvas" ? (
+    <BoardCanvas sections={shown} allSections={sections} filter={filter} onListView={() => setMode("list")} />
+  ) : (
+    <BoardList sections={shown} filter={filter} onCanvasView={() => setMode("canvas")} />
+  );
+}
+
+export type BoardFilter = {
+  options: LanguageOption[];
+  active: string | null;
+  onChange: (code: string | null) => void;
+};
+
+function BoardList({
+  sections,
+  filter,
+  onCanvasView,
+}: {
+  sections: BoardSection[];
+  filter: BoardFilter;
+  onCanvasView: () => void;
+}) {
+  const total = sections.reduce((n, s) => n + s.poems.length, 0);
   return (
     <div className="h-full overflow-y-auto bg-canvas">
       <div className="mx-auto max-w-3xl px-6 py-10">
@@ -30,11 +92,15 @@ function BoardList({ sections, onCanvasView }: { sections: BoardSection[]; onCan
             <FeatherIcon className="size-5 text-primary" aria-hidden />
             InkBoard
           </Link>
-          <Button variant="outline" size="sm" onClick={onCanvasView}>
-            <LayoutGridIcon />
-            Board view
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageFilter id="list-language" filter={filter} />
+            <Button variant="outline" size="sm" onClick={onCanvasView}>
+              <LayoutGridIcon />
+              Board view
+            </Button>
+          </div>
         </header>
+        <LanguageFilterStatus filter={filter} total={total} selectId="list-language" className="-mt-6 mb-8" />
         <div className="grid gap-12">
           {sections.map((s) => (
             <section key={s.editorId} aria-labelledby={`author-${s.editorId}`} style={{ ["--hue" as string]: sectionHue(s.editorId) }}>

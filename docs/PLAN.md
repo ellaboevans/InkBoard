@@ -363,11 +363,11 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 - **Accessibility:** axe scans of the editor with the bar open (Ewe tab with tone marks, IPA tab) and of the profile found the shared tab labels at 4.16:1; raised to 6.7:1 (`text-foreground/75`).
 - **Checked:** typecheck, lint, 265 Vitest tests (letter data, Unicode marks, IPA search), E2E for the bar in onboarding, the poem editor (title and poem: letters, capitals, tone marks, undo, the refused mark, IPA search) and the profile (remembered tab, pen name, bio), plus the full accessibility, auth, poems and profile specs. On a production build, Chrome reported Gentium/Andika for ƒ Ƒ and the Ghanaian letters, and Newsreader/Geist for plain Latin.
 
-**Phase 11c: a poem's language** ✅ (tagging; browsing by language not started)
+**Phase 11c: a poem's language** ✅ (tagging, and browsing the board by language)
 - **Editor:** a *Language* picker in the poem sidebar: Not set, Akan (Twi, Fante, Nzema), Ewe, Ga, English (`src/lib/poem-languages.ts`). Optional; existing poems stay "not set" (migration 0010 adds a nullable `poems.language`). Validated against the list on the server.
 - **Readers:** a small label on board cards, the list view, the author page and the reading page ("· in Ewe"); `lang` (BCP 47: `ak`, `ee`, `gaa`, `en`) on the poem's title, excerpt and text, so screen readers, hyphenation and spell-check treat it as that language. Never on UI around it: a private poem's unlock form stays English. Private poems show their language like their title, never their text (N1).
 - **Search engines:** `inLanguage` in the poem's JSON-LD.
-- **Not yet:** browsing or filtering the board by language. It needs a design choice (a filter on the canvas, or per-language pages) and a preview first.
+- **Browsing by language:** a *Language* filter in the board toolbar (and the list view): All languages, plus only the languages at least one published poem uses. Picking one keeps only that language's poems, drops authors left with none, and lays the shelves out again with no gaps (`src/lib/board-filter.ts` + the pure `layoutBoard`). The choice is in the URL (`/?lang=ee`; All removes it; an unknown or unused value means All), so reloads and shared links keep it. The list view, minimap, Authors index and *Fit* follow it; search still covers everything (a filtered-out author says so, a filtered-out poem opens directly). A status line ("Showing Ewe poems · 7", a live region) has *Show all languages*. `/` stays prerendered with one cached board for every language: the client reads `?lang` behind Suspense and filters, and the static shell is the unfiltered board. Tests: `tests/board/filter.test.ts`, `e2e/board-language.spec.ts`, a11y scan of the filtered board and list.
 
 ## 5. Requirements traceability
 
@@ -384,7 +384,7 @@ Decided with the product owner: shadcn **sidebar-08** shell, **login-02** sign-i
 | R9 Author sections | 1 (pen name), 3 | ✅ |
 | R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
-| R12 Ghanaian languages and IPA | 11 | ✅ 11a (fonts, share cards, NFC, slugs, search), 11b (Special letters bar), 11c (poem language tag); browse-by-language not started |
+| R12 Ghanaian languages and IPA | 11 | ✅ 11a (fonts, share cards, NFC, slugs, search), 11b (Special letters bar), 11c (poem language tag, browse by language) |
 | N1 Private body never leaked | 3, 4, 5 | ✅ board, reading page, unlock and search tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |

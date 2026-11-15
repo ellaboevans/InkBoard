@@ -32,6 +32,8 @@ import type { BoardPoem, BoardSection } from "@/lib/board-types";
 import type { SearchResults } from "@/lib/search-types";
 import { notify } from "@/lib/notify";
 import { BoardSearch } from "./board-search";
+import type { BoardFilter } from "./board-view";
+import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 
 /*
  * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
@@ -63,9 +65,15 @@ type Gesture =
 
 export function BoardCanvas({
   sections,
+  allSections,
+  filter,
   onListView,
 }: {
+  /** What's shown: the board narrowed by the language filter. */
   sections: BoardSection[];
+  /** The whole board, so search picks hidden by the filter can explain themselves. */
+  allSections: BoardSection[];
+  filter: BoardFilter;
   onListView: () => void;
 }) {
   const layout = useMemo(() => layoutBoard(sections), [sections]);
@@ -366,6 +374,8 @@ export function BoardCanvas({
   const [authorsOpen, setAuthorsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const total = sections.reduce((n, s) => n + s.poems.length, 0);
+  /** "Ewe" while the board is filtered to a language, for the help text. */
+  const activeLanguage = filter.options.find((o) => o.code === filter.active)?.name;
   const router = useRouter();
 
   // ⌘K / Ctrl+K anywhere, or "/" when not typing, opens search.
@@ -392,6 +402,12 @@ export function BoardCanvas({
 
   const pickAuthor = (author: SearchResults["authors"][number]) => {
     const i = sections.findIndex((s) => s.editorId === author.editorId);
+    const hidden = filter.options.find((o) => o.code === filter.active);
+    if (i < 0 && hidden && allSections.some((s) => s.editorId === author.editorId)) {
+      // Search covers the whole board; this author has no poems in the filter.
+      notify.info(`${author.penName} has no ${hidden.name} poems`, "Choose All languages to see their shelf.");
+      return;
+    }
     if (i < 0) {
       // Just published; this (cached) board doesn't have the section yet.
       notify.info(`${author.penName} will appear on the board shortly`, "Please refresh in a minute.");
@@ -411,7 +427,8 @@ export function BoardCanvas({
     const i = sections.findIndex((s) => s.editorId === poem.editorId);
     const j = i < 0 ? -1 : sections[i].poems.findIndex((p) => p.id === poem.id);
     if (j < 0) {
-      // Published after this board was cached: open it directly.
+      // Hidden by the language filter, or published after this board was
+      // cached: open it directly.
       router.push(`/p/${poem.authorSlug}/${poem.slug}`);
       return;
     }
@@ -445,7 +462,7 @@ export function BoardCanvas({
         className="absolute inset-0 cursor-grab touch-none overflow-clip opacity-0 outline-none select-none [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] data-[panning=true]:cursor-grabbing data-[ready=true]:opacity-100 data-[ready=true]:transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <p id="board-help" className="sr-only">
-          {total} poems by {sections.length} authors. Drag or use the arrow keys
+          {total} {activeLanguage && `${activeLanguage} `}poems by {sections.length} authors. Drag or use the arrow keys
           to move around, plus and minus to zoom, zero to see everything. Tab
           moves between authors and poems. A list view is also available.
         </p>
@@ -471,6 +488,7 @@ export function BoardCanvas({
           </span>
         </Link>
         <div className="pointer-events-auto flex gap-2">
+          <LanguageFilter id="board-language" filter={filter} />
           <Button
             variant="outline"
             size="sm"
@@ -500,6 +518,13 @@ export function BoardCanvas({
         onOpenChange={setSearchOpen}
         onPickAuthor={pickAuthor}
         onPickPoem={pickPoem}
+      />
+
+      <LanguageFilterStatus
+        filter={filter}
+        total={total}
+        selectId="board-language"
+        className="absolute top-16 left-1/2 -translate-x-1/2"
       />
 
       <AuthorsPanel

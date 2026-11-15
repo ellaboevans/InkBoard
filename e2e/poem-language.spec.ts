@@ -68,7 +68,7 @@ test("the editor's language reaches the board, the reading page and search engin
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
   const locked = page
     .locator("[data-card]")
-    .filter({ has: page.getByRole("link", { name: `Ɔdɔ ${id}`, exact: true }) });
+    .filter({ has: page.getByRole("link", { name: `Ɔdɔ ${id} (password protected)`, exact: true }) });
   await expect(locked.getByText("Akan", { exact: true })).toBeVisible();
   await locked.getByRole("link").click();
   await expect(page).toHaveURL(/\/p\//);

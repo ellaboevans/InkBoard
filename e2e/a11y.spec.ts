@@ -131,6 +131,24 @@ test("admin screens", async ({ page }) => {
   await scan(page, "profile: special letters");
 });
 
+test("board filtered by language", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-lang-${id}@example.com`, `Language Reader ${id}`);
+  await page.goto("/admin/poems/new");
+  await page.getByRole("textbox", { name: "Title" }).fill(`Ŋutifafa ${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("Ŋutifafa na wò");
+  await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+
+  await page.goto("/?lang=ee");
+  await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+  await expect(page.getByRole("button", { name: "Show all languages" })).toBeVisible();
+  await scan(page, "board: filtered by language");
+  await page.getByRole("button", { name: "List view" }).click();
+  await scan(page, "list view: filtered by language");
+});
+
 test("board, list view, search and reading", async ({ page }) => {
   const id = unique();
   const pen = `Reader Poet ${id}`;

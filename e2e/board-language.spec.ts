@@ -26,6 +26,9 @@ async function openBoard(page: Page, url = "/") {
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
 }
 
+/** "Showing Ewe poems · N". */
+const EWE_STATUS = /^Showing Ewe poems · \d+$/;
+
 const filter = (page: Page) => page.getByRole("combobox", { name: "Language" });
 const status = (page: Page) => page.getByRole("status").filter({ hasText: /^Showing / });
 const card = (page: Page, title: string) =>
@@ -138,4 +141,117 @@ test("the filter works from the keyboard", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   await expect(filter(page)).toBeFocused();
   await expect(status(page)).toHaveCount(0);
+});
+
+/**
+ * The filter indicator and toolbar at phone and desktop widths. The indicator
+ * used to be an absolute box centred with left-1/2, which only gets half the
+ * screen to size itself in, so on phones its text wrapped one word per line.
+ */
+test("the filter indicator stays one tidy line from phones to desktops", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `lang-fit-${id}@example.com`, `Narrow Screen Poet ${id}`);
+  await publish(page, `Ŋkɔ ${id}`, "Ŋutifafa", "Ewe");
+
+  /** Rects of the indicator, its text and button, and every other control it must not cover. */
+  const measure = () =>
+    page.locator("[data-filter-status]").filter({ visible: true }).evaluate((pill) => {
+      const box = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height };
+      };
+      const text = pill.querySelector("[data-filter-status-text]")!;
+      const button = pill.querySelector("button")!;
+      const visible = (el: Element) => (el as HTMLElement).offsetParent !== null;
+      const others = [...document.querySelectorAll("header a, header button, header select, button[aria-controls='authors-list']")]
+        .filter((el) => visible(el) && !pill.contains(el))
+        .map(box);
+      return {
+        viewport: window.innerWidth,
+        pill: box(pill),
+        text: { ...box(text), lineHeight: parseFloat(getComputedStyle(text).lineHeight), clipped: text.scrollWidth > text.clientWidth },
+        button: { ...box(button), lineHeight: parseFloat(getComputedStyle(button).lineHeight) },
+        others,
+      };
+    });
+
+  const expectTidy = async (where: string) => {
+    const m = await measure();
+    // One line each: the bug made the text three lines tall.
+    expect(m.text.height, `${where}: text on one line`).toBeLessThan(m.text.lineHeight * 1.5);
+    expect(m.text.clipped, `${where}: text not cut off`).toBe(false);
+    expect(m.button.height, `${where}: button on one line`).toBeLessThan(m.button.lineHeight * 2.5);
+    // Inside the screen.
+    expect(m.pill.left, `${where}: left edge`).toBeGreaterThanOrEqual(0);
+    expect(m.pill.right, `${where}: right edge`).toBeLessThanOrEqual(m.viewport);
+    // Not covering the toolbar or the Authors button.
+    for (const o of m.others) {
+      const overlaps = o.left < m.pill.right && m.pill.left < o.right && o.top < m.pill.bottom && m.pill.top < o.bottom;
+      expect(overlaps, `${where}: overlaps a control at ${JSON.stringify(o)}`).toBe(false);
+    }
+    // Every toolbar control is on screen too.
+    for (const o of m.others) expect(o.right, `${where}: control off screen`).toBeLessThanOrEqual(m.viewport);
+  };
+
+  const statusText = () => page.locator("[data-filter-status-text]").filter({ visible: true });
+
+  /** The toolbar's controls: on screen, not overlapping, each on one line, in at most two rows. */
+  const expectToolbar = async (where: string) => {
+    const m = await page.locator("[data-board-toolbar]").filter({ visible: true }).evaluate((bar) => {
+      const controls = [...bar.querySelectorAll("a, button, select")].filter((el) => (el as HTMLElement).offsetParent !== null);
+      return {
+        viewport: window.innerWidth,
+        boxes: controls.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { name: el.textContent?.trim() || el.getAttribute("aria-label") || el.tagName, left: r.left, right: r.right, top: r.top, bottom: r.bottom, height: r.height };
+        }),
+      };
+    });
+    expect(m.boxes.length, `${where}: toolbar has controls`).toBeGreaterThan(2);
+    const rows = new Set(m.boxes.map((b) => Math.round(b.top / 8)));
+    expect(rows.size, `${where}: toolbar rows ${JSON.stringify(m.boxes)}`).toBeLessThanOrEqual(2);
+    for (const [i, a] of m.boxes.entries()) {
+      expect(a.left, `${where}: ${a.name} off screen (left)`).toBeGreaterThanOrEqual(0);
+      expect(a.right, `${where}: ${a.name} off screen (right)`).toBeLessThanOrEqual(m.viewport);
+      expect(a.height, `${where}: ${a.name} on one line`).toBeLessThanOrEqual(36);
+      for (const b of m.boxes.slice(i + 1)) {
+        const overlaps = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        expect(overlaps, `${where}: ${a.name} overlaps ${b.name}`).toBe(false);
+      }
+    }
+  };
+
+  for (const width of [320, 375, 768, 1280]) {
+    await page.setViewportSize({ width, height: 720 });
+    // Unfiltered: the toolbar fits.
+    await openBoard(page, "/");
+    await expectToolbar(`board toolbar at ${width}px`);
+
+    await openBoard(page, "/?lang=ee");
+    await expectToolbar(`filtered board toolbar at ${width}px`);
+    // Shortened on phones, but read in full.
+    await expect(statusText()).toHaveText(EWE_STATUS);
+    const showAll = page.getByRole("button", { name: "Show all languages", exact: true });
+    await expect(showAll).toBeVisible();
+    await expect(page.getByRole("button", { name: "List view", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Fit", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Editor sign in", exact: true })).toBeVisible();
+    await expectTidy(`board at ${width}px`);
+
+    // With the Authors index open, the indicator still doesn't cover it.
+    await page.getByRole("button", { name: /^Authors/ }).click();
+    await expect(page.getByRole("navigation", { name: "Authors" })).toBeVisible();
+    await expectTidy(`board with Authors open at ${width}px`);
+    await page.getByRole("button", { name: /^Authors/ }).click();
+
+    await page.getByRole("button", { name: "List view", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Board view" })).toBeVisible();
+    await expect(statusText()).toHaveText(EWE_STATUS);
+    await expectTidy(`list view at ${width}px`);
+
+    // "Show all" still hands focus back to the filter.
+    await page.getByRole("button", { name: "Show all languages", exact: true }).click();
+    await expect(filter(page)).toBeFocused();
+    await expect(status(page)).toHaveCount(0);
+  }
 });

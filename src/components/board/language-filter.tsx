@@ -34,7 +34,13 @@ export function LanguageFilter({ id, filter, className }: { id: string; filter: 
 
 /**
  * "Showing Ewe poems · 7" with a way back to all. The live region is always
- * rendered (empty when unfiltered) so screen readers announce changes.
+ * rendered (empty, and out of the layout, when unfiltered) so screen readers
+ * announce changes.
+ *
+ * One line at every width: the text never wraps (a long name truncates
+ * instead), and the button never shrinks. On phones the visible text shortens
+ * to "Ewe · 7" / "Show all"; the dropped words stay as sr-only text, so the
+ * status and the button's name read in full.
  */
 export function LanguageFilterStatus({
   filter,
@@ -50,22 +56,28 @@ export function LanguageFilterStatus({
 }) {
   const name = filter.options.find((o) => o.code === filter.active)?.name;
   return (
-    <div role="status" className={cn(!name && "sr-only", className)}>
+    <div role="status" className={cn(name ? "flex max-w-full min-w-0" : "sr-only", className)}>
       {name && (
-        <div className="flex items-center gap-1 rounded-xl border bg-background/90 py-1 pr-1 pl-3 text-sm shadow-sm backdrop-blur">
-          <span>
-            Showing {name} poems · <span className="tabular-nums">{total}</span>
+        <div
+          data-filter-status
+          className="pointer-events-auto flex max-w-full min-w-0 items-center gap-1 rounded-xl border bg-background/90 py-1 pr-1 pl-3 text-sm shadow-sm backdrop-blur"
+        >
+          <span data-filter-status-text className="min-w-0 truncate">
+            {/* Spaces sit outside the sr-only spans: an sr-only span is a block, which drops its edge spaces. */}
+            <span className="max-sm:sr-only">Showing</span> {name} <span className="max-sm:sr-only">poems</span> ·{" "}
+            <span className="tabular-nums">{total}</span>
           </span>
           <Button
             variant="ghost"
             size="sm"
+            className="shrink-0"
             onClick={() => {
               filter.onChange(null);
               document.getElementById(selectId)?.focus();
             }}
           >
             <XIcon />
-            Show all languages
+            Show all <span className="max-sm:sr-only">languages</span>
           </Button>
         </div>
       )}

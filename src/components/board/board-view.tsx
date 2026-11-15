@@ -87,12 +87,12 @@ function BoardList({
   return (
     <div className="h-full overflow-y-auto bg-canvas">
       <div className="mx-auto max-w-3xl px-6 py-10">
-        <header className="mb-10 flex items-center justify-between gap-4">
+        <header className="mb-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <Link href="/" className="flex items-center gap-2 font-serif text-2xl">
             <FeatherIcon className="size-5 text-primary" aria-hidden />
             InkBoard
           </Link>
-          <div className="flex items-center gap-2">
+          <div data-board-toolbar className="flex flex-wrap items-center justify-end gap-2">
             <LanguageFilter id="list-language" filter={filter} />
             <Button variant="outline" size="sm" onClick={onCanvasView}>
               <LayoutGridIcon />

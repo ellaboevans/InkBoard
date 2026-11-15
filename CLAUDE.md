@@ -81,6 +81,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - The canvas keeps its camera in a ref and writes the transform straight to the DOM. React state only feeds the zoom label and minimap, so don't put the camera in state.
 - World elements are absolutely positioned inside a 0×0 container, so give them explicit widths. Shrink-to-fit would truncate them.
 - Pointer capture is taken only once a drag passes 4px, so a plain click still reaches the card's link.
+- The top board overlays (toolbar, language-filter status, Authors index) share one flow column in `board-canvas.tsx`, so each sits below the previous one however the toolbar wraps. Don't give an overlay its own guessed `top-*`, and don't centre an absolute box with `left-1/2 -translate-x-1/2`: it can only size itself in the space right of its left edge (half the screen), so its text wraps word by word on phones. Centre with a full-width row instead (the zoom bar). `e2e/board-language.spec.ts` checks this at 320/375/1280px.
+- Toolbar buttons that go icon-only on phones hide their label with `max-sm:sr-only`, never `hidden sm:inline` (that leaves them unnamed).
 - In E2E, call `openBoard()` (it waits for `data-ready="true"`) before interacting.
 - The author page (`/a/[author]`, `loadAuthorPage`) follows the same rules as the board: published only, `CASE WHEN visibility = 'public'` for excerpts, never the email. Anything that changes it (profile save, pin) must `updateTag(BOARD_TAG)`.
 - Poem text is light Markdown (`src/lib/poem-markdown.ts`, rendered by `PoemText`, inline only). Anything that shows poem text as plain text (meta description, JSON-LD, share cards) must go through `stripPoemMarkdown`.

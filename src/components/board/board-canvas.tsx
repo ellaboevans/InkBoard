@@ -475,11 +475,18 @@ export function BoardCanvas({
         </div>
       </div>
 
-      {/* Overlays: siblings of the viewport so they don't pan or eat wheel events. */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+      {/* Overlays: siblings of the viewport so they don't pan or eat wheel events.
+          The top ones share one flow column (toolbar → filter status → Authors),
+          so each sits below the previous one however the toolbar wraps. Don't
+          position them on their own with guessed offsets, and don't centre them
+          with left-1/2 + translate: an absolute box sized to fit its content
+          only gets the space right of its left edge (half the screen), so
+          its text wraps word by word on phones. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-4">
+      <header className="flex items-start justify-between gap-2">
         <Link
           href="/"
-          className="pointer-events-auto flex items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
+          className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
         >
           <FeatherIcon className="size-4 text-primary" aria-hidden />
           <span className="font-serif text-lg leading-none">InkBoard</span>
@@ -487,7 +494,7 @@ export function BoardCanvas({
             {sections.length} authors · {total} poems
           </span>
         </Link>
-        <div className="pointer-events-auto flex gap-2">
+        <div data-board-toolbar className="pointer-events-auto flex flex-wrap justify-end gap-2">
           <LanguageFilter id="board-language" filter={filter} />
           <Button
             variant="outline"
@@ -505,27 +512,20 @@ export function BoardCanvas({
           </Button>
           <Button variant="outline" size="sm" onClick={onListView} className="bg-background/85 backdrop-blur">
             <ListIcon />
-            <span className="hidden sm:inline">List view</span>
+            {/* Icon-only on phones, but still named. */}
+            <span className="max-sm:sr-only">List view</span>
           </Button>
           <Button asChild variant="outline" size="sm" className="bg-background/85 backdrop-blur">
-            <Link href="/sign-in">Editor sign in</Link>
+            <Link href="/sign-in">
+              {/* Phones show "Sign in"; the name stays "Editor sign in". */}
+              <span aria-hidden className="sm:hidden">Sign in</span>
+              <span className="max-sm:sr-only">Editor sign in</span>
+            </Link>
           </Button>
         </div>
       </header>
 
-      <BoardSearch
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        onPickAuthor={pickAuthor}
-        onPickPoem={pickPoem}
-      />
-
-      <LanguageFilterStatus
-        filter={filter}
-        total={total}
-        selectId="board-language"
-        className="absolute top-16 left-1/2 -translate-x-1/2"
-      />
+      <LanguageFilterStatus filter={filter} total={total} selectId="board-language" className="self-center" />
 
       <AuthorsPanel
         open={authorsOpen}
@@ -537,8 +537,18 @@ export function BoardCanvas({
           if (window.innerWidth < 640) setAuthorsOpen(false);
         }}
       />
+      </div>
 
-      <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-xl border bg-background/90 p-1 shadow-sm backdrop-blur">
+      <BoardSearch
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        onPickAuthor={pickAuthor}
+        onPickPoem={pickPoem}
+      />
+
+      {/* Centred by a full-width row, not left-1/2 (see the top overlays). */}
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 flex justify-center">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border bg-background/90 p-1 shadow-sm backdrop-blur">
         <Button variant="ghost" size="icon-sm" onClick={() => zoomCenter(0.8)} aria-label="Zoom out">
           <MinusIcon />
         </Button>
@@ -557,8 +567,9 @@ export function BoardCanvas({
         <span className="mx-1 h-5 w-px bg-border" aria-hidden />
         <Button variant="ghost" size="sm" onClick={() => fitAll()}>
           <MaximizeIcon />
-          <span className="hidden sm:inline">Fit</span>
+          <span className="max-sm:sr-only">Fit</span>
         </Button>
+      </div>
       </div>
 
       <p className="pointer-events-none absolute bottom-5 left-4 hidden text-xs text-muted-foreground lg:block">
@@ -688,14 +699,15 @@ function AuthorsPanel({
   onPick: (rect: Rect) => void;
 }) {
   return (
-    <div className="absolute top-20 left-4 z-10 w-64 max-w-[calc(100%-2rem)]">
+    // In the top overlay column; only the button and the list take pointer events.
+    <div className="pointer-events-none w-64 max-w-full self-start">
       <Button
         variant="outline"
         size="sm"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-controls="authors-list"
-        className="bg-background/85 backdrop-blur"
+        className="pointer-events-auto bg-background/85 backdrop-blur"
       >
         {open ? <XIcon /> : <UsersIcon />}
         Authors
@@ -705,7 +717,7 @@ function AuthorsPanel({
         <nav
           id="authors-list"
           aria-label="Authors"
-          className="mt-2 max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
+          className="pointer-events-auto mt-2 max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
         >
           <ul>
             {sections.map((s, i) => (

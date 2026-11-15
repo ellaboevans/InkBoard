@@ -196,6 +196,16 @@ test("collections: admin pages and the reading page's navigation", async ({ page
   await page.goto(`/p/${rows[0].author}/${rows[0].slug}`);
   await expect(page.getByRole("main").getByRole("navigation", { name: new RegExp(`^Sequence ${id}, part`) })).toBeVisible();
   await scan(page, "poem page: collection navigation");
+  // Public collection pages (round 2): the author page's list and the collection page.
+  await page.goto(`/a/${rows[0].author}`);
+  await expect(page.getByRole("region", { name: "Collections" })).toBeVisible();
+  await scan(page, "author page: with collections");
+  await page.getByRole("region", { name: "Collections" }).getByRole("link").first().click();
+  await expect(page.getByRole("heading", { level: 1, name: `Sequence ${id}` })).toBeVisible();
+  await scan(page, "collection page");
+  await page.setViewportSize({ width: 320, height: 720 });
+  await scan(page, "collection page: phone");
+  await page.setViewportSize({ width: 1280, height: 720 });
   await openBoard(page);
   await page.getByRole("link", { name: `First ${id}`, exact: true }).click();
   const dialog = page.getByRole("dialog", { name: `First ${id}` });

@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ExternalLinkIcon, PinIcon } from "lucide-react";
+import { ArrowLeftIcon, ExternalLinkIcon, LibraryIcon, PinIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -139,6 +139,34 @@ async function Author({ params }: Pick<Props, "params">) {
         </div>
       </header>
 
+      {a.collections.length > 0 && (
+        <section aria-labelledby="collections-heading" className="grid gap-4">
+          <h2 id="collections-heading" className="font-serif text-2xl">
+            Collections
+          </h2>
+          {/* minmax(0,1fr): grid items default to their content's width, so a long title widened the page. */}
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
+            {a.collections.map((c) => (
+              <li key={c.slug}>
+                <Link
+                  href={`/a/${a.slug}/c/${c.slug}`}
+                  className="flex h-full items-start gap-3 rounded-xl border bg-card p-4 hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
+                  <LibraryIcon className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)] gap-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="min-w-0 truncate font-serif text-lg">{c.title}</span>
+                      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">{pluralCount(c.poemCount, "poem")}</span>
+                    </span>
+                    {c.intro && <span className="line-clamp-2 text-sm text-muted-foreground">{c.intro}</span>}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section aria-labelledby="poems-heading" className="grid gap-5">
         <h2 id="poems-heading" className="font-serif text-2xl">
           Poems
@@ -163,6 +191,7 @@ async function Author({ params }: Pick<Props, "params">) {
                   isPrivate={p.visibility === "private"}
                   excerpt={p.excerpt}
                   lang={p.language}
+                  collection={p.collection}
                   hasMore={p.hasMore}
                   title={
                     <Link href={`/p/${a.slug}/${p.slug}`} className={cardTitleClass}>

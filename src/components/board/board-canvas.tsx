@@ -677,6 +677,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
       isPrivate={isPrivate}
       excerpt={poem.excerpt}
       lang={poem.language}
+      collection={poem.collection}
       hasMore={poem.hasMore}
       title={
         <Link

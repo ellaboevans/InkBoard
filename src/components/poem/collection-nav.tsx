@@ -17,11 +17,21 @@ import type { ReaderCollection, ReaderCollectionPoem } from "@/lib/board-types";
  * open the overlay on top of the full page.
  */
 
-/** "Part 3 of 7 · <collection>", above the poem's title. */
-export function CollectionPart({ collection }: { collection: ReaderCollection }) {
+/**
+ * "Part 3 of 7 · <collection>", the title linking to the collection's page.
+ * A plain router link in the overlay too: /a/… isn't intercepted, so it
+ * leaves the overlay for the page (the overlay clears via @modal/[...catchAll]).
+ */
+export function CollectionPart({ collection, authorSlug }: { collection: ReaderCollection; authorSlug: string }) {
   return (
     <p className="mb-3 text-sm text-muted-foreground">
-      Part {collection.part} of {collection.parts} · <span className="text-foreground">{collection.title}</span>
+      Part {collection.part} of {collection.parts} ·{" "}
+      <Link
+        href={`/a/${authorSlug}/c/${collection.slug}`}
+        className="text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        {collection.title}
+      </Link>
     </p>
   );
 }

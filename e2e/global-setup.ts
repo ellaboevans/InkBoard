@@ -41,6 +41,7 @@ async function warmUp() {
     ["/admin/collections/00000000-0000-0000-0000-000000000000"],
     ["/admin/profile"],
     ["/a/warm-up"],
+    ["/a/warm-up/c/warm-up"],
     ["/feed.xml"],
     ["/a/warm-up/feed.xml"],
     ["/avatars/a01"],

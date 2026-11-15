@@ -39,7 +39,7 @@ export async function PoemReader({
   return (
     <article>
       <header className="mb-8 sm:mb-10">
-        {poem.collection && <CollectionPart collection={poem.collection} />}
+        {poem.collection && <CollectionPart collection={poem.collection} authorSlug={poem.authorSlug} />}
         <PoemTitle inDialog={inDialog} lang={poem.language}>
           {poem.title}
         </PoemTitle>

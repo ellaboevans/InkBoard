@@ -3,7 +3,15 @@ import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { collections, editors, poems } from "@/db/schema";
-import type { AuthorPage, BoardSection, ReaderCollection, ReaderPoem } from "@/lib/board-types";
+import type {
+  AuthorCollection,
+  AuthorPage,
+  BoardSection,
+  CollectionBadge,
+  CollectionPage,
+  ReaderCollection,
+  ReaderPoem,
+} from "@/lib/board-types";
 
 /*
  * Public, reader-facing queries (R1, R8, R9). Uncached and framework-free so
@@ -20,6 +28,42 @@ export { EXCERPT_CHARS, EXCERPT_LINES };
 const lines = sql`string_to_array(${poems.body}, E'\\n')`;
 const isPublic = sql`${poems.visibility} = 'public'`;
 
+/** A card's text: the first lines of a public poem, never a private one's (N1). */
+const cardColumns = {
+  excerpt: sql<string | null>`CASE WHEN ${isPublic} THEN
+    left(array_to_string((${lines})[1:${sql.raw(String(EXCERPT_LINES))}], E'\\n'), ${EXCERPT_CHARS})
+  END`,
+  hasMore: sql<boolean>`CASE WHEN ${isPublic} THEN
+    cardinality(${lines}) > ${EXCERPT_LINES} OR length(${poems.body}) > ${EXCERPT_CHARS}
+  ELSE false END`,
+};
+
+/**
+ * The card's collection badge (Phase 14). Window functions over the query's
+ * own rows: callers must select *published* poems only (they all do), so
+ * "2/4" counts published poems and drafts never leave gaps. Needs
+ * LEFT JOIN collections.
+ */
+const badgeColumns = {
+  collectionTitle: collections.title,
+  collectionSlug: collections.slug,
+  collectionPart: sql<number | null>`CASE WHEN ${poems.collectionId} IS NOT NULL THEN
+    (row_number() OVER (PARTITION BY ${poems.collectionId} ORDER BY ${poems.collectionPosition}))::int END`,
+  collectionParts: sql<number | null>`CASE WHEN ${poems.collectionId} IS NOT NULL THEN
+    (count(*) OVER (PARTITION BY ${poems.collectionId}))::int END`,
+};
+
+function badge(r: {
+  collectionTitle: string | null;
+  collectionSlug: string | null;
+  collectionPart: number | null;
+  collectionParts: number | null;
+}): CollectionBadge | null {
+  return r.collectionTitle && r.collectionSlug && r.collectionPart && r.collectionParts
+    ? { title: r.collectionTitle, slug: r.collectionSlug, part: r.collectionPart, parts: r.collectionParts }
+    : null;
+}
+
 export async function loadBoardSections(): Promise<BoardSection[]> {
   const rows = await getDb()
     .select({
@@ -31,15 +75,12 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       slug: poems.slug,
       visibility: poems.visibility,
       language: poems.language,
-      excerpt: sql<string | null>`CASE WHEN ${isPublic} THEN
-        left(array_to_string((${lines})[1:${sql.raw(String(EXCERPT_LINES))}], E'\\n'), ${EXCERPT_CHARS})
-      END`,
-      hasMore: sql<boolean>`CASE WHEN ${isPublic} THEN
-        cardinality(${lines}) > ${EXCERPT_LINES} OR length(${poems.body}) > ${EXCERPT_CHARS}
-      ELSE false END`,
+      ...cardColumns,
+      ...badgeColumns,
     })
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
+    .leftJoin(collections, eq(collections.id, poems.collectionId))
     .where(
       and(
         eq(poems.status, "published"),
@@ -75,6 +116,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       language: row.language,
       excerpt: row.excerpt,
       hasMore: row.hasMore,
+      collection: badge(row),
     });
   }
   return sections;
@@ -176,20 +218,18 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
       slug: poems.slug,
       visibility: poems.visibility,
       language: poems.language,
-      excerpt: sql<string | null>`CASE WHEN ${isPublic} THEN
-        left(array_to_string((${lines})[1:${sql.raw(String(EXCERPT_LINES))}], E'\\n'), ${EXCERPT_CHARS})
-      END`,
-      hasMore: sql<boolean>`CASE WHEN ${isPublic} THEN
-        cardinality(${lines}) > ${EXCERPT_LINES} OR length(${poems.body}) > ${EXCERPT_CHARS}
-      ELSE false END`,
+      ...cardColumns,
+      ...badgeColumns,
       publishedAt: poems.publishedAt,
     })
     .from(poems)
+    .leftJoin(collections, eq(collections.id, poems.collectionId))
     .where(and(eq(poems.editorId, author.editorId), eq(poems.status, "published")))
     .orderBy(desc(poems.publishedAt), asc(poems.title));
 
-  const list = rows.map((r) => ({
+  const list = rows.map(({ collectionTitle, collectionSlug, collectionPart, collectionParts, ...r }) => ({
     ...r,
+    collection: badge({ collectionTitle, collectionSlug, collectionPart, collectionParts }),
     pinned: r.id === author.pinnedPoemId,
     publishedAt: r.publishedAt?.toISOString() ?? null,
   }));
@@ -203,5 +243,79 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
     bio: author.bio,
     links: Array.isArray(author.links) ? author.links : [],
     poems: list,
+    collections: await loadAuthorCollections(author.editorId),
+  };
+}
+
+/** An author's collections that readers can see: at least one published poem, A–Z. */
+async function loadAuthorCollections(editorId: string): Promise<AuthorCollection[]> {
+  return getDb()
+    .select({
+      title: collections.title,
+      slug: collections.slug,
+      intro: collections.intro,
+      poemCount: sql<number>`count(${poems.id})::int`,
+    })
+    .from(collections)
+    .innerJoin(poems, and(eq(poems.collectionId, collections.id), eq(poems.status, "published")))
+    .where(eq(collections.editorId, editorId))
+    .groupBy(collections.id)
+    .orderBy(asc(sql`lower(${collections.title})`), asc(collections.id));
+}
+
+/**
+ * A collection's public page: its published poems in reading order, numbered
+ * 1..n over published poems only (drafts never appear or leave gaps). Private
+ * poems are title-only cards (N1); never the email. Null for an unknown or
+ * not-yet-onboarded author, an unknown slug, or no published poems.
+ */
+export async function loadCollectionPage(authorSlug: string, collectionSlug: string): Promise<CollectionPage | null> {
+  const db = getDb();
+  const [c] = await db
+    .select({
+      id: collections.id,
+      title: collections.title,
+      slug: collections.slug,
+      intro: collections.intro,
+      updatedAt: collections.updatedAt,
+      editorId: editors.id,
+      penName: editors.penName,
+      authorSlug: editors.slug,
+    })
+    .from(collections)
+    .innerJoin(editors, eq(editors.id, collections.editorId))
+    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName), eq(collections.slug, collectionSlug)))
+    .limit(1);
+  if (!c) return null;
+
+  const rows = await db
+    .select({
+      id: poems.id,
+      title: poems.title,
+      slug: poems.slug,
+      visibility: poems.visibility,
+      language: poems.language,
+      publishedAt: poems.publishedAt,
+      ...cardColumns,
+    })
+    .from(poems)
+    .where(and(eq(poems.collectionId, c.id), eq(poems.editorId, c.editorId), eq(poems.status, "published")))
+    .orderBy(asc(poems.collectionPosition));
+  if (rows.length === 0) return null;
+
+  return {
+    title: c.title,
+    slug: c.slug,
+    intro: c.intro,
+    penName: c.penName!,
+    authorSlug: c.authorSlug!,
+    editorId: c.editorId,
+    updatedAt: c.updatedAt.toISOString(),
+    poems: rows.map((r, i) => ({
+      ...r,
+      publishedAt: r.publishedAt?.toISOString() ?? null,
+      part: i + 1,
+      collection: { title: c.title, slug: c.slug, part: i + 1, parts: rows.length },
+    })),
   };
 }

@@ -1,6 +1,7 @@
 import { cn } from "cn";
-import { LockIcon } from "lucide-react";
+import { LibraryIcon, LockIcon } from "lucide-react";
 import { PoemText } from "@/components/poem/poem-text";
+import type { CollectionBadge } from "@/lib/board-types";
 import { languageName } from "@/lib/poem-languages";
 
 /**
@@ -23,6 +24,7 @@ export function PoemCardFace({
   excerpt,
   hasMore,
   lang,
+  collection,
   className,
   style,
   ...rest
@@ -33,6 +35,8 @@ export function PoemCardFace({
   hasMore: boolean;
   /** The poem's language tag (src/lib/poem-languages.ts): `lang` on its title and text, plus a label. */
   lang?: string | null;
+  /** Its collection: a quiet "Harmattan Cycle · 2/4" line at the bottom (Phase 14). */
+  collection?: CollectionBadge | null;
 } & Omit<React.ComponentProps<"div">, "title" | "lang">) {
   return (
     <div
@@ -87,6 +91,38 @@ export function PoemCardFace({
           {hasMore && "\n…"}
         </p>
       )}
+      {collection && <CollectionBadgeLine collection={collection} className="mt-2" />}
     </div>
+  );
+}
+
+/**
+ * "Harmattan Cycle · 2/4": a quiet line, not a link (inside a card the
+ * title's stretched link covers everything). It sits at the bottom, away from
+ * the language label and lock, and takes its room from the excerpt, so card
+ * sizes don't change. Long titles truncate; the numbers never do.
+ */
+export function CollectionBadgeLine({ collection, className }: { collection: CollectionBadge; className?: string }) {
+  return (
+    // A span (display: flex), so it also fits inside the list view's links.
+    // contain: inline-size: a truncated nowrap line still reports its full text
+    // width when a grid or flex container sizes itself, which widened the author
+    // page's card grid past a phone's screen. Contained, it takes the width it's
+    // given and truncates inside it.
+    <span
+      data-collection-badge=""
+      className={cn("flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground [contain:inline-size]", className)}
+    >
+      <LibraryIcon className="size-3 shrink-0" aria-hidden />
+      <span className="min-w-0 truncate" title={collection.title}>
+        {collection.title}
+      </span>
+      <span className="shrink-0 tabular-nums" aria-hidden>
+        · {collection.part}/{collection.parts}
+      </span>
+      <span className="sr-only">
+        , part {collection.part} of {collection.parts}
+      </span>
+    </span>
   );
 }

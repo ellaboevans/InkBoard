@@ -19,6 +19,7 @@ import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
 import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { BoardCanvas } from "./board-canvas";
+import { CollectionBadgeLine } from "./poem-card-face";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 import { pluralCount } from "@/lib/plural";
 
@@ -155,6 +156,7 @@ function BoardList({
                           <PoemText text={p.excerpt} truncated={p.hasMore} />
                         </span>
                       )}
+                      {p.collection && <CollectionBadgeLine collection={p.collection} className="mt-1" />}
                     </Link>
                   </li>
                 ))}

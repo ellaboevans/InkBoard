@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { AuthorPage, BoardSection, ReaderPoem } from "@/lib/board-types";
-import { loadAuthorPage, loadBoardSections, loadReaderPoem } from "./board";
+import type { AuthorPage, BoardSection, CollectionPage, ReaderPoem } from "@/lib/board-types";
+import { loadAuthorPage, loadBoardSections, loadCollectionPage, loadReaderPoem } from "./board";
 import { BOARD_TAG } from "./cache-tags";
 import { loadAuthorFeed, loadSiteFeed } from "./feeds";
 
@@ -50,4 +50,12 @@ export async function getAuthorFeed(authorSlug: string): Promise<string | null> 
   cacheTag(BOARD_TAG);
   cacheLife("hours");
   return loadAuthorFeed(authorSlug);
+}
+
+/** A collection's public page (Phase 14); null when readers have nothing to see there. */
+export async function getCollectionPage(authorSlug: string, collectionSlug: string): Promise<CollectionPage | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadCollectionPage(authorSlug, collectionSlug);
 }

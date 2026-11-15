@@ -84,6 +84,7 @@ describe("loadBoardSections", () => {
       language: null,
       excerpt: null,
       hasMore: false,
+      collection: null,
     });
     const json = JSON.stringify(sections);
     expect(json).not.toContain(SECRET);

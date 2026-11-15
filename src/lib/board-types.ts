@@ -11,7 +11,12 @@ export type BoardPoem = {
   excerpt: string | null;
   /** True when a public poem continues past the excerpt. */
   hasMore: boolean;
+  /** Its collection, for the card's badge; null when it's in none (docs/PLAN.md, Phase 14). */
+  collection: CollectionBadge | null;
 };
+
+/** "Harmattan Cycle · 2/4": numbered over the collection's published poems only. */
+export type CollectionBadge = { title: string; slug: string; part: number; parts: number };
 
 export type BoardSection = {
   editorId: string;
@@ -64,4 +69,24 @@ export type AuthorPage = {
   links: string[];
   /** Published poems, newest first; the pinned one (if still published) is first. */
   poems: (BoardPoem & { pinned: boolean; publishedAt: string | null })[];
+  /** Collections with at least one published poem, A–Z. */
+  collections: AuthorCollection[];
+};
+
+export type AuthorCollection = { title: string; slug: string; intro: string | null; poemCount: number };
+
+/**
+ * A collection's public page (/a/[author]/c/[collection]): its published
+ * poems in reading order, numbered 1..n without drafts. Never the email.
+ */
+export type CollectionPage = {
+  title: string;
+  slug: string;
+  intro: string | null;
+  penName: string;
+  authorSlug: string;
+  /** For the author's feed link and JSON-LD. */
+  editorId: string;
+  updatedAt: string;
+  poems: (BoardPoem & { part: number; publishedAt: string | null })[];
 };

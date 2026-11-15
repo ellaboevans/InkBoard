@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { DialogTitle } from "@/components/ui/dialog";
 import { languageName } from "@/lib/poem-languages";
+import { CollectionNav, CollectionPart } from "./collection-nav";
 import { PoemBody } from "./poem-body";
 import { getReaderPoem } from "@/server/board-cache";
 import { getUnlockedBody } from "@/server/unlock-cookie";
@@ -38,6 +39,7 @@ export async function PoemReader({
   return (
     <article>
       <header className="mb-8 sm:mb-10">
+        {poem.collection && <CollectionPart collection={poem.collection} />}
         <PoemTitle inDialog={inDialog} lang={poem.language}>
           {poem.title}
         </PoemTitle>
@@ -64,6 +66,7 @@ export async function PoemReader({
           />
         </Suspense>
       )}
+      {poem.collection && <CollectionNav collection={poem.collection} authorSlug={poem.authorSlug} inDialog={inDialog} />}
     </article>
   );
 }

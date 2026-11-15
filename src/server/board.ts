@@ -2,8 +2,8 @@ import "server-only";
 import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { editors, poems } from "@/db/schema";
-import type { AuthorPage, BoardSection, ReaderPoem } from "@/lib/board-types";
+import { collections, editors, poems } from "@/db/schema";
+import type { AuthorPage, BoardSection, ReaderCollection, ReaderPoem } from "@/lib/board-types";
 
 /*
  * Public, reader-facing queries (R1, R8, R9). Uncached and framework-free so
@@ -96,6 +96,8 @@ export async function loadReaderPoem(
       body: sql<string | null>`CASE WHEN ${isPublic} THEN ${poems.body} END`,
       sharedPassword: sql<boolean>`${editors.passwordMode} = 'shared'`,
       publishedAt: poems.publishedAt,
+      id: poems.id,
+      collectionId: poems.collectionId,
     })
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
@@ -109,12 +111,39 @@ export async function loadReaderPoem(
     )
     .limit(1);
   if (!row) return null;
+  const { id, collectionId, ...poem } = row;
   return {
-    ...row,
+    ...poem,
     penName: row.penName!,
     authorSlug: row.authorSlug!,
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    collection: collectionId ? await loadReaderCollection(collectionId, id) : null,
   };
+}
+
+/**
+ * The published poem's place in its collection: part n of the *published*
+ * poems (drafts never leave gaps) and its published neighbours. Titles,
+ * slugs and visibility only: no text, so private neighbours stay title-only (N1).
+ */
+async function loadReaderCollection(collectionId: string, poemId: string): Promise<ReaderCollection | null> {
+  const db = getDb();
+  const [c] = await db
+    .select({ title: collections.title, slug: collections.slug })
+    .from(collections)
+    .where(eq(collections.id, collectionId))
+    .limit(1);
+  if (!c) return null;
+  const list = await db
+    .select({ id: poems.id, title: poems.title, slug: poems.slug, visibility: poems.visibility, language: poems.language })
+    .from(poems)
+    .where(and(eq(poems.collectionId, collectionId), eq(poems.status, "published")))
+    .orderBy(asc(poems.collectionPosition));
+  const i = list.findIndex((p) => p.id === poemId);
+  if (i < 0) return null;
+  const neighbour = (p: (typeof list)[number] | undefined) =>
+    p ? { title: p.title, slug: p.slug, visibility: p.visibility, language: p.language } : null;
+  return { ...c, part: i + 1, parts: list.length, prev: neighbour(list[i - 1]), next: neighbour(list[i + 1]) };
 }
 
 /**

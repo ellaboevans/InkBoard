@@ -144,6 +144,54 @@ test("admin screens", async ({ page }) => {
   await scan(page, "profile: special letters");
 });
 
+test("collections: admin pages and the reading page's navigation", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-coll-${id}@example.com`, `Sequence Poet ${id}`);
+  await publish(page, `First ${id}`, "one");
+  await publish(page, `Second ${id}`, "two", "a11y-pass");
+  await publish(page, `Third ${id}`, "three");
+
+  await page.goto("/admin/collections");
+  await scan(page, "collections: empty");
+  const create = page.getByRole("region", { name: "New collection" });
+  await create.getByRole("button", { name: "Create collection" }).click();
+  await expect(create.getByRole("alert")).toBeVisible();
+  await scan(page, "collections: new-collection form with an error");
+  await create.getByRole("textbox", { name: "Title" }).fill(`Sequence ${id}`);
+  await create.getByRole("button", { name: "Create collection" }).click();
+  await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  await scan(page, "collection: empty");
+  for (const t of [`First ${id}`, `Second ${id}`, `Third ${id}`]) {
+    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: t });
+    await page.getByRole("button", { name: "Add to collection" }).click();
+    await expect(page.getByRole("button", { name: `Remove “${t}” from the collection` })).toBeVisible();
+  }
+  await page.getByRole("button", { name: `Move “Third ${id}” up` }).click();
+  await expect(page.getByRole("main").getByRole("status").filter({ hasText: "Moved" })).toBeVisible();
+  await scan(page, "collection: with poems, after a move");
+  await page.getByRole("button", { name: "Delete collection" }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await scan(page, "collection: delete confirmation");
+  await page.keyboard.press("Escape");
+  await page.goto("/admin/collections");
+  await scan(page, "collections: with one");
+  await page.goto("/admin/poems/new");
+  await expect(page.getByRole("combobox", { name: "Collection" })).toBeVisible();
+  await scan(page, "new poem: collection picker");
+
+  // Readers: part n of m, previous/next (a private neighbour is title-only).
+  const { rows } = await sql(`SELECT e.slug AS author, p.slug FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.title = 'Third ${id}'`);
+  await page.goto(`/p/${rows[0].author}/${rows[0].slug}`);
+  await expect(page.getByRole("main").getByRole("navigation", { name: new RegExp(`^Sequence ${id}, part`) })).toBeVisible();
+  await scan(page, "poem page: collection navigation");
+  await openBoard(page);
+  await page.getByRole("link", { name: `First ${id}`, exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: `First ${id}` });
+  await expect(dialog.getByRole("navigation", { name: new RegExp(`^Sequence ${id}, part`) })).toBeVisible();
+  await scan(page, "overlay: collection navigation");
+  await page.keyboard.press("Escape");
+});
+
 test("board filtered by language", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-lang-${id}@example.com`, `Language Reader ${id}`);

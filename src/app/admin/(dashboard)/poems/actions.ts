@@ -24,6 +24,8 @@ function readForm(formData: FormData) {
     body: str("body") ?? "",
     visibility: str("visibility"),
     language: str("language"),
+    // "" = none; an id = that collection (the end of it); see poems.ts.
+    collection: str("collection"),
     // Which submit button was pressed ("Save draft" / "Publish" / …)
     status: str("status"),
     password: str("password"),

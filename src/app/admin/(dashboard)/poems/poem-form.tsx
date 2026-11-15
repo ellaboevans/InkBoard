@@ -74,6 +74,7 @@ export type PoemFormPoem = {
   body: string;
   visibility: "public" | "private";
   language: PoemLanguage | null;
+  collectionId: string | null;
   status: "draft" | "published";
   hasPassword: boolean;
 };
@@ -91,6 +92,8 @@ type Props = {
   /** Editing only: saved versions, newest first, and the one opened by ?version=. */
   history?: HistoryItem[];
   selectedVersion?: SelectedVersion | null;
+  /** The editor's collections, for the Collection picker. */
+  collections: { id: string; title: string }[];
 };
 
 export function PoemForm({
@@ -102,6 +105,7 @@ export function PoemForm({
   penName,
   history,
   selectedVersion = null,
+  collections,
 }: Props) {
   const shared = passwordMode === "shared";
   // Toast from the action's result rather than an effect, so it fires exactly
@@ -133,6 +137,8 @@ export function PoemForm({
   const [isPrivate, setIsPrivate] = useState(poem?.visibility === "private");
   // "" = not set (the select's first option).
   const [language, setLanguage] = useState<string>(poem?.language ?? "");
+  // "" = none (the select's first option).
+  const [collection, setCollection] = useState<string>(poem?.collectionId ?? "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [hasPassword, setHasPassword] = useState(poem?.hasPassword ?? false);
@@ -141,6 +147,7 @@ export function PoemForm({
     body: poem?.body ?? "",
     isPrivate: poem?.visibility === "private",
     language: poem?.language ?? "",
+    collection: poem?.collectionId ?? "",
   });
 
   // After a successful save, the current values become the "saved" snapshot.
@@ -148,7 +155,7 @@ export function PoemForm({
   if (seenState !== state) {
     setSeenState(state);
     if (state.savedAt) {
-      setSaved({ title, body, isPrivate, language });
+      setSaved({ title, body, isPrivate, language, collection });
       setPassword("");
       setHasPassword(state.visibility === "private");
     }
@@ -160,6 +167,7 @@ export function PoemForm({
     body !== saved.body ||
     isPrivate !== saved.isPrivate ||
     language !== saved.language ||
+    collection !== saved.collection ||
     password !== "";
   // Client-side checks give instant feedback; the server re-validates everything.
   const [clientErrors, setClientErrors] = useState<PoemErrors | null>(null);
@@ -346,6 +354,36 @@ export function PoemForm({
               Shown on the poem, and tells screen readers how to read it.
             </p>
             <FieldError id="language-error" message={errors.language} />
+
+            <Label htmlFor="collection" className="mt-2 text-sm font-medium">
+              Collection
+            </Label>
+            <NativeSelect
+              id="collection"
+              name="collection"
+              value={collection}
+              onChange={(e) => setCollection(e.target.value)}
+              aria-describedby={errors.collection ? "collection-error collection-help" : "collection-help"}
+              aria-invalid={errors.collection ? true : undefined}
+            >
+              <NativeSelectOption value="">None</NativeSelectOption>
+              {collections.map((c) => (
+                <NativeSelectOption key={c.id} value={c.id}>
+                  {c.title}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <p id="collection-help" className="text-xs text-muted-foreground">
+              {collection && collection !== saved.collection
+                ? "Saving adds it at the end. "
+                : collections.length === 0
+                  ? "Group poems into an ordered sequence. "
+                  : "Readers can read it in order with the others. "}
+              <Link href="/admin/collections" className="underline underline-offset-2">
+                {collections.length === 0 ? "Create a collection" : "Order collections"}
+              </Link>
+            </p>
+            <FieldError id="collection-error" message={errors.collection} />
           </section>
           <section className="grid gap-3 rounded-xl border bg-card p-4">
             <h2 className="text-sm font-medium">Publishing</h2>

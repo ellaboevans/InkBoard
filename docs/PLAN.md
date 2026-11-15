@@ -99,6 +99,14 @@ poem_revisions  id · poem_id → poems (ON DELETE CASCADE) · title · body · 
                 INDEX (poem_id, saved_at DESC); newest 20 per poem; no password, hash or visibility columns
 ```
 
+Phase 14 adds:
+
+```
+collections  id · editor_id → editors (CASCADE) · title · slug (unique per editor, fixed) · intro · created_at · updated_at
+poems        + collection_id → collections (SET NULL) · collection_position (1..n over all its poems, drafts included)
+             UNIQUE (collection_id, collection_position)
+```
+
 "A private poem is always readable with some password" (its own in per-poem mode, the
 author's shared one in shared mode) is enforced by triggers in
 `drizzle/0002_password_mode_triggers.sql`, which replaced Phase 0's
@@ -120,6 +128,8 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /admin/poems/[id]      Edit poem, visibility, password, publish, delete (R2, R3); History panel,
                        ?version=<revision id> opens a saved version read-only (Phase 13)
 /admin/settings        Private-poem password mode: per poem or one shared (R11)
+/admin/collections     Your collections; create one (Phase 14)
+/admin/collections/[id]  Order its poems (keyboard), add/remove poems, rename, intro, delete
 /admin/profile         Avatar, pen name, tagline, bio, links, pinned poem, stats, signed-in devices
 /avatars/[id]          Curated avatar SVGs (prerendered, cached forever)
 /api/search?q=         Search authors and poem titles (R10)
@@ -402,12 +412,21 @@ A bad save or a mistaken paste can be undone: editors see earlier versions of a 
 - **Restore** puts the version's title, text and language into the editor as unsaved changes (with a toast); the editor saves as usual, so a restore is itself recorded as a version and can be undone, and a published poem keeps its slug. There is no second save path.
 - **Tests:** integration tests (versions only on content changes, normalised whitespace isn't a change, the legacy baseline, the 20-version cap per poem, cascade on delete, cross-editor and malformed ids, no password data, concurrent saves in order and at the cap, the reader-isolation check), line-diff unit tests, an E2E for viewing (keyboard, diff, focus back on Escape), restoring and saving, readers seeing only the current text, malformed and foreign `?version=` ids, and axe scans of the History panel and the version dialog.
 
+### Phase 14: Collections ✅ (round 1)
+Many poems are sequences (a cycle, a chapbook). Editors group their poems into named, ordered collections; readers read them in order. The board layout is unchanged.
+- **Rules (product decisions):** a poem is in at most one collection; a collection is one editor's and holds only their poems. Readers see only published poems; "Part 3 of 7" counts published poems only (no gaps from drafts). A private poem in a collection shows its title and lock, never its text (N1).
+- **Data** (migration 0012): `collections` (title, slug unique per editor and fixed once created, optional intro) and `poems.collection_id` / `collection_position`. Positions are 1..n over all of a collection's poems, drafts included, and stay contiguous through every add, move, removal and poem delete; a unique index forbids duplicates (reorders renumber in two steps, via negative positions, so the index never trips mid-update). Deleting a collection keeps its poems (they leave it); the FK's `SET NULL` is only a safety net. Limits in `src/lib/collection-limits.ts`: title 100, intro 500, 50 collections per editor, 100 poems per collection; all validated on the server.
+- **Server** (`src/server/collections.ts`, like `poems.ts`): framework-free; every query scoped by the DAL-resolved editor id; another editor's collection or poem id behaves like a missing one; malformed ids are rejected before SQL. Lock order: editor row (`FOR NO KEY UPDATE`, like poem saves) → collection rows (`FOR NO KEY UPDATE`, in id order) → poem rows. Moves are relative (up/down/first/last), applied under the lock, so a stale page can't undo another change. Poem saves (`poems.ts`) take part: the editor's *Collection* field moves a poem to the end of another collection (or out), inside the same transaction; deleting a poem closes its collection's gap.
+- **Admin:** *Collections* in the sidebar. `/admin/collections` lists them (with counts) and creates one; `/admin/collections/[id]` orders its poems with *Move up / Move down* buttons named after each poem (`aria-disabled`, never `disabled`, so focus survives reaching an end; focus follows the moved poem; a live region announces "Moved … to position 2 of 4"), adds poems that aren't in a collection, removes them, renames, edits the intro and deletes (with confirmation). The poem editor has a *Collection* picker under *Language* ("None", or a collection; a poem added there goes to the end).
+- **Readers:** the reading page and the board overlay show "Part 3 of 7 · <collection>" above the title and previous/next links to the neighbouring published poems after it (private ones title-only, with a lock); JSON-LD adds `isPartOf` and `position`. In the overlay the links replace the history entry, so closing it (`router.back()`) still returns to the board; on the full page they're plain `<a>`s, since a soft navigation to `/p/…` is intercepted by the overlay. The data comes with `getReaderPoem` (cached under `BOARD_TAG`): titles, slugs and visibility of published neighbours only, never text, an email or a draft. Every collection mutation calls `updateTag(BOARD_TAG)` (and `poemTag` for the poems it moved).
+- **Tests:** integration tests (slugs and renames, limits, counts, one collection per poem, contiguous positions after add/move/remove/delete/unpublish, readers' parts and neighbours skipping drafts, no private text, draft titles or email in the reader payload, cross-editor and malformed ids, a race mixing reorders, moves, saves, deletes, renames and a password-mode switch, and concurrent adds); E2E for creating a collection from the sidebar, adding poems, ordering it from the keyboard, assigning a poem from the editor, a reader stepping through it in the overlay (Escape returns to the board) and on the full page (Back returns), removing a poem and deleting the collection, and another editor's collection being not found; axe scans of the admin pages, the delete dialog, the picker and the reading navigation (page and overlay).
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
 | --- | ----- | ------ |
 | R1 Canvas board | 3 | ✅ pan/zoom/pinch/keyboard, minimap, list view |
-| R2 Poem CRUD | 2, 13 | ✅ tested (unit + E2E); revision history and restore (Phase 13) |
+| R2 Poem CRUD | 2, 13, 14 | ✅ tested (unit + E2E); revision history and restore (Phase 13); ordered collections (Phase 14) |
 | R3 Public/private + password | 2, 4 | ✅ |
 | R4 Admin dashboard | 1 (shell), 2, 7 | ✅ sidebar shell, stats, filterable table, rich profile |
 | R5 Neon | 0, 6 | ✅ schema + driver switch; live on Neon since launch |
@@ -418,11 +437,11 @@ A bad save or a mistaken paste can be undone: editors see earlier versions of a 
 | R10 Full-text search | 5 | ✅ prefix, multi-word, typo, accent-insensitive; ⌘K palette |
 | R11 Editor picks per-poem or one shared password | 4 | ✅ tested (unit, DB invariant, E2E) |
 | R12 Ghanaian languages and IPA | 11 | ✅ 11a (fonts, share cards, NFC, slugs, search), 11b (Special letters bar), 11c (poem language tag, browse by language) |
-| N1 Private body never leaked | 3, 4, 5, 12 | ✅ board, reading page, unlock, search and feeds tested |
+| N1 Private body never leaked | 3, 4, 5, 12, 14 | ✅ board, reading page, unlock, search, feeds and collection navigation tested |
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
 | N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
-| N5 Server-side authorisation | 1, 2, 13 | ✅ tested (cross-editor IDOR, unit + E2E; revision ids too) |
+| N5 Server-side authorisation | 1, 2, 13, 14 | ✅ tested (cross-editor IDOR, unit + E2E; revision and collection ids too) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
 | N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
 | N8 Board caching | 3, 12 | ✅ tag-invalidated on every admin save (E2E); feeds share the tag |

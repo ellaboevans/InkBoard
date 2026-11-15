@@ -63,6 +63,10 @@ async function PoemJsonLd({ params }: Pick<Props, "params">) {
     ...(p.publishedAt && { datePublished: p.publishedAt }),
     ...(p.language && { inLanguage: p.language }),
     isAccessibleForFree: p.visibility === "public",
+    ...(p.collection && {
+      isPartOf: { "@type": "CreativeWorkSeries", name: p.collection.title },
+      position: p.collection.part,
+    }),
     ...(p.visibility === "public" && p.body && { text: stripPoemMarkdown(p.body) }),
     publisher: { "@type": "Organization", name: SITE_NAME, url: absoluteUrl("/") },
   };

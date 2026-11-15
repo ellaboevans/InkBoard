@@ -9,6 +9,7 @@ import { editors, poems } from "@/db/schema";
 import { BODY_MAX, PASSWORD_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
 import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/lib/slug";
 import { hashPassword } from "./passwords";
+import { compactCollection, lockCollections, placePoem } from "./collections";
 import { recordRevision, sameContent } from "./poem-history";
 
 /*
@@ -53,6 +54,15 @@ const inputSchema = z.object({
     .transform((l) => (l ? l : null))
     .pipe(z.enum(POEM_LANGUAGE_CODES, "Choose a language from the list").nullable()),
   status: z.enum(["draft", "published"]),
+  /**
+   * The poem's collection (docs/PLAN.md, Phase 14): absent = keep the current
+   * one, "" = none, else one of the editor's collection ids (added at the end).
+   */
+  collection: z
+    .string()
+    .optional()
+    .pipe(z.union([z.literal(""), z.uuid()], "Choose a collection from the list").optional())
+    .transform((c) => (c === undefined ? undefined : c || null)),
   /** Empty = keep the current password (edits) / none (public poems). */
   password: z
     .string()
@@ -87,6 +97,7 @@ function parse(raw: unknown) {
 }
 
 const PRIVATE_NEEDS_PASSWORD = "Private poems need a password readers can use";
+const NO_SUCH_COLLECTION = "Choose a collection from the list";
 const SETTINGS_CHANGED =
   "Your password settings changed while saving. Please review and save again.";
 
@@ -101,9 +112,13 @@ async function guardPasswordInvariant<T>(
     return await write();
   } catch (err) {
     if (isCheckViolation(err)) return { ok: false, errors: { form: SETTINGS_CHANGED } };
+    if (err instanceof CollectionFull) return { ok: false, errors: { collection: err.message } };
     throw err;
   }
 }
+
+/** Thrown inside a save transaction to roll it back when the chosen collection is full. */
+class CollectionFull extends Error {}
 
 /** Columns that are safe to send to the editor's browser (no hash). */
 const summaryColumns = {
@@ -117,6 +132,7 @@ const summaryColumns = {
   createdAt: poems.createdAt,
   updatedAt: poems.updatedAt,
   hasPassword: sql<boolean>`${poems.passwordHash} IS NOT NULL`,
+  collectionId: poems.collectionId,
 };
 const editorColumns = { ...summaryColumns, body: poems.body };
 
@@ -132,6 +148,7 @@ export type EditorPoem = {
   createdAt: Date;
   updatedAt: Date;
   hasPassword: boolean;
+  collectionId: string | null;
 };
 
 export type EditorPoemSummary = Omit<EditorPoem, "body">;
@@ -223,6 +240,10 @@ export async function createPoem(
         if (data.visibility === "private" && !shared && !typedHash) {
           return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
         }
+        // Lock order: editor (above), then the collection, then poems.
+        if (data.collection && !(await lockCollections(tx, editorId, [data.collection])).has(data.collection)) {
+          return { ok: false, errors: { collection: NO_SUCH_COLLECTION } };
+        }
         const [poem] = await tx
           .insert(poems)
           .values({
@@ -239,6 +260,11 @@ export async function createPoem(
           .returning({ id: poems.id, slug: poems.slug, status: poems.status });
         // Version 1 of its history.
         await recordRevision(tx, poem.id, { title: data.title, body: data.body, language: data.language });
+        if (data.collection) {
+          const full = await placePoem(tx, poem.id, null, data.collection);
+          // Throwing rolls the whole save back; caught below as a form error.
+          if (full) throw new CollectionFull(full);
+        }
         return { ok: true, poem };
       }),
     ),
@@ -261,6 +287,16 @@ export async function updatePoem(
     withSlugRetry(() =>
       getDb().transaction(async (tx) => {
         const shared = (await lockPasswordMode(tx, editorId)) === "shared";
+        // Lock order: editor (above), then collections, then the poem. The
+        // poem's collection can't change meanwhile: that needs the editor lock.
+        const [placed] = await tx
+          .select({ collectionId: poems.collectionId })
+          .from(poems)
+          .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)));
+        const locked = await lockCollections(tx, editorId, [placed?.collectionId, data.collection]);
+        if (data.collection && !locked.has(data.collection)) {
+          return { ok: false as const, errors: { collection: NO_SUCH_COLLECTION } };
+        }
         const [current] = await tx
           .select({
             title: poems.title,
@@ -332,6 +368,10 @@ export async function updatePoem(
         if (!sameContent(next, current)) {
           await recordRevision(tx, poemId, next, { ...current, savedAt: current.updatedAt });
         }
+        if (data.collection !== undefined) {
+          const full = await placePoem(tx, poemId, placed?.collectionId ?? null, data.collection);
+          if (full) throw new CollectionFull(full);
+        }
         return { ok: true as const, poem };
       }),
     ),
@@ -340,9 +380,20 @@ export async function updatePoem(
 
 export async function deletePoem(editorId: string, poemId: string): Promise<boolean> {
   if (!idSchema.safeParse(poemId).success) return false;
-  const rows = await getDb()
-    .delete(poems)
-    .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
-    .returning({ id: poems.id });
-  return rows.length > 0;
+  return getDb().transaction(async (tx) => {
+    // Editor, then its collection, then the poem; the rest of the collection closes up.
+    await lockPasswordMode(tx, editorId);
+    const [placed] = await tx
+      .select({ collectionId: poems.collectionId })
+      .from(poems)
+      .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)));
+    if (!placed) return false;
+    await lockCollections(tx, editorId, [placed.collectionId]);
+    const rows = await tx
+      .delete(poems)
+      .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
+      .returning({ id: poems.id });
+    if (placed.collectionId) await compactCollection(tx, placed.collectionId);
+    return rows.length > 0;
+  });
 }

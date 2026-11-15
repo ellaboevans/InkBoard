@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireOnboardedEditor } from "@/server/auth/dal";
+import { collectionOptions } from "@/server/collections";
 import { getPasswordMode } from "@/server/password-settings";
 import { firstAddedLine } from "@/lib/line-diff";
 import { getPoemRevision, listPoemRevisions, PREVIEW_CHARS } from "@/server/poem-history";
@@ -31,8 +32,9 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
   const poem = await getEditorPoem(editor.id, id);
   if (!poem) notFound();
   const { created, version } = await searchParams;
-  const [passwordMode, revisions, selected] = await Promise.all([
+  const [passwordMode, collections, revisions, selected] = await Promise.all([
     getPasswordMode(editor.id),
+    collectionOptions(editor.id),
     // History is editor-only: scoped by the DAL-resolved id, like the poem.
     listPoemRevisions(editor.id, poem.id),
     typeof version === "string" ? getPoemRevision(editor.id, poem.id, version) : null,
@@ -48,6 +50,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
       justCreated={created === "1"}
       passwordMode={passwordMode}
       penName={editor.penName}
+      collections={collections}
       history={revisions.map((r, i) => ({
         id: r.id,
         savedLabel: savedLabel(r.savedAt),
@@ -73,6 +76,7 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
         body: poem.body,
         visibility: poem.visibility,
         language: poem.language,
+        collectionId: poem.collectionId,
         status: poem.status,
         hasPassword: poem.hasPassword,
       }}

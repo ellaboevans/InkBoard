@@ -20,6 +20,22 @@ export type BoardSection = {
   poems: BoardPoem[];
 };
 
+/** A neighbour in a collection: title only, like a board card (never text). */
+export type ReaderCollectionPoem = { title: string; slug: string; visibility: "public" | "private"; language: string | null };
+
+/**
+ * Where a published poem sits in its collection (docs/PLAN.md, Phase 14).
+ * Counts published poems only, so drafts never leave gaps ("Part 3 of 7").
+ */
+export type ReaderCollection = {
+  title: string;
+  slug: string;
+  part: number;
+  parts: number;
+  prev: ReaderCollectionPoem | null;
+  next: ReaderCollectionPoem | null;
+};
+
 export type ReaderPoem = {
   title: string;
   slug: string;
@@ -32,6 +48,8 @@ export type ReaderPoem = {
   /** Private poems: true when the author uses one password for all of them. */
   sharedPassword: boolean;
   publishedAt: string | null;
+  /** Null when the poem isn't in a collection. */
+  collection: ReaderCollection | null;
 };
 
 /** An author's public page (/a/[author]). Never includes the email. */

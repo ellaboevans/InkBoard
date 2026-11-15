@@ -69,6 +69,12 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Editor-only: reads join `poems` and filter by the DAL-resolved `editorId`; never read it for readers (no board, feed, search or share-card query). A test fails if any other module references the table, or if its loaders are used outside `src/app/admin/`.
 - Never add password, hash or visibility columns to it. A restore only fills the editor form (`poem-history.tsx`); the normal save records it, so don't add a second save path.
 
+**Collections** (`src/server/collections.ts`, docs/PLAN.md Phase 14): an editor's ordered groups of their own poems; a poem is in at most one.
+- Same scoping as poems (DAL `editorId` on every query, foreign ids look missing, malformed ids rejected before SQL). Lock order: editor row (`FOR NO KEY UPDATE`) → collection rows (`lockCollections`, id order) → poems. Poem saves and deletes in `poems.ts` follow it too; keep it in any new write.
+- `collection_position` is 1..n over all the collection's poems (drafts included) and must stay contiguous: change it only through `placePoem`/`compactCollection`/`moveCollectionPoem`, which renumber in two steps (the unique index would trip on a one-step swap). Readers' "Part n of m" counts published poems only (`loadReaderCollection` in `board.ts`): titles, slugs and visibility, never text.
+- Every collection mutation that readers could see calls `updateTag(BOARD_TAG)`. Reader prev/next links: router links with `replace` in the overlay (closing it is `router.back()`), plain `<a>` on the full page (a soft navigation to `/p/…` is intercepted into the overlay).
+- The order page's buttons use `aria-disabled`, never `disabled` (a disabled button drops focus), and move focus to the moved poem after the refresh.
+
 **Private-poem passwords** have two modes per editor (`editors.password_mode`): `per_poem` (`poems.password_hash`) or `shared` (`editors.shared_password_hash`, with poem hashes null).
 - Switching is handled in `src/server/password-settings.ts`, the reader side in `src/server/unlock.ts`.
 - The rule "a private poem is always readable with some password" is enforced in the DB by triggers (`drizzle/0002_password_mode_triggers.sql`), which raise `check_violation` (23514); `guardPasswordInvariant` in `poems.ts` turns that into a form error.

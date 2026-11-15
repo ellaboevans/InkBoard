@@ -37,6 +37,8 @@ async function warmUp() {
     ["/admin/poems/new"],
     ["/admin/poems/00000000-0000-0000-0000-000000000000"],
     ["/admin/settings"],
+    ["/admin/collections"],
+    ["/admin/collections/00000000-0000-0000-0000-000000000000"],
     ["/admin/profile"],
     ["/a/warm-up"],
     ["/feed.xml"],

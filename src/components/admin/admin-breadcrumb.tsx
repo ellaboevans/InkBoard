@@ -15,6 +15,8 @@ import {
 function crumbsFor(pathname: string): { label: string; href?: string }[] {
   if (pathname.startsWith("/admin/poems/new")) return [{ label: "Poems", href: "/admin" }, { label: "New poem" }];
   if (pathname.startsWith("/admin/poems/")) return [{ label: "Poems", href: "/admin" }, { label: "Edit poem" }];
+  if (pathname.startsWith("/admin/collections/")) return [{ label: "Collections", href: "/admin/collections" }, { label: "Edit collection" }];
+  if (pathname.startsWith("/admin/collections")) return [{ label: "Collections" }];
   if (pathname.startsWith("/admin/profile")) return [{ label: "Profile" }];
   if (pathname.startsWith("/admin/settings")) return [{ label: "Settings" }];
   return [{ label: "Poems" }];

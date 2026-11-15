@@ -154,6 +154,25 @@ export const signInDevices = pgTable(
   (t) => [uniqueIndex("sign_in_devices_editor_device_key").on(t.editorId, t.deviceKey)],
 );
 
+/**
+ * An editor's named, ordered group of their own poems (docs/PLAN.md, Phase 14).
+ * The slug is unique per editor and fixed once created (it goes into URLs).
+ */
+export const collections = pgTable(
+  "collections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    intro: text("intro"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("collections_editor_slug_key").on(t.editorId, t.slug)],
+);
+
 export const poemVisibility = pgEnum("poem_visibility", ["public", "private"]);
 export const poemStatus = pgEnum("poem_status", ["draft", "published"]);
 
@@ -181,10 +200,20 @@ export const poems = pgTable(
     passwordVersion: integer("password_version").notNull().default(0),
     status: poemStatus("status").notNull().default("draft"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    /**
+     * At most one collection (the same editor's; src/server/collections.ts),
+     * with a 1-based position that stays contiguous over all its poems,
+     * drafts included. Both are set and cleared together by the app.
+     * SET NULL is only a safety net: deleting a collection clears positions first.
+     */
+    collectionId: uuid("collection_id").references(() => collections.id, { onDelete: "set null" }),
+    collectionPosition: integer("collection_position"),
     ...timestamps,
   },
   (t) => [
     uniqueIndex("poems_editor_slug_key").on(t.editorId, t.slug),
+    // Two poems can't share a position (NULL collections never clash).
+    uniqueIndex("poems_collection_position_key").on(t.collectionId, t.collectionPosition),
     index("poems_editor_idx").on(t.editorId),
     index("poems_status_published_idx").on(t.status, t.publishedAt),
   ],

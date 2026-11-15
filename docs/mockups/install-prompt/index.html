@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InkBoard install nudge · mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<!--
+  Design mockups only (docs). Opens from disk: no build, no server, no login.
+  Colours are the tokens from src/app/globals.css, copied verbatim.
+  The board is laid out by a port of src/lib/board-layout.ts over the
+  published poems in scripts/seed-data.ts, with the app's own camera rules.
+  PNG exports next to this file come from render.mjs (Playwright).
+-->
+<style>
+:root {
+  color-scheme: light;
+  /* ---- src/app/globals.css :root, verbatim ---- */
+  --background: oklch(0.985 0.008 85);
+  --foreground: oklch(0.24 0.018 55);
+  --card: oklch(0.995 0.005 85);
+  --card-foreground: oklch(0.24 0.018 55);
+  --popover: oklch(0.995 0.005 85);
+  --primary: oklch(0.43 0.12 25);
+  --primary-foreground: oklch(0.985 0.01 85);
+  --secondary: oklch(0.95 0.014 80);
+  --secondary-foreground: oklch(0.3 0.02 55);
+  --muted: oklch(0.95 0.012 80);
+  --muted-foreground: oklch(0.46 0.02 60);
+  --accent: oklch(0.93 0.03 80);
+  --accent-foreground: oklch(0.3 0.02 55);
+  --border: oklch(0.89 0.015 80);
+  --input: oklch(0.87 0.016 80);
+  --ring: oklch(0.55 0.1 25);
+  --destructive: oklch(0.5 0.19 28);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.97 0.012 82);
+  --sidebar-accent: oklch(0.93 0.03 80);
+  --sidebar-border: oklch(0.89 0.015 80);
+  --canvas: oklch(0.955 0.014 82);
+  --canvas-dot: oklch(0.82 0.02 75);
+  /* ---- Tailwind radii from the same file ---- */
+  --r-md: calc(var(--radius) * 0.8);
+  --r-lg: var(--radius);
+  --r-xl: calc(var(--radius) * 1.4);
+  --r-2xl: calc(var(--radius) * 1.8);
+  --r-3xl: calc(var(--radius) * 2.2);
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --glass: color-mix(in oklch, var(--background) 85%, transparent);
+  --glass-90: color-mix(in oklch, var(--background) 90%, transparent);
+}
+* { box-sizing: border-box; border-color: var(--border); }
+html { font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-size: 14px; line-height: 1.5; }
+h1, h2, h3, p, ol, ul { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* =================== Gallery (the docs page itself) =================== */
+.gallery { max-width: 1360px; margin: 0 auto; padding: 48px 16px 96px; }
+.gallery > header { max-width: 760px; margin-bottom: 40px; }
+.eyebrow { display: flex; align-items: center; gap: 10px; color: var(--muted-foreground); font-size: 13px; }
+.eyebrow svg { width: 28px; height: 28px; }
+.gallery h1 { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.15; margin: 14px 0 10px; }
+.gallery .lede { color: var(--muted-foreground); font-size: 16px; max-width: 64ch; }
+.group-title { font-family: var(--serif); font-weight: 400; font-size: 26px; margin: 56px 0 4px; }
+.group-sub { color: var(--muted-foreground); margin-bottom: 24px; }
+.row { display: flex; flex-wrap: wrap; gap: 40px 32px; align-items: flex-start; }
+figure.frame { margin: 0; min-width: 0; max-width: 100%; }
+/* Phone frames are as wide as the device; captions wrap to it. */
+figure.frame:has(.shot.phone) { width: min-content; }
+figure.frame figcaption { margin-bottom: 14px; max-width: 64ch; }
+.label { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.num { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 12px; font-weight: 600; transform: translateY(-2px); }
+.label strong { font-weight: 600; font-size: 15px; }
+.label .dim { color: var(--muted-foreground); font-size: 13px; font-variant-numeric: tabular-nums; }
+.caption { color: var(--muted-foreground); margin-top: 4px; }
+.fit { max-width: 100%; overflow: hidden; }
+.scaler { zoom: var(--z, 1); }
+.export .scaler { zoom: 1 !important; }
+.notes { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); max-width: 80ch; }
+.notes h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin-bottom: 10px; }
+.notes li { position: relative; padding-left: 18px; margin: 6px 0; color: var(--foreground); }
+.notes li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 99px; background: var(--primary); }
+.notes code { font-size: 12.5px; background: var(--muted); padding: 1px 5px; border-radius: 5px; }
+
+/* Device shells: deliberately plain, no OS status bars. */
+.shot { display: inline-block; vertical-align: top; }
+.phone { width: 410px; padding: 10px; border-radius: 52px; background: oklch(0.27 0.015 55); box-shadow: 0 30px 60px -30px oklch(0 0 0 / .45); }
+.phone > .screen { width: 390px; height: 844px; border-radius: 42px; overflow: hidden; position: relative; display: flex; flex-direction: column; background: var(--background); }
+.desk { border-radius: 14px; overflow: hidden; border: 1px solid oklch(0.82 0.015 80); box-shadow: 0 30px 60px -34px oklch(0 0 0 / .4); background: var(--background); }
+
+/* Generic browser chrome (not a copy of any vendor's UI). */
+.chrome-top { height: 56px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; background: oklch(0.96 0.003 85); border-bottom: 1px solid oklch(0.9 0.004 85); color: oklch(0.3 0.005 85); }
+.addr { flex: 1; height: 38px; border-radius: 999px; background: oklch(0.91 0.004 85); display: flex; align-items: center; gap: 8px; padding: 0 14px; font-size: 14px; color: oklch(0.33 0.005 85); }
+.addr svg { width: 14px; height: 14px; }
+.tabs-count { width: 22px; height: 22px; border: 2px solid currentColor; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+.chrome-bottom { flex: none; background: oklch(0.96 0.003 85); border-top: 1px solid oklch(0.9 0.004 85); padding: 8px 12px 14px; color: oklch(0.3 0.005 85); }
+.chrome-bottom .addr { height: 40px; border-radius: 12px; justify-content: center; position: relative; }
+.chrome-bottom .addr .reload { position: absolute; right: 12px; }
+.chrome-icons { display: flex; justify-content: space-around; padding-top: 10px; }
+.chrome-icons span { width: 44px; height: 36px; display: grid; place-items: center; }
+.chrome-icons svg { width: 22px; height: 22px; stroke-width: 1.8; }
+.chrome-icons .dim-icon { opacity: .35; }
+
+/* =================== App primitives (shadcn button, badge…) =================== */
+.btn { display: inline-flex; align-items: center; justify-content: center; flex: none; white-space: nowrap; border: 1px solid transparent; font-weight: 500; font-size: 14px; line-height: 1; gap: 6px; height: 32px; padding: 0 10px; border-radius: var(--r-lg); background-clip: padding-box; }
+.btn.sm { height: 28px; gap: 4px; padding: 0 10px; font-size: 0.8rem; border-radius: min(var(--r-md), 12px); }
+.btn.sm svg.i { width: 14px; height: 14px; }
+.btn.icon-sm { width: 28px; height: 28px; padding: 0; border-radius: min(var(--r-md), 12px); }
+.btn.lg { height: 36px; }
+.btn.touch { height: 44px; padding: 0 16px; font-size: 15px; border-radius: var(--r-lg); gap: 8px; }
+.btn.touch svg.i { width: 18px; height: 18px; }
+.btn.outline { border-color: var(--border); background: var(--background); }
+.btn.glass { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.btn.ghost { background: transparent; }
+.btn.primary { background: var(--primary); color: var(--primary-foreground); }
+.btn.hover { background: var(--muted); }
+.btn.ring { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent); border-color: var(--ring); }
+.muted { color: var(--muted-foreground); }
+kbd.k { font-family: var(--sans); font-size: 10px; line-height: 16px; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; background: var(--primary); color: var(--primary-foreground); }
+
+/* =================== Board (board-canvas.tsx) =================== */
+.board { position: relative; overflow: hidden; background: var(--canvas); flex: 1; }
+.board .viewport { position: absolute; inset: 0; overflow: clip; background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 24px 24px; }
+.world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.shelf { position: absolute; border: 1px solid oklch(0.82 0.04 var(--hue) / 0.7); background: oklch(0.975 0.016 var(--hue) / 0.72); border-radius: var(--r-3xl); }
+.shelf-label { position: absolute; display: flex; align-items: baseline; gap: 12px; padding: 0 4px; text-align: left; border-radius: var(--r-lg); }
+.shelf-label .dot { width: 10px; height: 10px; border-radius: 99px; background: oklch(0.62 0.12 var(--hue)); align-self: center; flex: none; }
+.shelf-label h2 { font-family: var(--serif); font-weight: 400; font-size: 28px; line-height: 1.25; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shelf-label .count { font-size: 14px; color: var(--muted-foreground); flex: none; }
+.pcard { position: absolute; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-2xl); background: var(--card); color: var(--card-foreground); padding: 16px; box-shadow: 0 1px 2px oklch(0 0 0 / .06), 0 4px 16px -8px oklch(0 0 0 / .12); }
+.pcard .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pcard h3 { font-family: var(--serif); font-weight: 400; font-size: 19px; line-height: 1.375; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pcard .lock { margin-top: 2px; width: 20px; height: 20px; border-radius: 99px; background: var(--secondary); color: var(--secondary-foreground); display: grid; place-items: center; flex: none; }
+.pcard .lock svg { width: 12px; height: 12px; }
+.pcard .excerpt { margin-top: 8px; flex: 1; overflow: hidden; font-family: var(--serif); font-size: 14.5px; line-height: 1.625; white-space: pre-wrap; color: var(--muted-foreground); -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent); mask-image: linear-gradient(to bottom, black 70%, transparent); }
+.pcard .redacted { margin-top: 12px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.pcard .redacted .lines { display: grid; gap: 8px; opacity: .6; }
+.pcard .redacted .lines span { height: 8px; border-radius: 99px; background: color-mix(in oklch, var(--muted-foreground) 20%, transparent); }
+.pcard .redacted p { font-size: 12px; color: var(--muted-foreground); }
+
+.top-col { position: absolute; inset: 0 0 auto 0; z-index: 10; display: flex; flex-direction: column; gap: 8px; padding: 16px; pointer-events: none; }
+.top-col > * { pointer-events: auto; }
+.board-head { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.logo-pill { display: flex; align-items: center; gap: 8px; flex: none; border: 1px solid var(--border); border-radius: var(--r-xl); padding: 8px 12px; background: var(--glass); backdrop-filter: blur(8px); box-shadow: var(--shadow-sm); }
+.logo-pill svg { color: var(--primary); }
+.logo-pill .name { font-family: var(--serif); font-size: 18px; line-height: 1; }
+.logo-pill .stats { font-size: 12px; color: var(--muted-foreground); }
+.toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.toolbar .search { min-width: 208px; justify-content: flex-start; }
+.toolbar .search kbd { margin-left: auto; }
+.authors { align-self: flex-start; }
+.bottom-col { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none; }
+.bottom-col > * { pointer-events: auto; }
+.zoombar { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: var(--r-xl); padding: 4px; background: var(--glass-90); backdrop-filter: blur(8px); box-shadow: var(--shadow-sm); }
+.zoombar .pct { width: 56px; font-variant-numeric: tabular-nums; }
+.zoombar .sep { width: 1px; height: 20px; margin: 0 4px; background: var(--border); }
+.hint { position: absolute; left: 16px; bottom: 20px; font-size: 12px; color: var(--muted-foreground); }
+.minimap { position: absolute; right: 16px; bottom: 16px; padding: 8px; border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--glass-90); backdrop-filter: blur(8px); box-shadow: var(--shadow-sm); }
+.minimap svg { display: block; }
+
+/* =================== The install nudge (new) =================== */
+.nudge { position: relative; width: 100%; max-width: 420px; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-2xl); background: color-mix(in oklch, var(--card) 97%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 1px 2px oklch(0 0 0 / .06), 0 14px 36px -14px oklch(0 0 0 / .3); }
+.nudge .top { display: flex; gap: 12px; align-items: flex-start; }
+.tile { width: 44px; height: 44px; flex: none; display: block; }
+.nudge h2 { font-size: 15.5px; line-height: 21px; font-weight: 600; margin-top: 1px; letter-spacing: -0.005em; }
+.nudge .why { margin-top: 2px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.nudge .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.nudge .actions.end { display: flex; justify-content: flex-end; }
+.steps { margin-top: 12px; display: grid; gap: 8px; counter-reset: step; }
+.steps li { display: flex; align-items: center; gap: 12px; font-size: 14.5px; line-height: 20px; }
+.steps .glyph { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: var(--r-lg); background: var(--secondary); color: var(--secondary-foreground); border: 1px solid var(--border); }
+.steps .glyph svg { width: 18px; height: 18px; }
+.steps .n { font-variant-numeric: tabular-nums; color: var(--muted-foreground); width: 12px; flex: none; text-align: right; }
+.steps b { font-weight: 600; }
+.pointer { position: absolute; left: 50%; bottom: -16px; translate: -50% 0; width: 32px; height: 32px; border-radius: 99px; display: grid; place-items: center; background: var(--primary); color: var(--primary-foreground); box-shadow: 0 0 0 4px var(--background), 0 6px 14px -4px oklch(0 0 0 / .35); }
+.pointer svg { width: 18px; height: 18px; }
+/* Desktop: hangs from the toolbar's install button. */
+.under-toolbar { position: absolute; right: 0; top: calc(100% + 10px); width: 372px; }
+.under-toolbar .nudge { max-width: none; }
+.tail { position: absolute; top: -7px; width: 12px; height: 12px; rotate: 45deg; background: var(--card); border-left: 1px solid var(--border); border-top: 1px solid var(--border); }
+.menu-path { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.menu-path kbd { font-family: var(--sans); font-size: 13px; font-weight: 500; line-height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--secondary); color: var(--secondary-foreground); }
+.tooltip { position: absolute; z-index: 30; padding: 6px 12px; border-radius: var(--r-md); background: var(--foreground); color: var(--background); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.tooltip::before { content: ""; position: absolute; left: 50%; top: -4px; width: 9px; height: 9px; translate: -50% 0; rotate: 45deg; background: inherit; border-radius: 2px; }
+.ring-callout { position: absolute; border: 2px dashed var(--primary); border-radius: 12px; pointer-events: none; }
+
+/* =================== Editor (poem-form.tsx, dashboard shell) =================== */
+.editor { position: relative; flex: 1; overflow: hidden; background: var(--background); }
+.ed-head { height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.ed-head .vsep { width: 1px; height: 16px; background: var(--border); margin-right: 8px; }
+.crumbs { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted-foreground); }
+.crumbs svg { width: 14px; height: 14px; }
+.crumbs [aria-current] { color: var(--foreground); }
+/* Pinned so the toast and the writer card both land on gaps between panels. */
+.ed-above { position: absolute; left: 16px; right: 16px; bottom: calc(100% - 151px); }
+.preview-canvas { display: flex; justify-content: center; padding: 16px 8px; border-radius: var(--r-lg); background: var(--canvas) radial-gradient(var(--canvas-dot) 1px, transparent 1px) 0 0 / 18px 18px; }
+.ed-scrolled { position: absolute; left: 16px; right: 16px; top: 167px; display: grid; gap: 16px; }
+.panel { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--border); border-radius: var(--r-xl); background: var(--card); }
+.panel .pl { font-size: 14px; font-weight: 500; line-height: 20px; }
+.panel .ph { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+.panel .pp { font-size: 14px; line-height: 20px; color: var(--muted-foreground); }
+.panel .u { text-decoration: underline; text-underline-offset: 2px; }
+.select { position: relative; display: block; }
+.select select { appearance: none; width: 100%; height: 32px; padding: 0 32px 0 10px; border: 1px solid var(--input); border-radius: var(--r-lg); background: transparent; font: inherit; font-size: 14px; color: var(--foreground); }
+.select svg { position: absolute; right: 10px; top: 8px; color: var(--muted-foreground); pointer-events: none; }
+.switch { width: 32px; height: 18.4px; flex: none; border-radius: 99px; background: var(--input); padding: 1px; display: flex; align-items: center; }
+.switch span { width: 16px; height: 16px; border-radius: 99px; background: var(--background); }
+.safe-top { height: 47px; flex: none; background: var(--background); }
+/* Sileo toast, as configured in src/components/toaster.tsx (top-centre, default white fill). */
+.toast { position: absolute; top: 8px; left: 50%; translate: -50% 0; width: 350px; z-index: 40; filter: drop-shadow(0 6px 14px oklch(0 0 0 / .14)) drop-shadow(0 1px 2px oklch(0 0 0 / .08)); }
+.toast .pill { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 8px; background: #fff; border-radius: 20px 20px 0 0; }
+.toast .badge-ok { width: 24px; height: 24px; border-radius: 99px; display: grid; place-items: center; color: var(--toast-tone); background: color-mix(in oklch, var(--toast-tone) 16%, transparent); }
+.toast .badge-ok svg { width: 14px; height: 14px; stroke-width: 2.5; }
+.toast .title { font-size: 0.825rem; line-height: 1rem; font-weight: 500; text-transform: capitalize; color: var(--toast-tone); }
+.toast .body { background: #fff; border-radius: 0 20px 20px 20px; padding: 14px 16px; font-size: 14px; line-height: 20px; color: oklch(0.38 0.01 60); }
+.toast { --toast-tone: oklch(0.48 0.14 145); }
+.editor .bottom-col { bottom: 16px; }
+
+/* Admin shell crop (sidebar-08 inset) */
+.admin { position: relative; display: flex; background: var(--sidebar); width: 760px; height: 470px; overflow: hidden; }
+.sb { width: 256px; flex: none; display: flex; flex-direction: column; padding: 8px; gap: 8px; }
+.sb-item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: var(--r-md); font-size: 14px; }
+.sb-item.lg { height: 48px; }
+.sb-item.active { background: var(--sidebar-accent); font-weight: 500; }
+.sb-item.new { background: var(--primary); color: var(--primary-foreground); box-shadow: 0 1px 2px oklch(0 0 0 / .05); }
+.sb-item.sm { height: 28px; font-size: 12px; }
+.sb-group { display: grid; gap: 4px; padding: 0 0 0 0; }
+.logo-tile-sq { width: 32px; height: 32px; border-radius: var(--r-lg); background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; flex: none; }
+.ident { display: grid; line-height: 1.25; text-align: left; flex: 1; min-width: 0; }
+.ident b { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ident span { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.avatar { width: 32px; height: 32px; border-radius: 99px; flex: none; background: var(--secondary); display: block; }
+.inset { flex: 1; margin: 8px 8px 8px 0; border-radius: var(--r-xl); background: var(--background); box-shadow: var(--shadow-sm); overflow: hidden; }
+.inset .ed-head { padding: 0 24px; }
+.inset .content { padding: 32px; }
+.inset h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.2; }
+.trow { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.trow.h { color: var(--muted-foreground); font-weight: 500; }
+.tbl { margin-top: 24px; border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; background: var(--card); }
+.menu { position: absolute; width: 240px; padding: 4px; border-radius: var(--r-lg); background: var(--popover); box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent), 0 10px 24px -8px oklch(0 0 0 / .22); z-index: 20; }
+.menu .mi { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--r-md); font-size: 14px; line-height: 20px; width: 100%; text-align: left; }
+.menu .mi.focus { background: var(--accent); color: var(--accent-foreground); }
+.menu .sep { height: 1px; margin: 4px -4px; background: var(--border); }
+.menu .lbl { display: flex; align-items: center; gap: 8px; padding: 6px 4px; }
+.menu .new-tag { margin-left: auto; font-size: 11px; color: var(--muted-foreground); }
+
+/* Installed note frame */
+.note-frame { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+.note-card { width: 380px; max-width: 100%; padding: 24px; border: 1px solid var(--border); border-radius: var(--r-2xl); background: var(--card); }
+.note-card h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.2; margin-bottom: 4px; }
+.note-card .sub { color: var(--muted-foreground); margin-bottom: 16px; }
+.state { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.state .off { font-size: 12px; font-weight: 500; color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px; }
+.note-card .detect { margin-top: 16px; font-size: 13px; color: var(--muted-foreground); }
+.note-card code { font-size: 12px; background: var(--muted); padding: 1px 5px; border-radius: 5px; color: var(--foreground); }
+</style>
+</head>
+<body>
+<div class="gallery">
+  <header>
+    <div class="eyebrow"><svg data-tile aria-hidden="true"></svg><span>InkBoard · design round · not built</span></div>
+    <h1>Install nudge</h1>
+    <p class="lede">Telling readers and writers that InkBoard can live on their home screen or dock. Every frame uses the real board, toolbar, colours and type; only the card, the toolbar button and the menu item are new.</p>
+  </header>
+
+  <h2 class="group-title">Phones</h2>
+  <p class="group-sub">The card is part of the bottom overlay column, so it can never cover the zoom bar.</p>
+  <div class="row">
+    <figure class="frame" data-export="1-android-chrome">
+      <figcaption>
+        <div class="label"><span class="num">1</span><strong>Android · Chrome</strong><span class="dim">390 × 844</span></div>
+        <p class="caption">First board visit at the phone’s reading zoom; Install opens Chrome’s own install dialog.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot phone"><div class="screen">
+        <div class="chrome-top" aria-hidden="true">
+          <div class="addr"><svg data-i="lock"></svg>inkboard.example</div>
+          <span class="tabs-count">2</span>
+          <svg data-i="ellipsis-vertical"></svg>
+        </div>
+        <div class="board" data-board='{"mode":"phone","view":"initial"}'>
+          <div class="bottom-col">
+            <section class="nudge" aria-labelledby="n1-title">
+              <div class="top">
+                <svg data-tile class="tile" aria-hidden="true"></svg>
+                <div>
+                  <h2 id="n1-title">Put InkBoard on your home screen</h2>
+                  <p class="why">One tap to the board, full screen, without the browser around it.</p>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn outline touch">Not now</button>
+                <button type="button" class="btn primary touch"><svg data-i="download"></svg>Install</button>
+              </div>
+            </section>
+            <div data-zoombar></div>
+          </div>
+        </div>
+      </div></div></div></div>
+    </figure>
+
+    <figure class="frame" data-export="2-iphone-safari">
+      <figcaption>
+        <div class="label"><span class="num">2</span><strong>iPhone · Safari</strong><span class="dim">390 × 844</span></div>
+        <p class="caption">No install API, so the card teaches the two taps and points down at Safari’s Share button.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot phone"><div class="screen">
+        <div class="safe-top" aria-hidden="true"></div>
+        <div class="board" data-board='{"mode":"phone","view":{"shelf":"Odalys Moon"}}'>
+          <div class="bottom-col">
+            <div data-zoombar></div>
+            <section class="nudge" aria-labelledby="n2-title">
+              <div class="top">
+                <svg data-tile class="tile" aria-hidden="true"></svg>
+                <div>
+                  <h2 id="n2-title">Put InkBoard on your home screen</h2>
+                  <p class="why">One tap to the board, full screen. Safari does it in two steps:</p>
+                </div>
+              </div>
+              <ol class="steps">
+                <li><span class="n">1</span><span class="glyph"><svg data-i="share"></svg></span><span>Tap <b>Share</b> in the bar below</span></li>
+                <li><span class="n">2</span><span class="glyph"><svg data-i="square-plus"></svg></span><span>Choose <b>Add to Home Screen</b></span></li>
+              </ol>
+              <div class="actions">
+                <button type="button" class="btn outline touch">Not now</button>
+                <button type="button" class="btn primary touch">Got it</button>
+              </div>
+              <span class="pointer" aria-hidden="true"><svg data-i="arrow-down"></svg></span>
+            </section>
+          </div>
+        </div>
+        <div class="chrome-bottom" aria-hidden="true">
+          <div class="addr">inkboard.example<svg class="reload" data-i="rotate-cw"></svg></div>
+          <div class="chrome-icons">
+            <span><svg data-i="chevron-left"></svg></span>
+            <span class="dim-icon"><svg data-i="chevron-right"></svg></span>
+            <span><svg data-i="share"></svg></span>
+            <span><svg data-i="book-open"></svg></span>
+            <span><svg data-i="copy"></svg></span>
+          </div>
+        </div>
+      </div></div></div></div>
+    </figure>
+
+    <figure class="frame" data-export="3-editor-first-publish">
+      <figcaption>
+        <div class="label"><span class="num">3</span><strong>Editor · phone · after the first publish</strong><span class="dim">390 × 844</span></div>
+        <p class="caption">Just after “Publish to board” (the editor scrolled to its Publishing panel): the toast confirms, then the card, reworded for writers.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot phone"><div class="screen">
+        <div class="chrome-top" aria-hidden="true">
+          <div class="addr"><svg data-i="lock"></svg>inkboard.example/admin/…</div>
+          <span class="tabs-count">2</span>
+          <svg data-i="ellipsis-vertical"></svg>
+        </div>
+        <div class="editor">
+          <!-- On phones the aside stacks under the poem, so “Publish to board” is
+               reached by scrolling down: this is the page scrolled to its end. -->
+          <div class="ed-above">
+            <section class="panel" style="gap:12px">
+              <div style="display:grid;gap:2px"><h2 class="pl">Card preview</h2><p class="ph">How it looks on the board.</p></div>
+              <div class="preview-canvas">
+                <div class="pcard" style="position:relative;width:264px;height:184px;flex:none"><div class="head"><h3><button type="button">Unwritten</button></h3></div><p class="excerpt">blank page
+the pen's
+long pause</p></div>
+              </div>
+              <p class="ph">Click the card to preview the full poem.</p>
+            </section>
+          </div>
+          <div class="ed-scrolled">
+            <section class="panel">
+              <label class="pl" for="e-lang">Language</label>
+              <span class="select"><select id="e-lang"><option>Not set</option></select><svg data-i="chevron-down"></svg></span>
+              <p class="ph">Shown on the poem, and tells screen readers how to read it.</p>
+              <label class="pl" for="e-coll" style="margin-top:8px">Collection</label>
+              <span class="select"><select id="e-coll"><option>None</option></select><svg data-i="chevron-down"></svg></span>
+              <p class="ph">Group poems into an ordered sequence. <a href="#" class="u">Create a collection</a></p>
+            </section>
+            <section class="panel" style="gap:12px">
+              <h2 class="pl">Publishing</h2>
+              <p class="pp">This poem is on the board. Saving updates it right away.</p>
+              <div style="display:grid;gap:8px">
+                <button type="button" class="btn primary">Save changes</button>
+                <button type="button" class="btn outline">Unpublish</button>
+              </div>
+              <p class="ph">Tip: ⌘S / Ctrl S saves.</p>
+            </section>
+            <section class="panel">
+              <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div style="display:grid;gap:4px"><span class="pl" style="display:flex;align-items:center;gap:6px"><svg data-i="lock" style="width:14px;height:14px"></svg>Password protected</span><p class="pp">Anyone can read this poem.</p></div>
+                <button type="button" role="switch" aria-checked="false" aria-label="Password protected" class="switch"><span></span></button>
+              </div>
+            </section>
+            <section class="panel">
+              <h2 class="pl" style="display:flex;align-items:center;gap:6px"><svg data-i="history" style="width:14px;height:14px"></svg>History</h2>
+              <p class="ph">Earlier versions appear here when you save changes to the title, text or language.</p>
+            </section>
+            <button type="button" class="btn ghost" style="justify-content:flex-start;color:var(--destructive)"><svg data-i="trash-2"></svg>Delete poem</button>
+          </div>
+          <div class="toast" role="status">
+            <div class="pill"><span class="badge-ok"><svg data-i="check"></svg></span><span class="title">Saved and published</span></div>
+            <div class="body">Readers see the update on the board right away.</div>
+          </div>
+          <div class="bottom-col">
+            <section class="nudge" aria-labelledby="n3-title">
+              <div class="top">
+                <svg data-tile class="tile" aria-hidden="true"></svg>
+                <div>
+                  <h2 id="n3-title">Write from your home screen</h2>
+                  <p class="why">Your poems one tap away, ready when a line arrives.</p>
+                </div>
+              </div>
+              <div class="actions">
+                <button type="button" class="btn outline touch">Not now</button>
+                <button type="button" class="btn primary touch"><svg data-i="download"></svg>Install</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div></div></div></div>
+    </figure>
+  </div>
+
+  <h2 class="group-title">Desktop</h2>
+  <p class="group-sub">The card hangs from the toolbar’s install button, top right: clear of the minimap and the zoom bar.</p>
+  <div class="row">
+    <figure class="frame" data-export="4-desktop-chrome-edge">
+      <figcaption>
+        <div class="label"><span class="num">4</span><strong>Desktop · Chrome / Edge</strong><span class="dim">1280 × 800</span></div>
+        <p class="caption">The real top-right toolbar with the card just under it; “Not now” folds it back into the button it points at.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot desk" style="width:1280px;height:800px;display:flex">
+        <div class="board" data-board='{"mode":"desktop","view":"initial","install":"anchor"}'>
+          <div data-under-toolbar class="under-toolbar">
+            <span class="tail" aria-hidden="true"></span>
+            <section class="nudge" aria-labelledby="n4-title">
+              <div class="top">
+                <svg data-tile class="tile" aria-hidden="true"></svg>
+                <div>
+                  <h2 id="n4-title">Install InkBoard</h2>
+                  <p class="why">The board in its own window, one click away in your dock or taskbar.</p>
+                </div>
+              </div>
+              <div class="actions end">
+                <button type="button" class="btn outline">Not now</button>
+                <button type="button" class="btn primary"><svg data-i="download"></svg>Install</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div></div></div>
+    </figure>
+  </div>
+
+  <h2 class="group-title">Always available</h2>
+  <p class="group-sub">After “Not now”, installing stays one click away, and nothing shows once InkBoard is installed.</p>
+  <div class="row">
+    <figure class="frame" data-export="5a-toolbar-install-button">
+      <figcaption>
+        <div class="label"><span class="num">5a</span><strong>Board toolbar · install button</strong><span class="dim">desktop, 1000 × 176 crop</span></div>
+        <p class="caption">A square icon button before “Editor sign in”, rendered only when the browser can install.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot desk" style="width:1000px;height:176px;display:flex">
+        <div class="board" data-board='{"mode":"desktop","view":"initial","install":"hover","noBottom":true}'></div>
+      </div></div></div>
+    </figure>
+
+    <figure class="frame" data-export="5b-account-menu-install">
+      <figcaption>
+        <div class="label"><span class="num">5b</span><strong>Editor · account menu</strong><span class="dim">desktop, 760 × 470 crop</span></div>
+        <p class="caption">“Install app” joins Profile and Settings in nav-user.tsx’s menu, above Sign out.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot desk">
+        <div class="admin">
+          <aside class="sb">
+            <a href="#" class="sb-item lg"><span class="logo-tile-sq"><svg data-i="feather"></svg></span><span class="ident"><b style="font-family:var(--serif);font-weight:400;font-size:16px">InkBoard</b><span>Editor</span></span></a>
+            <div class="sb-group" style="margin-top:8px"><a href="#" class="sb-item new"><svg data-i="plus"></svg>New poem</a></div>
+            <div class="sb-group" style="margin-top:8px">
+              <a href="#" class="sb-item active"><svg data-i="file-text"></svg>Poems</a>
+              <a href="#" class="sb-item"><svg data-i="library"></svg>Collections</a>
+              <a href="#" class="sb-item"><svg data-i="user-round"></svg>Profile</a>
+              <a href="#" class="sb-item"><svg data-i="settings"></svg>Settings</a>
+            </div>
+            <div style="margin-top:auto" class="sb-group"><a href="#" class="sb-item sm"><svg data-i="external-link"></svg>View the board</a></div>
+            <button type="button" class="sb-item lg" style="background:var(--sidebar-accent)" aria-expanded="true"><span class="sr-only">Account menu:</span><svg class="avatar" data-avatar aria-hidden="true"></svg><span class="ident"><b>Odalys Moon</b><span>author-3@seed.poemhub.test</span></span><svg data-i="chevrons-up-down"></svg></button>
+          </aside>
+          <div class="inset">
+            <header class="ed-head"><button type="button" class="btn ghost icon-sm"><svg data-i="panel-left"></svg><span class="sr-only">Toggle Sidebar</span></button><span class="vsep" aria-hidden="true"></span><span class="crumbs"><span aria-current="page">Poems</span></span></header>
+            <div class="content">
+              <h1>Your poems</h1>
+              <p class="muted" style="margin-top:4px">12 of 13 published under “Odalys Moon”.</p>
+              <div class="tbl">
+                <div class="trow h"><span>Title</span><span>Status</span></div>
+                <div class="trow"><span style="font-family:var(--serif);font-size:16px">Unwritten</span><span class="muted">Draft</span></div>
+                <div class="trow"><span style="font-family:var(--serif);font-size:16px">First Frost</span><span class="muted">Published</span></div>
+                <div class="trow" style="border:0"><span style="font-family:var(--serif);font-size:16px">Kettle</span><span class="muted">Published</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="menu" role="menu" aria-label="Account" style="left:268px;bottom:8px">
+            <div class="lbl"><svg class="avatar" data-avatar aria-hidden="true"></svg><span class="ident"><b>Odalys Moon</b><span>author-3@seed.poemhub.test</span></span></div>
+            <div class="sep" role="separator"></div>
+            <a href="#" role="menuitem" class="mi"><svg data-i="user-round"></svg>Profile</a>
+            <a href="#" role="menuitem" class="mi"><svg data-i="settings"></svg>Settings</a>
+            <button type="button" role="menuitem" class="mi focus"><svg data-i="monitor-down"></svg>Install app</button>
+            <div class="sep" role="separator"></div>
+            <button type="button" role="menuitem" class="mi"><svg data-i="log-out"></svg>Sign out</button>
+          </div>
+        </div>
+      </div></div></div>
+    </figure>
+
+    <figure class="frame" data-export="5c-mac-safari-add-to-dock">
+      <figcaption>
+        <div class="label"><span class="num">5c</span><strong>Mac · Safari</strong><span class="dim">1280 × 800</span></div>
+        <p class="caption">Same place as on Chrome, but Safari installs from its own menu, so the card names the path instead of an Install button.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot desk" style="width:1280px;height:800px;display:flex">
+        <div class="board" data-board='{"mode":"desktop","view":{"shelf":"Odalys Moon","dx":0,"dy":10},"install":"anchor"}'>
+          <div data-under-toolbar class="under-toolbar">
+            <span class="tail" aria-hidden="true"></span>
+            <section class="nudge" aria-labelledby="n5c-title">
+              <div class="top">
+                <svg data-tile class="tile" aria-hidden="true"></svg>
+                <div>
+                  <h2 id="n5c-title">Add InkBoard to your Dock</h2>
+                  <p class="why">Opens the board in its own window.</p>
+                  <p class="why" style="margin-top:10px;color:var(--foreground)">In Safari’s menu bar, choose</p>
+                  <p class="menu-path" style="margin-top:6px"><kbd>File</kbd><svg data-i="chevron-right" aria-label="then"></svg><kbd>Add to Dock…</kbd></p>
+                </div>
+              </div>
+              <div class="actions end">
+                <button type="button" class="btn outline">Not now</button>
+                <button type="button" class="btn primary">Got it</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div></div></div>
+    </figure>
+
+    <figure class="frame" data-export="5d-installed-nothing-shown">
+      <figcaption>
+        <div class="label"><span class="num">5d</span><strong>Already installed</strong><span class="dim">phone, opened from the home screen</span></div>
+        <p class="caption">Running as the installed app, InkBoard shows no card, no toolbar button and no menu item.</p>
+      </figcaption>
+      <div class="fit"><div class="scaler"><div class="shot note-frame" style="padding:4px">
+        <div class="phone"><div class="screen">
+          <div class="safe-top" aria-hidden="true"></div>
+          <div class="board" data-board='{"mode":"phone","view":{"shelf":"Ines Calloway"}}'></div>
+        </div></div>
+        <div class="note-card">
+          <h3>Nothing to install</h3>
+          <p class="sub">Opened from the home screen or dock, the board is already full screen, without browser bars, so every nudge stays hidden.</p>
+          <div class="state"><span>Install card (board and editor)</span><span class="off">hidden</span></div>
+          <div class="state"><span>Toolbar install button</span><span class="off">hidden</span></div>
+          <div class="state"><span>“Install app” in the account menu</span><span class="off">hidden</span></div>
+          <p class="detect">Detected with <code>display-mode: standalone</code> (and <code>navigator.standalone</code> on iPhone). The same applies in a browser tab once the app is installed, and in browsers that can’t install it at all.</p>
+        </div>
+      </div></div></div>
+    </figure>
+  </div>
+
+  <section class="notes" aria-labelledby="notes-title">
+    <h2 id="notes-title">Choices made in this round</h2>
+    <ul>
+      <li>The card is a plain region, not a dialog: it doesn’t take focus or block the board, and sits in the same flow column as the zoom bar, so the two can’t overlap.</li>
+      <li>On iPhone the zoom bar stays and the card sits under it, so the card’s arrow has a clear line down to Share.</li>
+      <li>“Not now” hides the card for a while; “Got it” (Safari) hides it for good. The toolbar button and the menu item stay either way.</li>
+      <li>On phones the toolbar gets no install button: its icon buttons are 28 px and it’s at its two-row limit at 320 px. The browser’s own menu still offers it.</li>
+      <li>Touch buttons in the phone cards are 44 px high; all text meets 4.5:1 against its background.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+/* ---------------- Icons: lucide 1.72 paths, inline stroke SVG ---------------- */
+const ICONS = {
+  feather: '<path d="M14.086 18.412A2 2 0 0112.67 19H5v-7.672a2 2 0 01.586-1.414L11.75 3.75a6 6 0 118.49 8.49z"/><path d="M16 8 2 22"/><path d="M17.488 15H9"/>',
+  search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+  list: '<path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/>',
+  rss: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+  'log-in': '<path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+  minus: '<path d="M5 12h14"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  maximize: '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  share: '<path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>',
+  'square-plus': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+  'monitor-down': '<path d="M12 13V7"/><path d="m15 10-3 3-3-3"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/>',
+  download: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+  'user-round': '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  settings: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
+  'log-out': '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>',
+  'chevrons-up-down': '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+  'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  'arrow-down': '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  'panel-left': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
+  'ellipsis-vertical': '<circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/>',
+  'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+  'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+  'trash-2': '<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'book-open': '<path d="M12 5v16"/><path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  'rotate-cw': '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  'external-link': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  'file-text': '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+};
+const ic = (name, extra = "") => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${ICONS[name]}</svg>`;
+
+/* src/app/icon.svg, verbatim: the Feather logo tile. */
+const TILE = '<rect width="32" height="32" rx="7" fill="#852e2c"/><g transform="translate(6.5 6.5) scale(0.79)" fill="none" stroke="#fdfaf3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.086 18.412A2 2 0 0112.67 19H5v-7.672a2 2 0 01.586-1.414L11.75 3.75a6 6 0 118.49 8.49z"/><path d="M16 8 2 22"/><path d="M17.488 15H9"/></g>';
+
+/* ---------------- Seed: published poems from scripts/seed-data.ts ---------------- */
+const SEED = [
+  {"penName":"Ines Calloway","poems":[{"title":"Low Tide Inventory","body":"one blue rope, frayed at the wrist,\na crab shell turned to a teacup,\nthe moon's thumbprint on wet sand,\nand you, counting what the sea forgot\n    as if it might come back for it.","private":false,"daysAgo":3},{"title":"Harbour Lights","body":"The boats come in like tired dogs,\nnosing the pier for a place to sleep.\nSomebody's radio plays a song\nmy mother used to hum while ironing,\nand the water holds every lamp\nthe way I hold her voice:\n    broken up, but still bright.","private":false,"daysAgo":12},{"title":"Salt","body":"It gets into everything here,\nthe hinges, the bread, the letters\nI never send.\nEven my sleep tastes of it.","private":false,"daysAgo":30},{"title":"What the Lighthouse Keeper Kept","body":"A drawer of postcards addressed to no one.\nA clock that only ran in storms.\nA name she said into the lamp each night\nso the ships would know which way was home.","private":true,"daysAgo":44},{"title":"Ferry, 6:40","body":"Commuters with their coffee halos,\ngulls doing arithmetic in the wake.\nNobody speaks. Everyone agrees\nthe island is closer than yesterday.","private":false,"daysAgo":60}]},
+  {"penName":"Tomasz Reyes-Hart","poems":[{"title":"Night Bus Psalm","body":"Blessed is the driver who waits\nfor the running woman with the shopping bags.\nBlessed the window fogged with breath\nand the boy who draws a door in it.\nBlessed the last stop,\n    which is somebody's first.","private":false,"daysAgo":1},{"title":"Laundromat, 2 a.m.","body":"Forty minutes of warm machinery.\nA stranger's red sock in my load\nlike a small confession.\nI fold it with the others. I keep it.","private":false,"daysAgo":9},{"title":"Fire Escape","body":"We called it the balcony,\nwhich was generous of us.\nBasil in a coffee tin,\ntwo chairs that never matched,\nthe whole city below like a radio\ntuned slightly off the station.","private":false,"daysAgo":21},{"title":"Elegy for a Corner Shop","body":"Mr. Adeyemi knew my tea, my mood, my rent.\nWhen the shutters came down for good\nhe left the bell on the door.\nI still hear it some mornings,\nannouncing no one.","private":true,"daysAgo":35},{"title":"Rooftop Antennae","body":"A forest of listening.\nEveryone tuned to a different weather.","private":false,"daysAgo":70}]},
+  {"penName":"Odalys Moon","poems":[{"title":"First Frost","body":"the garden bench\nwears a thin grey coat —\nnobody sits","private":false,"daysAgo":2},{"title":"Kettle","body":"the kettle's long vowel —\nmorning\nlearning to speak","private":false,"daysAgo":4},{"title":"Moth","body":"against the window\na moth rehearses\nits one argument","private":false,"daysAgo":6},{"title":"Rain on the Tin Roof","body":"rain on the tin roof\nall night the house\ncounts its own bones","private":false,"daysAgo":8},{"title":"Commute","body":"crowded train —\nsomeone's daffodils\nlighting the carriage","private":false,"daysAgo":11},{"title":"Old Letters","body":"your handwriting\nleans toward me\nstill","private":true,"daysAgo":14},{"title":"Late Bloom","body":"october rose\nthe last bee\nin no hurry","private":false,"daysAgo":17},{"title":"Snowmelt","body":"snowmelt —\nthe gutter sings\nwhat the roof remembered","private":false,"daysAgo":20},{"title":"Lantern","body":"paper lantern\nthe small moon\nwe made ourselves","private":false,"daysAgo":24},{"title":"Inheritance","body":"grandmother's thimble —\nmy finger too large\nfor her careful life","private":true,"daysAgo":27},{"title":"Crows","body":"three crows on a wire\ndiscussing\nthe price of bread","private":false,"daysAgo":31},{"title":"Solstice","body":"shortest day —\nthe cat follows\nthe last square of sun","private":false,"daysAgo":40}]},
+  {"penName":"Bram Okafor","poems":[{"title":"My Father Peels an Orange","body":"In one long ribbon, always,\nthe way his own father did,\nthumb working the white seam\nlike a man unbuttoning a coat for a child.\nHe hands me the first segment.\n    He always hands me the first segment.","private":false,"daysAgo":5},{"title":"Sunday Stew","body":"Onions first, my mother said,\nthen patience, then everything else.\nI am forty and still learning the order.","private":true,"daysAgo":19},{"title":"Recipe Card in My Aunt's Hand","body":"\"A pinch\" — whose pinch?\n\"Until it looks right\" — right to whom?\nI cook it wrong every year\nand every year it tastes like her.","private":true,"daysAgo":38},{"title":"Washing Up","body":"Two of us at the sink,\none washing, one drying,\nsaying nothing important\nfor an hour that turned out\nto be the important part.","private":false,"daysAgo":52}]},
+  {"penName":"Juniper Vale","poems":[{"title":"How to Be a Hedgerow","body":"Let everything in.\nThe wren, the bramble, the blown crisp packet.\nBe thick with small business.\nBe the border that is mostly a home.","private":false,"daysAgo":7},{"title":"Field Notes, April","body":"Lapwing over the wet field — a tumbling, a cry.\nBlackthorn white before its leaves, as if it couldn't wait.\nMy boots heavier on the way back,\nthe field coming home with me.","private":false,"daysAgo":15},{"title":"The Oak Is Not in a Hurry","body":"Three hundred years to say one thing,\nand it's still on the first word.","private":false,"daysAgo":23},{"title":"Mushrooms After Rain","body":"Overnight, a village.\nPale roofs, no doors,\nthe whole wood whispering\nabout the new neighbours.","private":false,"daysAgo":33},{"title":"River in Spate","body":"Brown and loud and certain,\ncarrying a whole branch like a sentence\nit can't wait to finish.","private":false,"daysAgo":47},{"title":"Bees in the Lavender","body":"The hum is a kind of weather.\nI stand in it until I'm warm.","private":false,"daysAgo":58},{"title":"Owl","body":"You asked what I was listening for.\nThat, I said. And then it didn't call again,\nand we stood in the dark a long time,\n    happy to be wrong together.","private":true,"daysAgo":66}]},
+  {"penName":"Theo Lindqvist","poems":[{"title":"Winter Light, Kitchen Table","body":"The sun gets as far as the salt cellar\nand gives up.\nWe eat in the bright half,\npushing our plates toward it like offerings.","private":false,"daysAgo":10},{"title":"Sledge","body":"My brother at the bottom of the hill,\narms up, already a man in the photograph,\nstill a boy in the snow.","private":false,"daysAgo":26},{"title":"Thaw","body":"The icicles let go one drop at a time,\nlike people leaving a party,\nsaying goodbye to everyone.","private":false,"daysAgo":49}]},
+  {"penName":"Amara Nwosu-Bell","poems":[{"title":"Letter Folded Into Thirds","body":"Dear you,\nthe first third is the weather,\nthe second third is what I meant,\nand the last third I folded inward\n    so you'd have to open me to find it.","private":true,"daysAgo":6},{"title":"Postscript","body":"P.S. I lied about the weather.\nIt was beautiful. I wanted you to come.","private":false,"daysAgo":13},{"title":"Two Cups","body":"I still make two.\nThe second goes cold on the windowsill\nand I drink it anyway, at noon,\nbitter and patient, like an answer.","private":true,"daysAgo":29},{"title":"Voicemail I Didn't Delete","body":"Eleven seconds.\nYou say my name, then \"never mind,\"\nthen laugh at something I'll never know.\nI've played it more than any song.","private":true,"daysAgo":41},{"title":"Return Address","body":"Wherever you are,\nwrite this on the back:\n    a kitchen, a lamp, someone awake.","private":false,"daysAgo":63}]},
+  {"penName":"the quiet archivist","poems":[{"title":"catalogue entry no. 114","body":"item: one glove, left hand, child's.\ncondition: loved.\nprovenance: a bus seat, march.\nnotes: someone is still looking.","private":false,"daysAgo":16},{"title":"catalogue entry no. 207","body":"item: a library card, expired 1998.\nborrowed: eleven books about the sea.\nreturned: all but one.","private":false,"daysAgo":36}]},
+  {"penName":"Ren Takahashi-Moreau","poems":[{"title":"On Being Asked at a Dinner Party What My Poems Are About and Saying 'Mostly Weather'","body":"Which was true, and also not.\nThe weather is how I say\nthe things a dinner party\nhas no room for.","private":false,"daysAgo":18},{"title":"A Short Treatise on the Correct Way to Leave a Room You Have Loved","body":"Turn off the lamp last.\nLet your hand stay on the switch\none breath longer than it needs to.\nThat's the whole treatise.","private":false,"daysAgo":39},{"title":"Instructions for the House-Sitter, Including Several Things About the Cat That Are Not Strictly Instructions","body":"Food at seven. Water always.\nShe will sit on the warm side of the bed\nand pretend she was there first.\nLet her. She was.","private":true,"daysAgo":55},{"title":"Untitled (Airport)","body":"Everyone here is between two sentences.","private":false,"daysAgo":72}]},
+  {"penName":"Wren Abernathy","poems":[{"title":"Only Poem","body":"I wrote one poem\nand put it on the board\nlike a single cup on a long shelf,\nto see if anyone would drink from it.","private":false,"daysAgo":25}]}
+];
+
+/* Section hues are hashed from editor ids in the app; fixed picks here. */
+const HUES = { "Amara Nwosu-Bell": 18, "Bram Okafor": 140, "Ines Calloway": 215, "Juniper Vale": 105, "Odalys Moon": 290, "Ren Takahashi-Moreau": 60, "the quiet archivist": 190, "Theo Lindqvist": 250, "Tomasz Reyes-Hart": 335, "Wren Abernathy": 165 };
+
+/* Board order (board.ts): lower(pen_name), then newest first. */
+const SECTIONS = SEED.filter(a => a.poems.length)
+  .map(a => ({ penName: a.penName, hue: HUES[a.penName] ?? 40, poems: a.poems.slice().sort((p, q) => p.daysAgo - q.daysAgo || (p.title < q.title ? -1 : 1)) }))
+  .sort((a, b) => (a.penName.toLowerCase() < b.penName.toLowerCase() ? -1 : 1));
+const TOTAL = SECTIONS.reduce((n, s) => n + s.poems.length, 0);
+
+/* ---------------- Port of src/lib/board-layout.ts ---------------- */
+const CARD_W = 264, CARD_H = 184, CARD_GAP = 20, SECTION_PAD = 28, SECTION_HEADER = 76, SECTION_GAP = 96, SECTION_MIN_W = 340, MAX_COLS = 4;
+const columnsFor = n => (n <= 1 ? 1 : Math.min(MAX_COLS, n, Math.ceil(Math.sqrt(n * 1.5))));
+function sectionSize(count) {
+  const cols = columnsFor(count), rows = Math.max(1, Math.ceil(count / cols));
+  return { cols, w: Math.max(SECTION_MIN_W, SECTION_PAD * 2 + cols * CARD_W + (cols - 1) * CARD_GAP), h: SECTION_HEADER + SECTION_PAD + rows * CARD_H + (rows - 1) * CARD_GAP };
+}
+function layoutBoard(sections) {
+  const sizes = sections.map(s => sectionSize(s.poems.length));
+  const area = sizes.reduce((sum, s) => sum + (s.w + SECTION_GAP) * (s.h + SECTION_GAP), 0);
+  const rowWidth = Math.max(Math.max(...sizes.map(s => s.w)), Math.sqrt(area * 2.4));
+  const boxes = []; let x = 0, y = 0, rowHeight = 0, maxX = 0;
+  sections.forEach((section, i) => {
+    const { cols, w, h } = sizes[i];
+    if (x > 0 && x + w > rowWidth) { x = 0; y += rowHeight + SECTION_GAP; rowHeight = 0; }
+    const cards = section.poems.map((_, j) => ({ x: x + SECTION_PAD + (j % cols) * (CARD_W + CARD_GAP), y: y + SECTION_HEADER + Math.floor(j / cols) * (CARD_H + CARD_GAP), w: CARD_W, h: CARD_H }));
+    boxes.push({ x, y, w, h, cols, cards });
+    maxX = Math.max(maxX, x + w); rowHeight = Math.max(rowHeight, h); x += w + SECTION_GAP;
+  });
+  return { sections: boxes, bounds: { x: 0, y: 0, w: maxX, h: y + rowHeight } };
+}
+const LAYOUT = layoutBoard(SECTIONS);
+
+/* cardExcerpt (src/lib/poem-text.ts): first 5 lines, 280 chars. */
+function cardExcerpt(body) {
+  const lines = body === "" ? [] : body.split("\n");
+  const head = Array.from(lines.slice(0, 5).join("\n"));
+  return { excerpt: head.slice(0, 280).join(""), hasMore: lines.length > 5 || Array.from(body).length > 280 };
+}
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+/* Camera rules from board-canvas.tsx: fit if k ≥ 0.32, else reading zoom 0.62 on the first shelf. */
+function initialCamera(w, h) {
+  const b = LAYOUT.bounds, pad = Math.min(72, w * 0.06), top = 72;
+  const k = Math.min(2.5, Math.max(0.1, Math.min((w - pad * 2) / b.w, (h - top - pad * 2) / b.h, 1)));
+  if (k >= 0.32) return { k, x: w / 2 - (b.x + b.w / 2) * k, y: top + (h - top) / 2 - (b.y + b.h / 2) * k };
+  return { k: 0.62, x: 24 - b.x * 0.62, y: 136 - b.y * 0.62 };
+}
+function cameraFor(view, w, h) {
+  if (view === "initial") return initialCamera(w, h);
+  const i = SECTIONS.findIndex(s => s.penName === view.shelf), box = LAYOUT.sections[i], k = 0.62;
+  return { k, x: 24 - box.x * k + (view.dx || 0), y: 136 - box.y * k + (view.dy || 0) };
+}
+
+function worldHTML() {
+  return SECTIONS.map((s, i) => {
+    const box = LAYOUT.sections[i];
+    const cards = s.poems.map((p, j) => {
+      const r = box.cards[j];
+      const { excerpt, hasMore } = cardExcerpt(p.body);
+      const inner = p.private
+        ? `<div class="redacted"><div class="lines" aria-hidden="true">${[88, 72, 80, 54].map(w => `<span style="width:${w}%"></span>`).join("")}</div><p>Enter the password to read</p></div>`
+        : `<p class="excerpt">${esc(excerpt)}${hasMore ? "\n…" : ""}</p>`;
+      return `<div class="pcard" data-card style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px"><div class="head"><h3><a href="#">${esc(p.title)}${p.private ? '<span class="sr-only"> (password protected)</span>' : ""}</a></h3>${p.private ? `<span class="lock" aria-hidden="true">${ic("lock")}</span>` : ""}</div>${inner}</div>`;
+    }).join("");
+    return `<section aria-label="${esc(s.penName)}, ${plural(s.poems.length, "poem")}" style="--hue:${s.hue}">
+      <div class="shelf" style="left:${box.x}px;top:${box.y}px;width:${box.w}px;height:${box.h}px"></div>
+      <button type="button" class="shelf-label" style="left:${box.x + 28}px;top:${box.y + 18}px;width:${box.w - 56}px"><span class="dot" aria-hidden="true"></span><h2>${esc(s.penName)}</h2><span class="count">${plural(s.poems.length, "poem")}</span></button>
+      ${cards}</section>`;
+  }).join("");
+}
+
+function toolbarHTML(mode, install) {
+  const phone = mode === "phone";
+  const installBtn = install
+    ? `<button type="button" data-install class="btn outline glass sm icon-sm${install === "hover" ? " hover" : ""}" aria-label="Install InkBoard"${install === "anchor" ? ' aria-expanded="true"' : ""}>${ic("monitor-down")}</button>`
+    : "";
+  return `<header class="board-head">
+    <a href="#" class="logo-pill">${ic("feather")}<span class="name">InkBoard</span>${phone ? "" : `<span class="stats">${plural(SECTIONS.length, "author")} · ${plural(TOTAL, "poem")}</span>`}</a>
+    <div class="toolbar" data-board-toolbar>
+      ${phone
+        ? `<button type="button" class="btn outline glass sm icon-sm">${ic("search")}<span class="sr-only">Search</span></button>
+           <button type="button" class="btn outline glass sm icon-sm">${ic("list")}<span class="sr-only">List view</span></button>
+           <button type="button" class="btn outline glass sm icon-sm">${ic("rss")}<span class="sr-only">Subscribe</span></button>
+           <a href="#" class="btn outline glass sm"><span aria-hidden="true">Sign in</span><span class="sr-only">Editor sign in</span></a>`
+        : `<button type="button" class="btn outline glass sm search">${ic("search")}<span class="muted">Search authors &amp; poems</span><kbd class="k">⌘K</kbd></button>
+           <button type="button" class="btn outline glass sm">${ic("list")}<span>List view</span></button>
+           <button type="button" class="btn outline glass sm">${ic("rss")}<span>Subscribe</span></button>
+           ${installBtn}
+           <a href="#" class="btn outline glass sm">Editor sign in</a>`}
+    </div>
+  </header>
+  <button type="button" class="btn outline glass sm authors" aria-expanded="false">${ic("users")}Authors<span class="muted">${SECTIONS.length}</span></button>`;
+}
+
+function zoombarHTML(k, mode) {
+  return `<div class="zoombar">
+    <button type="button" class="btn ghost icon-sm" aria-label="Zoom out">${ic("minus")}</button>
+    <button type="button" class="btn ghost sm pct">${Math.round(k * 100)}%</button>
+    <button type="button" class="btn ghost icon-sm" aria-label="Zoom in">${ic("plus")}</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button type="button" class="btn ghost sm">${ic("maximize")}<span class="${mode === "phone" ? "sr-only" : ""}">Fit</span></button>
+  </div>`;
+}
+
+function minimapHTML(cam, w, h) {
+  const b = LAYOUT.bounds, s = Math.min(180 / b.w, 120 / b.h);
+  const rects = SECTIONS.map((sec, i) => { const r = LAYOUT.sections[i]; return `<rect x="${r.x * s}" y="${r.y * s}" width="${r.w * s}" height="${r.h * s}" rx="3" fill="oklch(0.75 0.08 ${sec.hue} / 0.55)"/>`; }).join("");
+  const vx = -cam.x / cam.k, vy = -cam.y / cam.k;
+  return `<div class="minimap" aria-hidden="true"><svg width="${b.w * s}" height="${b.h * s}">${rects}<rect x="${vx * s}" y="${vy * s}" width="${(w / cam.k) * s}" height="${(h / cam.k) * s}" rx="2" fill="var(--primary)" fill-opacity="0.08" stroke="var(--primary)" stroke-width="1.5"/></svg></div>`;
+}
+
+function renderBoard(el) {
+  const cfg = JSON.parse(el.dataset.board);
+  const w = el.clientWidth, h = el.clientHeight, cam = cameraFor(cfg.view, w, h);
+  const extra = [...el.children];
+  el.innerHTML = `<div class="viewport" role="region" aria-label="Poem board" style="background-position:${cam.x % 24}px ${cam.y % 24}px">
+      <div class="world" style="transform:translate(${cam.x}px,${cam.y}px) scale(${cam.k})">${worldHTML()}</div></div>
+    <div class="top-col">${toolbarHTML(cfg.mode, cfg.install)}</div>`;
+  const head = el.querySelector(".board-head");
+  let bottom = extra.find(n => n.classList.contains("bottom-col"));
+  for (const n of extra) (n.hasAttribute("data-under-toolbar") ? head : el).append(n);
+  if (!cfg.noBottom) {
+    if (!bottom) { bottom = document.createElement("div"); bottom.className = "bottom-col"; bottom.innerHTML = "<div data-zoombar></div>"; el.append(bottom); }
+    bottom.querySelector("[data-zoombar]").outerHTML = zoombarHTML(cam.k, cfg.mode);
+    if (cfg.mode === "desktop") {
+      if (w >= 1024) el.insertAdjacentHTML("beforeend", `<p class="hint">Drag to move · ⌘/Ctrl + scroll or pinch to zoom</p>`);
+      el.insertAdjacentHTML("beforeend", minimapHTML(cam, w, h));
+    }
+  }
+  // The card's tail points at the install button it folds into.
+  const anchor = el.querySelector("[data-install]"), under = head.querySelector(".under-toolbar");
+  if (anchor && under) {
+    const a = anchor.getBoundingClientRect(), u = under.getBoundingClientRect();
+    under.querySelector(".tail").style.left = `${(a.left + a.width / 2 - u.left) / currentZoom(el) - 6}px`;
+    anchor.classList.add("ring");
+  }
+  if (cfg.install === "hover" && anchor) {
+    const a = anchor.getBoundingClientRect(), r = el.getBoundingClientRect(), z = currentZoom(el);
+    el.insertAdjacentHTML("beforeend", `<div class="tooltip" role="tooltip" style="top:${(a.bottom - r.top) / z + 8}px;left:${(a.left + a.width / 2 - r.left) / z}px;translate:-50% 0">Install InkBoard</div>`);
+  }
+}
+function currentZoom(el) { const s = el.closest(".scaler"); return s ? parseFloat(getComputedStyle(s).zoom) || 1 : 1; }
+
+/* Placeholder avatar (the app's are generated SVG faces from /avatars/[id]). */
+const AVATAR = '<circle cx="16" cy="16" r="16" fill="oklch(0.88 0.05 290)"/><circle cx="16" cy="13" r="5.5" fill="oklch(0.62 0.1 290)"/><path d="M6.5 27a10 10 0 0 1 19 0" fill="oklch(0.62 0.1 290)"/>';
+
+function hydrateIcons(root) {
+  root.querySelectorAll("svg[data-i]").forEach(s => {
+    s.setAttribute("viewBox", "0 0 24 24"); s.classList.add("i");
+    if (!s.hasAttribute("aria-label")) s.setAttribute("aria-hidden", "true"); else s.setAttribute("role", "img");
+    s.innerHTML = ICONS[s.dataset.i];
+  });
+  root.querySelectorAll("svg[data-tile]").forEach(s => { s.setAttribute("viewBox", "0 0 32 32"); s.innerHTML = TILE; });
+  root.querySelectorAll("svg[data-avatar]").forEach(s => { s.setAttribute("viewBox", "0 0 32 32"); s.innerHTML = AVATAR; });
+}
+
+/* Scale frames down to fit narrow windows (PNG export renders them at 100%). */
+function fitFrames() {
+  document.querySelectorAll(".fit").forEach(f => {
+    const s = f.querySelector(".scaler"); s.style.setProperty("--z", 1);
+    const natural = s.scrollWidth, avail = f.clientWidth || f.parentElement.clientWidth;
+    s.style.setProperty("--z", Math.min(1, avail / natural).toFixed(4));
+  });
+}
+
+hydrateIcons(document);
+document.fonts.ready.then(() => {
+  document.querySelectorAll("[data-board]").forEach(renderBoard);
+  fitFrames();
+  addEventListener("resize", fitFrames);
+  document.documentElement.dataset.ready = "true";
+});
+</script>
+</body>
+</html>

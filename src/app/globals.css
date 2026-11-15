@@ -157,3 +157,27 @@
     transition: none;
   }
 }
+
+/* Toasts (Sileo, src/components/toaster.tsx). Sileo injects its stylesheet at
+   runtime, unlayered and after this file, so these overrides must stay outside
+   any @layer and be more specific than its single-attribute selectors.
+   - Titles are written in sentence case and often hold a pen name, poem title
+     or language: show them exactly as written (Sileo capitalises every word).
+   - State colours: Sileo's defaults are too light on the toast's white fill
+     (success 2.28:1, info 2.71, warning 1.91, error 3.81). These keep each
+     hue and reach ≥5:1 for the title, and ≥3:1 for the badge icon on its
+     tint. Set on the viewport, the nearest ancestor, so they beat Sileo's
+     :root values. Loading (4.74:1) is unused and left as is. */
+[data-sileo-viewport] {
+  --sileo-state-success: oklch(0.52 0.15 145); /* 5.17:1 on white */
+  --sileo-state-error: var(--destructive); /* 6.62:1 */
+  --sileo-state-warning: oklch(0.52 0.12 65); /* 5.66:1 */
+  --sileo-state-info: oklch(0.5 0.13 245); /* 5.94:1 */
+}
+[data-sileo-viewport] [data-sileo-title] {
+  text-transform: none;
+}
+/* Ink on the white fill (16.5:1), rather than inheriting whatever surrounds the viewport. */
+[data-sileo-viewport] [data-sileo-description] {
+  color: var(--foreground);
+}

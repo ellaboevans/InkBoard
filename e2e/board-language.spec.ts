@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signOut, signUpAs, sql } from "./helpers";
+import { renderedToastTitle, signOut, signUpAs, sql } from "./helpers";
 
 // Browsing the board by language (docs/PLAN.md, Phase 11c): a filter in the
 // toolbar, kept in the URL (?lang=ee), followed by the list view and the
@@ -79,6 +79,8 @@ test("filtering the board by language, in the URL, the list view and the Authors
   await palette.getByRole("combobox").fill(englishPoet);
   await palette.getByRole("option", { name: new RegExp(englishPoet) }).click();
   await expect(page.locator("[data-sileo-toast]").filter({ hasText: `${englishPoet} has no Ewe poems` })).toBeVisible();
+  // Shown as written: a pen name and a language inside a sentence-case title.
+  expect(await renderedToastTitle(page, `${englishPoet} has no Ewe poems`)).toBe(`${englishPoet} has no Ewe poems`);
 
   // Opening a poem and closing the overlay keeps the filter.
   await page.getByRole("link", { name: `Ŋutifafa ${id}`, exact: true }).click();

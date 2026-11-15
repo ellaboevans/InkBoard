@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { latestCode, requestCode, signUpAs, sql } from "./helpers";
+import { latestCode, renderedToastTitle, requestCode, signUpAs, sql, toastContrast } from "./helpers";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -381,4 +381,40 @@ test("install nudge: every card state", async ({ browser }) => {
     await scan(page, state.name);
     await context.close();
   }
+});
+
+test("toasts: success, error and info", async ({ page }) => {
+  // Axe runs on each (colour-contrast included, via the WCAG tags), but it can't
+  // judge toast text: the toast's fill is an SVG shape, so axe files the title
+  // and description as "incomplete". toastContrast computes those ratios itself.
+  const id = unique();
+  await signUpAs(page, `a11y-toast-${id}@example.com`, `Toast Poet ${id}`);
+  await page.goto("/admin/poems/new");
+  await page.getByRole("textbox", { name: "Title" }).fill(`Solstice ${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("shortest day —\nthe cat follows");
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+  // A second save, so the History panel has a version to restore (for the info toast).
+  await page.getByRole("textbox", { name: "Poem" }).fill("shortest day —\nthe cat follows\nthe last square of sun");
+  await page.getByRole("button", { name: "Save changes" }).click();
+
+  const check = async (title: string, screen: string) => {
+    const ratios = await toastContrast(page, title);
+    expect.soft(ratios.title, `${screen}: title contrast`).toBeGreaterThanOrEqual(4.5);
+    expect.soft(ratios.description ?? 0, `${screen}: description contrast`).toBeGreaterThanOrEqual(4.5);
+    expect.soft(await renderedToastTitle(page, title), `${screen}: title as written`).toBe(title);
+    await scan(page, screen);
+  };
+  await check("Saved and published", "toast: success");
+
+  await page.getByRole("textbox", { name: "Title" }).fill("");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await check("Couldn't save the poem", "toast: error");
+  await page.getByRole("textbox", { name: "Title" }).fill(`Solstice ${id}`);
+
+  const versions = page.getByRole("region", { name: "History" }).getByRole("link");
+  await expect(versions).toHaveCount(2);
+  await versions.nth(1).click();
+  await page.getByRole("dialog", { name: /^Earlier version, saved / }).getByRole("button", { name: "Restore this version" }).click();
+  await check("Version restored in the editor", "toast: info");
 });

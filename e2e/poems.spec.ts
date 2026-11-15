@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signOut, signUpAs, sql } from "./helpers";
+import { renderedToastTitle, signOut, signUpAs, sql } from "./helpers";
 
 // All local requests share one client IP (::1), so per-IP sign-in limits
 // would trip across tests. Rate limiting itself is covered by unit tests.
@@ -315,4 +315,21 @@ test("history: view an earlier version, restore it, save; readers never see hist
   await expect(otherPage.getByRole("heading", { name: /not found/i })).toBeVisible();
   expect(await otherPage.content()).not.toContain(`first draft line ${id}`);
   await other.close();
+});
+
+test("toast titles appear exactly as written, not title-cased", async ({ page }) => {
+  // Titles are sentence case on purpose (Sileo would show "Saved And Published").
+  // renderedToastTitle reads innerText, which applies CSS text-transform.
+  await signUpAs(page, `case-${unique()}@example.com`, "Wren Case");
+  await writePoem(page, `Solstice ${unique()}`, "shortest day —\nthe cat follows");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  expect(await renderedToastTitle(page, "Poem created")).toBe("Poem created");
+
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  expect(await renderedToastTitle(page, "Saved and published")).toBe("Saved and published");
+
+  // An error toast, from the editor's own validation.
+  await page.getByRole("textbox", { name: "Title" }).fill("");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  expect(await renderedToastTitle(page, "Couldn't save the poem")).toBe("Couldn't save the poem");
 });

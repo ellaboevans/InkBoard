@@ -123,6 +123,9 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Wrap `useActionState` actions in `withErrorToast`, which turns unexpected throws into a toast but still lets `redirect()`/`notFound()` through (`unstable_rethrow`).
 - After a redirect, show success with a flash param plus `<FlashToast param=… />` (examples: `?deleted=1`, `?signed-in=1`, `?welcome=1`, `/sign-in?signed-out=1`).
 - Toast descriptions often repeat inline text, so in E2E scope inline assertions with `page.getByRole("main")`, and toast assertions with `[data-sileo-toast]`.
+- Titles are sentence case and are shown as written: Sileo's own CSS title-cases them (`text-transform: capitalize`), which `globals.css` undoes. Sileo injects its stylesheet at runtime, unlayered and after ours, so toast overrides go in the unlayered block at the end of `globals.css` with selectors under `[data-sileo-viewport]` (anything inside a Tailwind `@layer` loses). The same block sets the state colours (`--sileo-state-*`, ≥5:1 on the white fill; error is `--destructive`). Don't pass `theme` or `fill` to the Toaster: that changes the background these were measured on.
+- In E2E, `getByText`/`hasText` read the DOM text and ignore `text-transform`; use `renderedToastTitle()` (helpers) to check what people see. Axe can't judge toast contrast (the fill is an SVG shape, so it reports "incomplete"); `toastContrast()` measures it (`e2e/a11y.spec.ts`, "toasts").
+- The E2E dev server's `.next-e2e` cache can keep serving an old compiled `globals.css` after you revert a change to it; delete `.next-e2e` before a before/after comparison.
 
 **Client patterns.**
 - Forms use `useActionState` with controlled inputs, because React resets uncontrolled fields after an action and that would wipe a poem on a validation error.

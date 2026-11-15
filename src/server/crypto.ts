@@ -7,6 +7,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { env } from "@/env";
+import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from "@/lib/recovery-code-format";
 
 /** Uniformly random 6-digit numeric code, zero-padded. */
 export function generateOtpCode(): string {
@@ -35,6 +36,17 @@ export function generateLetterToken(length = LINK_TOKEN_LENGTH): string {
       if (byte < 208 && out.length < length) out += LETTERS[byte % 52];
     }
   }
+  return out;
+}
+
+/**
+ * A recovery code: 12 uniformly random Crockford base32 symbols (60 bits),
+ * canonical form without dashes (see src/lib/recovery-code-format.ts).
+ */
+export function generateRecoveryCode(): string {
+  // 32 divides 256, so taking the low 5 bits of each byte is unbiased.
+  let out = "";
+  for (const byte of randomBytes(RECOVERY_CODE_LENGTH)) out += RECOVERY_CODE_ALPHABET[byte & 31];
   return out;
 }
 

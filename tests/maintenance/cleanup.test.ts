@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { editors, emailOtps, rateLimits, sessions, signInDevices, signInLocations } from "@/db/schema";
+import { editors, emailOtps, rateLimits, sessions, signInDevices, signInLocations, stepUpCodes } from "@/db/schema";
 import { cleanupExpiredRows, isAuthorizedCron } from "@/server/maintenance";
 
 const db = getDb();
@@ -22,6 +22,12 @@ describe("cleanupExpiredRows", () => {
       { editorId: ed.id, tokenHash: "recent", expiresAt: ago("1 hour") },
       { editorId: ed.id, tokenHash: "live", expiresAt: ahead("30 days") },
     ]);
+    const [live] = await db.select().from(sessions).where(sql`token_hash = 'live'`);
+    await db.insert(stepUpCodes).values([
+      { sessionId: live.id, codeHash: "old-expired", expiresAt: ago("2 days") },
+      { sessionId: live.id, codeHash: "old-used", expiresAt: ahead("5 minutes"), consumedAt: ago("2 days") },
+      { sessionId: live.id, codeHash: "live", expiresAt: ahead("5 minutes") },
+    ]);
     await db.insert(rateLimits).values([
       { key: "old", windowStart: ago("3 days"), count: 1 },
       { key: "today", windowStart: ago("1 hour"), count: 1 },
@@ -35,13 +41,14 @@ describe("cleanupExpiredRows", () => {
       { editorId: ed.id, deviceKey: "recent", lastSeenAt: ago("11 months") },
     ]);
 
-    expect(await cleanupExpiredRows()).toEqual({ otps: 2, sessions: 1, rateLimits: 1, signInLocations: 1, signInDevices: 1 });
+    expect(await cleanupExpiredRows()).toEqual({ otps: 2, stepUpCodes: 2, sessions: 1, rateLimits: 1, signInLocations: 1, signInDevices: 1 });
+    expect((await db.select().from(stepUpCodes)).map((r) => r.codeHash)).toEqual(["live"]);
     expect((await db.select().from(emailOtps)).map((r) => r.codeHash).sort()).toEqual(["just-expired", "live"]);
     expect((await db.select().from(sessions)).map((r) => r.tokenHash).sort()).toEqual(["live", "recent"]);
     expect((await db.select().from(rateLimits)).map((r) => r.key)).toEqual(["today"]);
     expect((await db.select().from(signInLocations)).map((r) => r.ipKey)).toEqual(["recent"]);
     expect((await db.select().from(signInDevices)).map((r) => r.deviceKey)).toEqual(["recent"]);
-    expect(await cleanupExpiredRows()).toEqual({ otps: 0, sessions: 0, rateLimits: 0, signInLocations: 0, signInDevices: 0 });
+    expect(await cleanupExpiredRows()).toEqual({ otps: 0, stepUpCodes: 0, sessions: 0, rateLimits: 0, signInLocations: 0, signInDevices: 0 });
   });
 });
 

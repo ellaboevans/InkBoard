@@ -2,13 +2,15 @@
 
 import { Loader2Icon } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { PublicDeviceCheckbox } from "@/components/auth/public-device-checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { notify, withErrorToast } from "@/lib/notify";
 import { linkSignInAction, type LinkSignInState } from "../actions";
 
 export function LinkSignInForm() {
+  const [publicDevice, setPublicDevice] = useState(false);
   const [state, formAction, pending] = useActionState(
     withErrorToast(async (prev: LinkSignInState, formData: FormData) => {
       // Read the token only now, on a deliberate click (see page.tsx).
@@ -32,7 +34,8 @@ export function LinkSignInForm() {
           <Link href="/sign-in">Request a new sign-in email</Link>
         </Button>
       ) : (
-        <form action={formAction}>
+        <form action={formAction} className="grid gap-4">
+          <PublicDeviceCheckbox checked={publicDevice} onCheckedChange={setPublicDevice} disabled={pending} />
           <Button type="submit" className="w-full" disabled={pending}>
             {pending && <Loader2Icon className="animate-spin" />}
             Continue to InkBoard

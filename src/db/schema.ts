@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   check,
   index,
   integer,
@@ -60,6 +61,11 @@ export const editors = pgTable(
     lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
     /** When the welcome email was claimed (sent at most once, after onboarding). */
     welcomedAt: timestamp("welcomed_at", { withTimezone: true }),
+    /**
+     * When the editor answered "Not now" to the dashboard's recovery-code setup
+     * prompt (docs/PLAN.md, Phase 16). Server-side, so it holds on every device.
+     */
+    recoveryPromptDismissedAt: timestamp("recovery_prompt_dismissed_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -95,6 +101,9 @@ export const emailOtps = pgTable(
   ],
 );
 
+/** How a session was started: an email code or link, or a recovery code (Phase 16). */
+export const signInMethod = pgEnum("sign_in_method", ["email", "recovery"]);
+
 /** Server-side sessions. The cookie holds a random token; we store its SHA-256. */
 export const sessions = pgTable(
   "sessions",
@@ -107,6 +116,19 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     userAgent: text("user_agent"),
     ip: text("ip"),
+    /**
+     * "This isn't my device" at sign-in: a 12-hour session with a browser-session
+     * cookie and no device cookie (src/server/auth/dal.ts).
+     */
+    publicDevice: boolean("public_device").notNull().default(false),
+    method: signInMethod("sign_in_method").notNull().default("email"),
+    /**
+     * When this session last proved access to the editor's inbox: set at an
+     * email sign-in, and again by a step-up code (src/server/auth/step-up.ts).
+     * Null for a recovery-code sign-in. Replacing recovery codes needs this to
+     * be recent, so a stolen long-lived session can't quietly do it.
+     */
+    emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -115,6 +137,50 @@ export const sessions = pgTable(
     uniqueIndex("sessions_token_hash_key").on(t.tokenHash),
     index("sessions_editor_idx").on(t.editorId),
   ],
+);
+
+/**
+ * Recovery codes (docs/PLAN.md, Phase 16): ten single-use codes per editor
+ * for signing in without email. Only an HMAC of each code is stored
+ * (src/server/auth/recovery-codes.ts). A new set deletes the old one; used
+ * codes stay until then, so "n of 10 left" can be shown.
+ */
+export const recoveryCodes = pgTable(
+  "recovery_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("recovery_codes_editor_idx").on(t.editorId),
+    uniqueIndex("recovery_codes_code_hash_key").on(t.codeHash),
+  ],
+);
+
+/**
+ * Step-up codes: a 6-digit code emailed to a signed-in editor to confirm it's
+ * them before a sensitive change (replacing recovery codes). Bound to the
+ * session that asked for it; only an HMAC is stored.
+ */
+export const stepUpCodes = pgTable(
+  "step_up_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("step_up_codes_session_idx").on(t.sessionId, t.createdAt)],
 );
 
 /**

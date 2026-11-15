@@ -10,8 +10,9 @@ export async function latestCode(email: string): Promise<string> {
       const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n");
       code = lines
         .filter(Boolean)
-        .map((l) => JSON.parse(l) as { to: string; code?: string })
-        .findLast((m) => m.to === email && m.code)?.code;
+        .map((l) => JSON.parse(l) as { to: string; kind?: string; code?: string })
+        // Sign-in emails have no `kind` (step-up confirmations carry a code too).
+        .findLast((m) => m.to === email && m.code && !m.kind)?.code;
       return code;
     })
     .toBeTruthy();
@@ -78,7 +79,6 @@ export async function signOut(page: Page) {
   await page.getByRole("menuitem", { name: "Sign out" }).click();
 }
 
-/** Security notices written to the E2E outbox for `email`. */
 /** Welcome emails recorded for this address by the E2E outbox. */
 export async function welcomesFor(email: string): Promise<{ penName: string; slug: string }[]> {
   const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
@@ -87,6 +87,7 @@ export async function welcomesFor(email: string): Promise<{ penName: string; slu
     .filter((m) => m.to === email && m.kind === "welcome");
 }
 
+/** Security notices written to the E2E outbox for `email`. */
 export async function alertsFor(email: string): Promise<{ device: string; ip: string }[]> {
   const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
   return lines
@@ -164,4 +165,65 @@ export async function expectBackOnList(page: Page, timeout = 45_000) {
 export async function poemIdByTitle(title: string): Promise<string> {
   const { rows } = await sql(`SELECT id FROM poems WHERE title = '${title.replace(/'/g, "''")}'`);
   return rows[0].id as string;
+}
+
+/** The newest step-up confirmation code emailed to `email` (profile, recovery codes). */
+export async function latestStepUpCode(email: string): Promise<string> {
+  let code: string | undefined;
+  await expect
+    .poll(async () => {
+      const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n");
+      code = lines
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as { to: string; kind?: string; code?: string })
+        .findLast((m) => m.to === email && m.kind === "step-up")?.code;
+      return code;
+    })
+    .toBeTruthy();
+  return code!;
+}
+
+export type RecoveryNotice =
+  | { kind: "recovery-used"; device: string; remaining: number }
+  | { kind: "recovery-codes-changed"; device: string; firstSet: boolean };
+
+/** "Recovery code used" and "recovery codes changed" notices recorded for `email`. */
+export async function recoveryNoticesFor(email: string): Promise<RecoveryNotice[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string } & RecoveryNotice)
+    .filter((m) => m.to === email && (m.kind === "recovery-used" || m.kind === "recovery-codes-changed"))
+    .map((m) => {
+      const notice: Partial<typeof m> = { ...m };
+      delete notice.to;
+      return notice as RecoveryNotice;
+    });
+}
+
+const CODE_RE = /[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}/g;
+
+/**
+ * Make recovery codes from the profile (the session must be fresh, e.g. just
+ * signed up) and return them as shown. Leaves the codes on screen.
+ */
+export async function createRecoveryCodes(page: Page): Promise<string[]> {
+  await page.goto("/admin/profile");
+  await page.getByRole("button", { name: "Create recovery codes" }).click();
+  return shownRecoveryCodes(page);
+}
+
+/** The codes in the "Your recovery codes" list. */
+export async function shownRecoveryCodes(page: Page): Promise<string[]> {
+  const list = page.getByRole("list", { name: "Recovery codes" });
+  await expect(list.getByRole("listitem")).toHaveCount(10, { timeout: 45_000 });
+  return (await list.innerText()).match(CODE_RE) ?? [];
+}
+
+/** Sign in at /sign-in/recovery with an email and a recovery code. */
+export async function recoverySignIn(page: Page, email: string, code: string, { publicDevice = false } = {}) {
+  await page.goto("/sign-in/recovery");
+  await page.getByRole("textbox", { name: "Email" }).fill(email);
+  await page.getByRole("textbox", { name: "Recovery code" }).fill(code);
+  if (publicDevice) await page.getByRole("checkbox", { name: "This isn't my device" }).check();
+  await page.getByRole("button", { name: "Sign in with recovery code" }).click();
 }

@@ -1,6 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { latestCode, renderedToastTitle, requestCode, signUpAs, sql, toastContrast, expectBackOnList } from "./helpers";
+import {
+  createRecoveryCodes,
+  latestCode,
+  latestStepUpCode,
+  recoverySignIn,
+  renderedToastTitle,
+  requestCode,
+  signUpAs,
+  sql,
+  toastContrast,
+  expectBackOnList,
+} from "./helpers";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -62,6 +73,61 @@ test("sign-in and onboarding", async ({ page }) => {
   await page.locator('input[name="code"]').fill(await latestCode(email));
   await expect(page).toHaveURL(/\/admin\/onboarding$/, { timeout: 45_000 });
   await scan(page, "onboarding");
+});
+
+test("recovery codes: sign-in, dashboard notices and the profile section", async ({ page }) => {
+  // Sign-in side: the box ticked, the recovery form, and its generic error.
+  await page.goto("/sign-in");
+  await page.getByRole("checkbox", { name: "This isn't my device" }).check();
+  await scan(page, "sign-in: this isn't my device ticked");
+  await page.goto("/sign-in/recovery");
+  await scan(page, "recovery sign-in");
+  await recoverySignIn(page, `a11y-nobody-${unique()}@example.com`, "ABCD-EFGH-JKMN", { publicDevice: true });
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await scan(page, "recovery sign-in: wrong code");
+
+  const id = unique();
+  const email = `a11y-rec-${id}@example.com`;
+  await signUpAs(page, email, `Recovery Poet ${id}`);
+  await expect(page.getByRole("region", { name: /^Set up recovery codes/ })).toBeVisible();
+  await scan(page, "dashboard: recovery setup prompt");
+
+  await page.goto("/admin/profile");
+  await expect(page.getByRole("button", { name: "Create recovery codes" })).toBeVisible();
+  await scan(page, "profile: recovery codes not set up");
+  await createRecoveryCodes(page);
+  await scan(page, "profile: new recovery codes");
+  await page.getByRole("button", { name: "I've saved my codes" }).click();
+
+  // An older sign-in: replacing asks first, then needs a confirmation code.
+  await sql(
+    `UPDATE sessions SET email_verified_at = now() - interval '11 minutes'
+     WHERE editor_id = (SELECT id FROM editors WHERE email = '${email}')`,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Make a new set" }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await scan(page, "profile: replace recovery codes dialog");
+  await page.getByRole("button", { name: "Replace my codes" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm it's you" })).toBeVisible();
+  await scan(page, "profile: confirm it's you");
+  await page.getByRole("button", { name: "Email me a code" }).click();
+  const code = await latestStepUpCode(email);
+  await scan(page, "profile: confirmation code sent");
+  await page.getByRole("textbox", { name: "Confirmation code" }).fill(code === "000000" ? "111111" : "000000");
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await scan(page, "profile: wrong confirmation code");
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // Running low.
+  await sql(`UPDATE recovery_codes SET used_at = now() WHERE id IN (
+    SELECT r.id FROM recovery_codes r JOIN editors e ON e.id = r.editor_id WHERE e.email = '${email}' LIMIT 9)`);
+  await page.goto("/admin");
+  await expect(page.getByRole("region", { name: "Only 1 recovery code left" })).toBeVisible();
+  await scan(page, "dashboard: recovery codes running low");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await scan(page, "dashboard: recovery codes running low (phone)");
+  await page.setViewportSize({ width: 1280, height: 720 });
 });
 
 test("sign-in link page", async ({ page }) => {

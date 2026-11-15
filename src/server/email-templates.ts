@@ -358,3 +358,226 @@ ${bottomSpace}`,
   });
   return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
 }
+
+/**
+ * e.g. "Sun 15 Nov, 21:49 UTC": no year, so the message has no 4-digit number
+ * at all. Recovery emails can't avoid the word "code" ("recovery code"), so
+ * they must never contain anything a code detector could offer to copy.
+ */
+export function formatNoticeTime(at: Date): string {
+  const date = new Intl.DateTimeFormat("en-GB", {
+    weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
+  }).format(at);
+  const time = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC" }).format(at);
+  return `${date}, ${time} UTC`;
+}
+
+/** Shared look of the recovery notices: badge, heading, intro, detail rows, steps, button. */
+function securityNotice(d: {
+  appUrl: string;
+  preheader: string;
+  footer: string;
+  heading: string;
+  intro: string;
+  rows: [string, string][];
+  steps: string[];
+  closing: string;
+  button: [string, string];
+}): string {
+  const row = (label: string, value: string, last: boolean) =>
+    `<tr><td style="padding:12px 0;${last ? "" : `border-bottom:1px solid ${C.line};`}width:112px;font-family:${SANS};font-size:13px;line-height:20px;color:${C.muted};vertical-align:top">${label}</td><td style="padding:12px 0;${last ? "" : `border-bottom:1px solid ${C.line};`}font-family:${SANS};font-size:14px;line-height:20px;font-weight:600;color:${C.ink}">${escapeHtml(value)}</td></tr>`;
+  const step = (n: number, html: string) =>
+    `<tr><td style="padding:8px 0 0;width:32px;vertical-align:top"><div style="width:22px;height:22px;border-radius:11px;background:${C.well};font-family:${SANS};font-size:12px;line-height:22px;font-weight:700;text-align:center;color:${C.primary}">${n}</div></td><td style="padding:8px 0 0;font-family:${SANS};font-size:14px;line-height:22px;color:${C.ink}">${html}</td></tr>`;
+  return frame({
+    appUrl: d.appUrl,
+    preheader: d.preheader,
+    footer: d.footer,
+    body: `
+<tr><td style="padding:40px 40px 0"><span style="display:inline-block;padding:4px 10px;border-radius:999px;background:${C.well};font-family:${SANS};font-size:12px;line-height:16px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:${C.primary}">Security notice</span></td></tr>
+<tr><td style="padding:14px 40px 0;font-family:${SERIF};font-size:30px;line-height:36px;color:${C.ink}">${d.heading}</td></tr>
+${para(d.intro, { top: 14 })}
+<tr><td style="padding:20px 40px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.line};border-bottom:1px solid ${C.line}">
+${d.rows.map(([label, value], i) => row(label, value, i === d.rows.length - 1)).join("\n")}
+</table>
+</td></tr>
+${para("<strong>Was this you?</strong> Then there's nothing to do.", { top: 24, size: 15 })}
+${para("<strong>Wasn't you?</strong>", { top: 16, size: 15 })}
+<tr><td style="padding:0 40px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+${d.steps.map((s, i) => step(i + 1, s)).join("\n")}
+</table>
+</td></tr>
+${para(d.closing, { top: 16, size: 13, color: C.muted })}
+${button(d.button[0], d.button[1])}
+${bottomSpace}`,
+  });
+}
+
+export type RecoveryCodeUsedDetails = {
+  penName: string | null;
+  /** Human device label (describeUserAgent). */
+  device: string;
+  at: Date;
+  /** Unused codes left after this one. */
+  remaining: number;
+  appUrl: string;
+};
+
+const leftPhrase = (n: number) => (n === 0 ? "none left" : `${n} left`);
+
+/**
+ * "A recovery code was used to sign in · N left". Says "code" (it has to), so
+ * it carries no 4–8 digit numbers: no year, no IP address (an IPv6 group can
+ * be four digits), and never the code itself. Tested.
+ */
+export function recoveryCodeUsedEmail(d: RecoveryCodeUsedDetails): EmailMessage {
+  const profileUrl = new URL("/admin/profile", d.appUrl).href;
+  const when = formatNoticeTime(d.at);
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const subject = `A recovery code was used to sign in · ${leftPhrase(d.remaining)}`;
+  const left =
+    d.remaining === 0
+      ? "That was your last one: make a new set from your profile so you still have a way in without email."
+      : `You have ${pluralCount(d.remaining, "unused recovery code")} left.`;
+  const steps = [
+    `Sign that device out under "Signed-in devices" on your profile.`,
+    "Make a new set of recovery codes there. That cancels every old one, including any someone else has.",
+    "Check where you kept your codes, and keep the new ones somewhere only you can reach.",
+  ];
+  const text = [
+    greeting,
+    "",
+    "Someone just signed in to your InkBoard account with one of your recovery codes. That code can't be used again.",
+    left,
+    "",
+    `Device: ${d.device}`,
+    `When: ${when}`,
+    "",
+    "If this was you, there's nothing to do.",
+    "",
+    "If it wasn't you:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    "",
+    `Your profile: ${profileUrl}`,
+    "",
+    "InkBoard",
+  ].join("\n");
+  const html = securityNotice({
+    appUrl: d.appUrl,
+    preheader: `Signed in from ${d.device}. ${left}`,
+    footer: "We send this every time a recovery code is used on your account.",
+    heading: "A recovery code was used",
+    intro: `${escapeHtml(greeting)} someone just signed in to your InkBoard account with one of your recovery codes. That code can't be used again. ${escapeHtml(left)}`,
+    rows: [
+      ["Device", d.device],
+      ["When", when],
+    ],
+    steps: steps.map((s) => escapeHtml(s).replace("&#34;Signed-in devices&#34;", "<em>Signed-in devices</em>")),
+    closing: "Someone signing in with a recovery code didn't need your email, so your inbox is safe.",
+    button: [profileUrl, "Review your account"],
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+export type RecoveryCodesChangedDetails = {
+  penName: string | null;
+  device: string;
+  at: Date;
+  /** True when the editor had no codes before (set up, not replaced). */
+  firstSet: boolean;
+  appUrl: string;
+};
+
+/**
+ * Sent when an editor makes a set of recovery codes (first or replacement).
+ * Never contains the codes; same digit rule as recoveryCodeUsedEmail.
+ */
+export function recoveryCodesChangedEmail(d: RecoveryCodesChangedDetails): EmailMessage {
+  const profileUrl = new URL("/admin/profile", d.appUrl).href;
+  const when = formatNoticeTime(d.at);
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const subject = d.firstSet
+    ? "Recovery codes were set up for your InkBoard account"
+    : "Your InkBoard recovery codes were replaced";
+  const what = d.firstSet
+    ? "A set of recovery codes was just made for your InkBoard account. Each one signs in once, without email."
+    : "A new set of recovery codes was just made for your InkBoard account. The old codes no longer work.";
+  const steps = [
+    `Sign that device out under "Signed-in devices" on your profile.`,
+    "Make another new set yourself, which cancels the set that was just made.",
+    "Secure your email account: making codes needs a recent sign-in or a confirmation sent to your inbox.",
+  ];
+  const text = [
+    greeting,
+    "",
+    what,
+    "",
+    `Device: ${d.device}`,
+    `When: ${when}`,
+    "",
+    "If this was you, there's nothing to do. Keep the new codes somewhere safe.",
+    "",
+    "If it wasn't you:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    "",
+    `Your profile: ${profileUrl}`,
+    "",
+    "InkBoard",
+  ].join("\n");
+  const html = securityNotice({
+    appUrl: d.appUrl,
+    preheader: d.firstSet ? `Recovery codes set up from ${d.device}.` : `New recovery codes made from ${d.device}. The old ones no longer work.`,
+    footer: "We send this whenever recovery codes are made for your account.",
+    heading: d.firstSet ? "Recovery codes set up" : "Recovery codes replaced",
+    intro: `${escapeHtml(greeting)} ${escapeHtml(what)}`,
+    rows: [
+      ["Device", d.device],
+      ["When", when],
+    ],
+    steps: steps.map((s) => escapeHtml(s).replace("&#34;Signed-in devices&#34;", "<em>Signed-in devices</em>")),
+    closing: "We never send the codes themselves by email.",
+    button: [profileUrl, "Review your account"],
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+/**
+ * The step-up email: a 6-digit code that confirms a signed-in editor before a
+ * sensitive change. Same layout rules as otpEmail (code first, alone on its
+ * line, no other 4–8 digit numbers) but no sign-in link: it signs nobody in.
+ */
+export function stepUpEmail({ code, appUrl, ttlMinutes }: { code: string; appUrl: string; ttlMinutes: number }): EmailMessage {
+  const subject = "Confirm it's you on InkBoard";
+  const text = [
+    "Your InkBoard confirmation code is:",
+    "",
+    code,
+    "",
+    "Enter it on your profile page to make new recovery codes.",
+    `It expires in ${pluralCount(ttlMinutes, "minute")} and works once, only in the browser that asked for it.`,
+    "",
+    "Didn't ask for this? Someone may be signed in to your account: sign out your other devices from your profile.",
+    "",
+    "InkBoard",
+    new URL("/", appUrl).href,
+  ].join("\n");
+  const html = frame({
+    appUrl,
+    preheader: `Your InkBoard confirmation code is ${code}. It expires in ${pluralCount(ttlMinutes, "minute")}.`,
+    footer: "You're receiving this because someone signed in to your InkBoard account asked to confirm it's you.",
+    body: `
+${heading("Confirm it's you")}
+${para("Your InkBoard confirmation code is:", { top: 14, color: C.muted })}
+<tr><td style="padding:16px 40px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+<td align="center" style="padding:22px 12px;background:${C.well};border-radius:14px">
+<p style="margin:0;font-family:${MONO};font-size:38px;line-height:44px;font-weight:700;letter-spacing:10px;color:${C.ink}"><strong>${escapeHtml(code)}</strong></p>
+</td></tr></table>
+</td></tr>
+${para(`Enter it on your profile page to make new recovery codes. It expires in ${pluralCount(ttlMinutes, "minute")} and works only in the browser that asked for it.`, { top: 14, size: 14, color: C.muted })}
+${para("Didn't ask for this? Someone may be signed in to your account: sign out your other devices from your profile.", { top: 28, size: 13, color: C.faint })}
+${bottomSpace}`,
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}

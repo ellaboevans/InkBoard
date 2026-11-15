@@ -8,6 +8,15 @@ import { generateToken, sha256 } from "@/server/crypto";
 import { isEmailAllowed } from "./email";
 
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
+/** "This isn't my device": the server ends the session after 12 hours, whatever the browser does. */
+export const PUBLIC_SESSION_TTL_SECONDS = 12 * 60 * 60;
+
+export type SessionOptions = {
+  /** "This isn't my device" was ticked: short-lived, and the cookie dies with the browser. */
+  publicDevice?: boolean;
+  /** How the editor proved who they are. A recovery code doesn't prove inbox access. */
+  method?: "email" | "recovery";
+};
 
 /** The subset of an editor that is safe to hand to UI code. */
 export type SessionEditor = {
@@ -23,16 +32,23 @@ export type SessionEditor = {
 export async function createSession(
   editorId: string,
   meta: { userAgent?: string | null; ip?: string | null } = {},
+  options: SessionOptions = {},
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
+  const method = options.method ?? "email";
+  const ttl = options.publicDevice ? PUBLIC_SESSION_TTL_SECONDS : SESSION_TTL_SECONDS;
   const [row] = await getDb()
     .insert(sessions)
     .values({
       editorId,
       tokenHash: sha256(token),
-      expiresAt: sql`now() + make_interval(secs => ${SESSION_TTL_SECONDS})`,
+      expiresAt: sql`now() + make_interval(secs => ${ttl})`,
       userAgent: meta.userAgent?.slice(0, 512) ?? null,
       ip: meta.ip ?? null,
+      publicDevice: options.publicDevice ?? false,
+      method,
+      // An email sign-in just proved inbox access; a recovery code didn't.
+      emailVerifiedAt: method === "email" ? sql`now()` : null,
     })
     .returning({ expiresAt: sessions.expiresAt });
   return { token, expiresAt: row.expiresAt };
@@ -92,6 +108,9 @@ export type SessionSummary = {
   expiresAt: Date;
   userAgent: string | null;
   ip: string | null;
+  /** Signed in with "This isn't my device" ticked. */
+  publicDevice: boolean;
+  method: "email" | "recovery";
   current: boolean;
 };
 
@@ -107,6 +126,8 @@ export async function listSessions(
       expiresAt: sessions.expiresAt,
       userAgent: sessions.userAgent,
       ip: sessions.ip,
+      publicDevice: sessions.publicDevice,
+      method: sessions.method,
     })
     .from(sessions)
     .where(and(eq(sessions.editorId, editorId), gt(sessions.expiresAt, sql`now()`)))

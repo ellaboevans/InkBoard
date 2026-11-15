@@ -36,6 +36,8 @@ account; every later sign-in sends a fresh code.
 | R10 | Full-text search over author names (section labels) and poem titles. |
 | R11 | Each editor chooses whether their private poems each have their own password or all share one password, and sets it accordingly. |
 | R12 | Poets can write, and readers can read, poems in Ghanaian languages (Ewe, Twi/Akan, Nzema, Ga) with their own letters and tone marks, and linguists can write IPA. Every letter renders in our typefaces, on the site and in share cards, and works in links and search. |
+| R13 | Editors can sign in without their email: single-use recovery codes, made on their profile and kept by them, work from any computer. Email codes stay the main way in. |
+| R14 | "This isn't my device" at sign-in: a short session that ends when the browser closes, with nothing about the browser remembered, shown as "Public device" in the device list. |
 
 ### Non-functional (derived — needed to meet the brief safely)
 
@@ -50,6 +52,7 @@ account; every later sign-in sends a fresh code.
 | N7  | Accessibility: the board is keyboard navigable and has a list/search fallback; reading view is plain semantic HTML. |
 | N8  | Performance: public board data is cached (`"use cache"` + tags) and invalidated when an editor publishes/edits. |
 | N9  | No user enumeration from the sign-in form (same response whether or not an account exists / is allowed). |
+| N10 | Recovery codes: ≥ 50 bits each, stored only as HMAC, compared in constant time, single use under concurrency, tiered guess limits (IP → email+client → email), no enumeration, an email on every use and every new set. Making or replacing them needs proof of inbox access within 10 minutes (step-up). |
 
 ## 3. Architecture & key decisions
 
@@ -112,6 +115,16 @@ author's shared one in shared mode) is enforced by triggers in
 `drizzle/0002_password_mode_triggers.sql`, which replaced Phase 0's
 `CHECK (visibility = 'public' OR password_hash IS NOT NULL)`.
 
+Phase 16 adds:
+
+```
+recovery_codes  id · editor_id → editors (CASCADE) · code_hash (HMAC, unique) · used_at · created_at
+                10 per editor; a new set deletes the old one (used rows stay until then, for "n of 10 left")
+step_up_codes   id · session_id → sessions (CASCADE) · code_hash (HMAC) · expires_at · attempts · consumed_at · created_at
+sessions        + public_device (bool) · sign_in_method (email|recovery) · email_verified_at (null after a recovery sign-in)
+editors         + recovery_prompt_dismissed_at
+```
+
 Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(pen_name)` and
 `search_normalize(title)`, in `drizzle/0003_search.sql` only (drizzle-kit doesn't model them).
 
@@ -121,7 +134,8 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /                      Public canvas board (R1, R9) + search (R10)
 /p/[author]/[poem]     Reading view; password gate for private poems (R8)
 /a/[author]            Author's public page: avatar, tagline, bio, links, poems (pinned first)
-/sign-in               Email → OTP (R7)
+/sign-in               Email → OTP (R7); "This isn't my device" (R14)
+/sign-in/recovery      Email + recovery code (R13, Phase 16)
 /admin                 Dashboard: my poems (R4)
 /admin/onboarding      First sign-in: choose pen name (the section label)
 /admin/poems/new       Create poem (R2, R3)
@@ -130,7 +144,7 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /admin/settings        Private-poem password mode: per poem or one shared (R11)
 /admin/collections     Your collections; create one (Phase 14)
 /admin/collections/[id]  Order its poems (keyboard), add/remove poems, rename, intro, delete
-/admin/profile         Avatar, pen name, tagline, bio, links, pinned poem, stats, signed-in devices
+/admin/profile         Avatar, pen name, tagline, bio, links, pinned poem, stats, recovery codes, signed-in devices
 /avatars/[id]          Curated avatar SVGs (prerendered, cached forever)
 /api/search?q=         Search authors and poem titles (R10)
 /api/cron/cleanup      Daily cleanup of expired rows (Bearer CRON_SECRET)
@@ -448,6 +462,19 @@ InkBoard already had a manifest (`display: standalone`), but nothing told people
   - **Offline experience:** `experimental.useOffline` is on. `OfflineIndicator` ("You're offline · showing saved poems") uses `useOffline()` or `navigator.onLine` (a page loaded from the saved copy may not have failed a fetch yet); a `role="status"` region, always rendered. On the board it sits in the top overlay flow column (clear of the zoom bar and the install card), elsewhere at the bottom. `/offline` (static, precached at install) lists the poems saved on this device straight from CacheStorage, offers "Try that page again" and the saved board.
   - **Tests:** unit tests for the strategy of each request kind, what's never touched, the storage verdicts (including forged markers), listing metadata, asset discovery, caps and the worker source. A production E2E (`playwright.offline.config.ts`: fixtures, `next build` into `.next-offline`, `next start`; command in the config header) covers reading online then offline (reload and from the board), the board offline, an unread poem → the offline page with the saved list, a private poem unlocked online never stored (no cache body contains its text), `/admin` and `/sign-in` never cached, an unpublished poem dropped on the next online visit, and a rebuilt app picking up the new worker, migrating saved poems and loading without failed chunks. axe scans of the indicator (board, poem page) and the offline page (empty, with poems, phone).
 
+### Phase 16: Signing in without email (round 1: recovery codes, "This isn't my device") ✅ (R13, R14, N10)
+Some editors read their email only on their phone, so a computer without it (their own new laptop, a library PC) can't sign in. SMS is out (cost, and it's the same phone). Round 1 adds recovery codes and a public-device option; **round 2 is passkeys**. Email codes and links are unchanged and stay the main way in.
+- **Codes** (`src/lib/recovery-code-format.ts`, pure; `src/server/auth/recovery-codes.ts`): 10 per set, 12 Crockford base32 symbols each (60 bits; `generateRecoveryCode` in `crypto.ts`, unbiased), shown as `XXXX-XXXX-XXXX` in Geist Mono with a slashed zero. Input is normalised before checking: NFKC, case, whitespace, any dash or underscore, and O→0, I/L→1 (U isn't in the alphabet). Stored as `hmac("recovery-code", editorId:code)` only.
+- **Using one** (`/sign-in/recovery`, linked quietly from both sign-in steps as "Can't get to your email? Use a recovery code"): email + code. Rate limits are counted first, in tiers: `recovery:verify:ip:<bucket>` (20/15 min), then `recovery:verify:email-ip:{h,d}:<sha256>:<bucket>` (10/h, 20/day), then `recovery:verify:email:{h,d}:<sha256>` (30/h, 100/day); a client over its own budget never reaches the shared tier, so it can't lock the editor out. Then the same work for everyone: one editor lookup, one code lookup (a nil id stands in for no editor / not allowlisted), and ten constant-time comparisons against real or decoy hashes, without early exit. Unknown email, not allowed, no codes, wrong and used codes all get one message. A match is used with `UPDATE … WHERE used_at IS NULL` (one winner under concurrency). Success starts the session through the DAL (`sign_in_method = 'recovery'`), runs the usual new-device/network alert, and emails "A recovery code was used to sign in · N left" (device, time, what to do).
+- **Making them** (profile → "Recovery codes"): status ("7 of 10 codes left", made on), Create / "Make a new set" (with a confirm dialog). The codes are returned once and kept only in the panel's state: Copy, Download (.txt) and Print (a portalled sheet; `globals.css` hides everything else in print), the advice to keep them in a password manager or printed in a wallet, and "I've saved my codes". A new set replaces the old one (same transaction, under the editor row lock) and emails a notice; codes never go in email.
+- **Step-up** (`src/server/auth/step-up.ts`): making or replacing codes needs `sessions.email_verified_at` within 10 minutes, checked inside the generating transaction. An email sign-in sets it; a recovery sign-in doesn't (it never touched the inbox), and sessions from before this phase have none. Otherwise the editor confirms with a 6-digit code emailed to them: HMAC only, bound to the session that asked, 10-minute expiry, newest only, attempts counted before comparing (5), 60 s resend cooldown, per-session and per-editor limits. A stolen long-lived cookie alone can't quietly replace codes.
+- **Dashboard:** a one-time setup prompt for editors with no codes ("Set up recovery codes so you can sign in without your email"), with "Not now" stored on the editor (`recovery_prompt_dismissed_at`), so it doesn't come back on any device; it also goes once codes exist. With 2 or fewer unused codes, a notice ("Only 2 recovery codes left", "You've used all your recovery codes") links to a new set until there is one.
+- **"This isn't my device"** (both sign-in steps, the link page and the recovery form): the session cookie has no Expires/Max-Age, the server session lasts 12 hours instead of 30 days, and the long-lived device cookie is neither read nor written (a throwaway id makes the alert treat it as a new device). The device list marks it "Public device" (and "Recovery code" for recovery sign-ins). Radix's Checkbox resets itself on the form `reset` React fires after each action, so `PublicDeviceCheckbox` ignores reset-driven changes and posts through its own hidden input.
+- **Emails:** the two recovery notices say "code", so they carry no 4–8 digit numbers at all (time without the year, no IP address, never a code); the step-up email follows the code-email rules (code first, alone, no other digit runs, no sign-in link). Templates are pure, in `email-templates.ts`; the E2E outbox records `recovery-used`, `recovery-codes-changed` and `step-up`.
+- **Data:** migration `0013_recovery_codes.sql` (generated). The cleanup cron also deletes step-up codes a day after expiry or use; recovery codes don't expire (a new set replaces them).
+- **Tests:** integration (`tests/auth/recovery-codes.test.ts`): format, entropy and normalisation; generation and hashing; replacement; concurrent new sets; single use with concurrent attempts; wrong codes; every rate-limit tier, including that blocked guesses never reach the shared tier; no enumeration (same answer and the same five rate-limit keys for unknown, not allowed, no codes and wrong); the step-up rule (fresh, aged, pre-feature, recovery sign-in, other editor, expired, session-bound codes, attempt cap under concurrency, cooldown); the remaining count; the emails; public-device sessions. Template tests for the three emails. E2E: `e2e/recovery-codes.spec.ts` (set up, Copy, Download, Print, sign in from a fresh context, used code refused, generic error, step-up, setup prompt and dismissal across devices, low-codes notice), `e2e/public-device.spec.ts` (cookie without expiry, 12 h, no device cookie, "Public device", unticked unchanged, box survives an error); new states in `e2e/a11y.spec.ts`.
+- **Round 2:** passkeys (WebAuthn), registered from the profile with the same step-up rule.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
@@ -472,7 +499,10 @@ InkBoard already had a manifest (`display: standalone`), but nothing told people
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
 | N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
 | N8 Board caching | 3, 12 | ✅ tag-invalidated on every admin save (E2E); feeds share the tag |
-| N9 No user enumeration | 1 | ✅ tested |
+| N9 No user enumeration | 1, 16 | ✅ tested (sign-in codes; recovery codes too) |
+| R13 Sign in without email (recovery codes) | 16 | ✅ round 1 tested (unit + E2E); round 2: passkeys |
+| R14 "This isn't my device" | 16 | ✅ tested (unit + E2E: cookie without expiry, 12 h, no device cookie, "Public device") |
+| N10 Recovery code security and step-up | 16 | ✅ tested (hashing, concurrency, rate-limit tiers, enumeration, step-up, emails) |
 | Installable app (manifest, icons, install nudge, offline reading) | 15 | ✅ round 1: installability (Chrome, no errors) and the nudge; round 2: service worker and offline reading (production E2E, private poems never stored) |
 
 ## 6. Decisions and open questions
@@ -486,6 +516,7 @@ Decided:
 - **Email provider?** Resend, with a verified sending domain (done at launch).
 - **Which local languages?** Ewe, Twi/Akan, Nzema and Ga for poets, and IPA for linguists (Phase 11). The interface stays in English.
 - **Board layout?** An automatic grid of author sections. Letting editors arrange positions could be a later phase.
+- **Signing in without email?** Recovery codes and "This isn't my device" now (Phase 16), passkeys next. No SMS (cost, and it's the same phone).
 
 No open questions remain.
 

@@ -10,7 +10,14 @@ import { safeEqual, sha256 } from "./crypto";
  * the instant it expires.
  */
 
-export type CleanupResult = { otps: number; sessions: number; rateLimits: number; signInLocations: number; signInDevices: number };
+export type CleanupResult = {
+  otps: number;
+  stepUpCodes: number;
+  sessions: number;
+  rateLimits: number;
+  signInLocations: number;
+  signInDevices: number;
+};
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const db = getDb();
@@ -19,6 +26,14 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   // Sign-in codes: expired or used more than a day ago.
   const otps = await db.execute(sql`
     DELETE FROM email_otps
+    WHERE expires_at < now() - interval '1 day'
+       OR consumed_at < now() - interval '1 day'
+  `);
+  // Step-up confirmation codes (Phase 16): same rule as sign-in codes. (They
+  // also go with their session. Recovery codes don't expire: a new set
+  // replaces the old one, so they never pile up.)
+  const stepUpCodes = await db.execute(sql`
+    DELETE FROM step_up_codes
     WHERE expires_at < now() - interval '1 day'
        OR consumed_at < now() - interval '1 day'
   `);
@@ -41,6 +56,7 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   `);
   return {
     otps: count(otps),
+    stepUpCodes: count(stepUpCodes),
     sessions: count(sessions),
     rateLimits: count(rateLimits),
     signInLocations: count(signInLocations),

@@ -2,7 +2,9 @@
 
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { Loader2Icon, MailIcon } from "lucide-react";
+import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
+import { PublicDeviceCheckbox } from "@/components/auth/public-device-checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,35 +64,52 @@ function EmailStep({
   action,
   pending,
 }: StepProps<Extract<SignInState, { step: "email" }>>) {
+  const [publicDevice, setPublicDevice] = useState(state.publicDevice ?? false);
   return (
-    <form action={action} className="grid gap-4">
-      <input type="hidden" name="intent" value="request" />
-      <div className="grid gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
-          placeholder="you@example.com"
-          defaultValue={state.email}
-          aria-invalid={state.error ? true : undefined}
-          aria-describedby={state.error ? "email-error" : undefined}
-          required
-          autoFocus
-        />
-      </div>
-      {state.error && (
-        <p id="email-error" role="alert" className="text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
-      <Button type="submit" size="lg" disabled={pending}>
-        {pending ? <Loader2Icon className="animate-spin" /> : <MailIcon />}
-        Email me a sign-in code
-      </Button>
-    </form>
+    <div className="grid gap-6">
+      <form action={action} className="grid gap-4">
+        <input type="hidden" name="intent" value="request" />
+        <div className="grid gap-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="you@example.com"
+            defaultValue={state.email}
+            aria-invalid={state.error ? true : undefined}
+            aria-describedby={state.error ? "email-error" : undefined}
+            required
+            autoFocus
+          />
+        </div>
+        {state.error && (
+          <p id="email-error" role="alert" className="text-sm text-destructive">
+            {state.error}
+          </p>
+        )}
+        <PublicDeviceCheckbox checked={publicDevice} onCheckedChange={setPublicDevice} />
+        <Button type="submit" size="lg" disabled={pending}>
+          {pending ? <Loader2Icon className="animate-spin" /> : <MailIcon />}
+          Email me a sign-in code
+        </Button>
+      </form>
+      <RecoveryLink />
+    </div>
+  );
+}
+
+/** The quiet way in for editors whose email is on a phone they don't have with them. */
+function RecoveryLink() {
+  return (
+    <p className="text-center text-sm text-muted-foreground">
+      Can&apos;t get to your email?{" "}
+      <Link href="/sign-in/recovery" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+        Use a recovery code
+      </Link>
+    </p>
   );
 }
 
@@ -101,6 +120,7 @@ function CodeStep({
 }: StepProps<Extract<SignInState, { step: "code" }>>) {
   const formRef = useRef<HTMLFormElement>(null);
   const [code, setCode] = useState("");
+  const [publicDevice, setPublicDevice] = useState(state.publicDevice);
   const secondsLeft = useCountdown(state.resendAt);
 
   // After a failed attempt, clear the slots so the next code can be typed.
@@ -164,6 +184,8 @@ function CodeStep({
           </p>
         )}
 
+        <PublicDeviceCheckbox checked={publicDevice} onCheckedChange={setPublicDevice} disabled={pending} />
+
         <Button
           type="submit"
           size="lg"
@@ -197,6 +219,7 @@ function CodeStep({
           {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : "Resend code"}
         </Button>
       </form>
+      <RecoveryLink />
     </div>
   );
 }

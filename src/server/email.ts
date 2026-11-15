@@ -4,12 +4,18 @@ import { Resend } from "resend";
 import { env } from "@/env";
 import { OTP_TTL_SECONDS } from "./auth/otp-config";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./email-logo";
+import { STEP_UP_TTL_SECONDS } from "./auth/step-up-config";
 import {
   otpEmail,
+  recoveryCodesChangedEmail,
+  recoveryCodeUsedEmail,
   signInAlertEmail,
   signInLinkUrl,
+  stepUpEmail,
   welcomeEmail,
   type EmailMessage,
+  type RecoveryCodesChangedDetails,
+  type RecoveryCodeUsedDetails,
   type SignInAlertDetails,
   type WelcomeDetails,
 } from "./email-templates";
@@ -75,4 +81,20 @@ export async function sendSignInAlertEmail(to: string, details: Omit<SignInAlert
 export async function sendWelcomeEmail(to: string, details: Omit<WelcomeDetails, "appUrl">): Promise<void> {
   const message = welcomeEmail({ ...details, appUrl: env().APP_URL });
   await deliver(to, message, { kind: "welcome", penName: details.penName, slug: details.slug });
+}
+
+export async function sendRecoveryCodeUsedEmail(to: string, details: Omit<RecoveryCodeUsedDetails, "appUrl">): Promise<void> {
+  const message = recoveryCodeUsedEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, { kind: "recovery-used", device: details.device, remaining: details.remaining });
+}
+
+export async function sendRecoveryCodesChangedEmail(to: string, details: Omit<RecoveryCodesChangedDetails, "appUrl">): Promise<void> {
+  const message = recoveryCodesChangedEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, { kind: "recovery-codes-changed", device: details.device, firstSet: details.firstSet });
+}
+
+/** The confirmation code for a step-up (src/server/auth/step-up.ts). */
+export async function sendStepUpEmail(to: string, code: string): Promise<void> {
+  const message = stepUpEmail({ code, appUrl: env().APP_URL, ttlMinutes: STEP_UP_TTL_SECONDS / 60 });
+  await deliver(to, message, { kind: "step-up", code });
 }

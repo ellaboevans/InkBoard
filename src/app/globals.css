@@ -197,3 +197,12 @@
   0%, 55% { background-color: color-mix(in oklch, var(--accent) 70%, transparent); }
   100% { background-color: transparent; }
 }
+
+/* Recovery codes (profile, recovery-codes-panel.tsx): while new codes are on
+   screen, printing the page prints only their sheet, a direct child of body,
+   so the sidebar, the rest of the profile and any toasts stay off the paper. */
+@media print {
+  body:has(> [data-print-sheet]) > :not([data-print-sheet]) {
+    display: none !important;
+  }
+}

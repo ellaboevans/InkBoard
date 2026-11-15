@@ -127,7 +127,7 @@ describe("managing devices", () => {
       [laptop.id, false],
     ]);
     expect(Object.keys(list[0]).sort()).toEqual(
-      ["createdAt", "current", "expiresAt", "id", "ip", "userAgent"],
+      ["createdAt", "current", "expiresAt", "id", "ip", "method", "publicDevice", "userAgent"],
     );
     expect(JSON.stringify(list)).not.toContain(phone.token);
   });

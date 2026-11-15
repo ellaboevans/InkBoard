@@ -11,6 +11,7 @@ import {
   revokeSessionToken,
   validateSession,
   type SessionEditor,
+  type SessionOptions,
 } from "./sessions";
 
 /**
@@ -80,14 +81,21 @@ const cookieOptions = {
   path: "/",
 } as const;
 
-/** Server Actions / Route Handlers only (cookies are read-only in RSC). */
-export async function startSession(editorId: string): Promise<void> {
+/**
+ * Server Actions / Route Handlers only (cookies are read-only in RSC).
+ * On a public device ("This isn't my device") the cookie gets no Expires or
+ * Max-Age, so the browser drops it when it closes, and the server ends the
+ * session after 12 hours anyway (browsers that restore sessions keep such
+ * cookies, so the server-side expiry is what really counts).
+ */
+export async function startSession(editorId: string, options: SessionOptions = {}): Promise<void> {
   const meta = await getRequestMeta();
-  const { token, expiresAt } = await createSession(editorId, meta);
-  (await cookies()).set(SESSION_COOKIE, token, {
-    ...cookieOptions,
-    expires: expiresAt,
-  });
+  const { token, expiresAt } = await createSession(editorId, meta, options);
+  (await cookies()).set(
+    SESSION_COOKIE,
+    token,
+    options.publicDevice ? cookieOptions : { ...cookieOptions, expires: expiresAt },
+  );
 }
 
 const DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60;
@@ -96,8 +104,15 @@ const DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60;
  * This browser's device id for new-device alerts (Server Actions only). Reads
  * the device cookie, or issues one if it's missing or malformed. `issued` is
  * true when the browser had no usable id, i.e. it's new to us.
+ *
+ * On a public device nothing is read or written: the browser isn't the
+ * editor's, so it must not be remembered (or recognised from someone else's
+ * cookie). A throwaway id makes it count as a new device for the alert.
  */
-export async function deviceIdForSignIn(): Promise<{ id: string; issued: boolean }> {
+export async function deviceIdForSignIn(
+  { publicDevice = false }: { publicDevice?: boolean } = {},
+): Promise<{ id: string; issued: boolean }> {
+  if (publicDevice) return { id: generateToken(), issued: true };
   const jar = await cookies();
   const existing = jar.get(DEVICE_COOKIE)?.value;
   if (existing && /^[A-Za-z0-9_-]{43}$/.test(existing)) {

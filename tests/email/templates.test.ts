@@ -2,7 +2,17 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { EMAIL_LOGO_PNG_BASE64 } from "@/server/email-logo";
 import { describe, expect, it } from "vitest";
-import { escapeHtml, formatAlertTime, otpEmail, signInAlertEmail, signInLinkUrl } from "@/server/email-templates";
+import {
+  escapeHtml,
+  formatAlertTime,
+  formatNoticeTime,
+  otpEmail,
+  recoveryCodesChangedEmail,
+  recoveryCodeUsedEmail,
+  signInAlertEmail,
+  signInLinkUrl,
+  stepUpEmail,
+} from "@/server/email-templates";
 
 /** What a reader (or a code detector) sees in the HTML part: no tags, styles or attributes. */
 function visibleText(html: string) {
@@ -116,5 +126,86 @@ describe("new sign-in alert email", () => {
 
   it("formats times in UTC", () => {
     expect(formatAlertTime(new Date("2026-01-05T03:07:00Z"))).toBe("Mon, 5 Jan 2026 at 03:07 UTC");
+  });
+});
+
+describe("recovery code emails", () => {
+  const appUrl = "https://poemhub.example";
+  // A date whose year, day and time could all form digit runs if formatted carelessly.
+  const at = new Date("2026-12-31T23:59:00Z");
+  const used = (remaining: number) =>
+    recoveryCodeUsedEmail({ penName: "Ada <Verse>", device: "Firefox on Windows", at, remaining, appUrl });
+  const changed = (firstSet: boolean) =>
+    recoveryCodesChangedEmail({ penName: "Ada", device: "Safari on iPhone", at, firstSet, appUrl });
+  const all = [used(9), used(1), used(0), changed(true), changed(false)];
+
+  it("says a recovery code was used and how many are left, in the subject", () => {
+    expect(used(9).subject).toBe("A recovery code was used to sign in · 9 left");
+    expect(used(0).subject).toBe("A recovery code was used to sign in · none left");
+    expect(used(1).text).toContain("You have 1 unused recovery code left.");
+    expect(used(0).text).toContain("That was your last one");
+  });
+
+  it("names the device and time, and what to do if it wasn't them", () => {
+    const mail = used(4);
+    for (const part of [mail.text, visibleText(mail.html)]) {
+      expect(part).toContain("Firefox on Windows");
+      expect(part).toContain("Thu 31 Dec, 23:59 UTC");
+      expect(part).toMatch(/Sign that device out/);
+      expect(part).toMatch(/Make a new set of recovery codes/);
+    }
+    expect(mail.html).toContain('href="https://poemhub.example/admin/profile"');
+  });
+
+  it("contains no 4–8 digit numbers anywhere (they say 'code', so nothing may look like one)", () => {
+    for (const mail of all) {
+      expect(digitRuns(mail.subject)).toEqual([]);
+      expect(digitRuns(mail.text)).toEqual([]);
+      expect(digitRuns(visibleText(mail.html))).toEqual([]);
+      const hrefs = [...mail.html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+      expect(hrefs.flatMap(digitRuns)).toEqual([]);
+    }
+  });
+
+  it("formats notice times without the year", () => {
+    expect(formatNoticeTime(at)).toBe("Thu 31 Dec, 23:59 UTC");
+    expect(digitRuns(formatNoticeTime(new Date("2027-01-01T00:00:00Z")))).toEqual([]);
+  });
+
+  it("never includes an IP address (an IPv6 group can be four digits)", () => {
+    for (const mail of all) expect(mail.text).not.toMatch(/IP address/);
+  });
+
+  it("tells a first set apart from a replacement, and never contains codes", () => {
+    expect(changed(true).subject).toBe("Recovery codes were set up for your InkBoard account");
+    expect(changed(false).subject).toBe("Your InkBoard recovery codes were replaced");
+    expect(changed(false).text).toContain("The old codes no longer work.");
+    expect(visibleText(changed(true).html)).toContain("We never send the codes themselves by email.");
+    for (const mail of all) expect(mail.text).not.toMatch(/[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}/);
+  });
+
+  it("escapes editor-controlled text", () => {
+    expect(used(3).html).toContain("Ada &#60;Verse&#62;");
+    expect(used(3).html).not.toContain("<Verse>");
+  });
+});
+
+describe("step-up confirmation email", () => {
+  const mail = stepUpEmail({ code: "305718", appUrl: "https://poemhub.example", ttlMinutes: 10 });
+
+  it("follows the code email rules: code first, alone on its line, unbroken", () => {
+    expect(mail.text.split("\n")[0]).toBe("Your InkBoard confirmation code is:");
+    expect(mail.text.split("\n")).toContain("305718");
+    expect(mail.html).toMatch(/<strong>305718<\/strong>/);
+    expect(visibleText(mail.html).trim().startsWith("Your InkBoard confirmation code is 305718.")).toBe(true);
+  });
+
+  it("contains no other 4–8 digit numbers, and no sign-in link", () => {
+    expect(digitRuns(mail.subject)).toEqual([]);
+    for (const part of [mail.text, visibleText(mail.html)]) {
+      expect(new Set(digitRuns(part))).toEqual(new Set(["305718"]));
+    }
+    expect(mail.html).not.toContain("/sign-in/link");
+    expect(mail.text).not.toContain("/sign-in/link");
   });
 });

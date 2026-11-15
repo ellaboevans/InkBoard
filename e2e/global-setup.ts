@@ -31,6 +31,7 @@ async function warmUp() {
   const routes: [string, Record<string, string>?][] = [
     ["/sign-in"],
     ["/sign-in/link"],
+    ["/sign-in/recovery"],
     ["/"],
     ["/admin"],
     ["/admin/onboarding"],

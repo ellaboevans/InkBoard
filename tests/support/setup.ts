@@ -1,11 +1,11 @@
 import { sql } from "drizzle-orm";
 import { beforeEach, vi } from "vitest";
 import { getDb } from "@/db";
-import { alerts, outbox, welcomes } from "./outbox";
+import { alerts, outbox, recoveryNotices, stepUpCodes, welcomes } from "./outbox";
 
 // Capture outgoing emails instead of sending/logging them.
 vi.mock("@/server/email", async () => {
-  const { alerts, outbox, welcomes } = await import("./outbox");
+  const { alerts, outbox, recoveryNotices, stepUpCodes, welcomes } = await import("./outbox");
   return {
     sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
       outbox.push({ to, code, linkToken });
@@ -15,6 +15,19 @@ vi.mock("@/server/email", async () => {
     }),
     sendWelcomeEmail: vi.fn(async (to: string, d: { penName: string; slug: string }) => {
       welcomes.push({ to, penName: d.penName, slug: d.slug });
+    }),
+    sendRecoveryCodeUsedEmail: vi.fn(
+      async (to: string, d: { device: string; remaining: number; at: Date; penName: string | null }) => {
+        recoveryNotices.push({ to, kind: "used", ...d });
+      },
+    ),
+    sendRecoveryCodesChangedEmail: vi.fn(
+      async (to: string, d: { device: string; firstSet: boolean; at: Date; penName: string | null }) => {
+        recoveryNotices.push({ to, kind: "changed", ...d });
+      },
+    ),
+    sendStepUpEmail: vi.fn(async (to: string, code: string) => {
+      stepUpCodes.push({ to, code });
     }),
   };
 });
@@ -31,6 +44,8 @@ beforeEach(async () => {
   outbox.length = 0;
   alerts.length = 0;
   welcomes.length = 0;
+  recoveryNotices.length = 0;
+  stepUpCodes.length = 0;
   await getDb().execute(
     sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits CASCADE`,
   );

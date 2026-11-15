@@ -5,12 +5,14 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { getProfile } from "@/server/auth/profile";
+import { getRecoveryCodeStatus } from "@/server/auth/recovery-codes";
 import { getEditorStats } from "@/server/editor-stats";
 import { StatCards } from "@/components/admin/stat-cards";
 import { listEditorPoems } from "@/server/poems";
 import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
 import { FirstPublishFlash } from "@/components/install/install-nudge";
+import { RecoveryNotice } from "./recovery-notice";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -24,10 +26,11 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const editor = await requireOnboardedEditor();
-  const [poems, stats, profile, flash] = await Promise.all([
+  const [poems, stats, profile, recovery, flash] = await Promise.all([
     listEditorPoems(editor.id),
     getEditorStats(editor.id),
     getProfile(editor.id),
+    getRecoveryCodeStatus(editor.id),
     searchParams,
   ]);
   const rows: DashboardPoem[] = poems.map((p) => ({
@@ -77,6 +80,8 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
         </div>
         {poems.length > 0 && <NewPoemButton />}
       </div>
+
+      <RecoveryNotice status={recovery} />
 
       <StatCards stats={stats} />
 

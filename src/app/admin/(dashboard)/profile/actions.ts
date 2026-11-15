@@ -1,7 +1,10 @@
 "use server";
 
 import { refresh, updateTag } from "next/cache";
-import { requireOnboardedEditor, requireOnboardedSession } from "@/server/auth/dal";
+import { getRequestMeta, requireOnboardedEditor, requireOnboardedSession } from "@/server/auth/dal";
+import { generateRecoveryCodes } from "@/server/auth/recovery-codes";
+import { requestStepUpCode, verifyStepUpCode } from "@/server/auth/step-up";
+import { pluralCount } from "@/lib/plural";
 import { updateProfile, type ProfileField, type ProfileFields } from "@/server/auth/profile";
 import { revokeOtherSessions, revokeSession } from "@/server/auth/sessions";
 import { BOARD_TAG } from "@/server/cache-tags";
@@ -55,4 +58,63 @@ export async function revokeOtherSessionsAction(): Promise<RevokeResult> {
   const count = await revokeOtherSessions(editor.id, sessionId);
   refresh();
   return { ok: true, count };
+}
+
+export type RecoveryCodesResult =
+  | { ok: true; codes: string[] }
+  /** The session isn't fresh: confirm with an emailed code first. */
+  | { ok: false; stepUp: true }
+  | { ok: false; error: string };
+
+/**
+ * Make (or replace) the editor's recovery codes. The step-up rule is checked
+ * in generateRecoveryCodes, inside its transaction: this action never
+ * decides freshness itself.
+ */
+export async function createRecoveryCodesAction(): Promise<RecoveryCodesResult> {
+  const { editor, sessionId } = await requireOnboardedSession();
+  const { userAgent } = await getRequestMeta();
+  const res = await generateRecoveryCodes({ editorId: editor.id, sessionId, userAgent });
+  if (!res.ok) return { ok: false, stepUp: true };
+  // The count on this page and the dashboard notices change.
+  refresh();
+  return { ok: true, codes: res.codes };
+}
+
+export type StepUpRequestResult = { ok: true; email: string; resendAt: number } | { ok: false; error: string };
+
+/** Email this session a confirmation code. */
+export async function requestStepUpAction(): Promise<StepUpRequestResult> {
+  const { editor, sessionId } = await requireOnboardedSession();
+  const res = await requestStepUpCode({ editorId: editor.id, sessionId });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error:
+        res.error === "rate_limited"
+          ? `Please wait ${pluralCount(res.retryAfter, "second")} before asking for another code.`
+          : "Your session has ended. Sign in again.",
+    };
+  }
+  return { ok: true, email: res.email, resendAt: Date.now() + res.resendIn * 1000 };
+}
+
+/** Check the confirmation code, then make the codes in the same round trip. */
+export async function confirmStepUpAction(code: string): Promise<RecoveryCodesResult> {
+  const { editor, sessionId } = await requireOnboardedSession();
+  const res = await verifyStepUpCode({ editorId: editor.id, sessionId, code });
+  if (!res.ok) {
+    return {
+      ok: false,
+      error:
+        res.error === "too_many_attempts"
+          ? "Too many incorrect attempts. Ask for a new code."
+          : res.error === "rate_limited"
+            ? `Too many attempts. Try again in ${Math.ceil(res.retryAfter / 60)} min.`
+            : res.attemptsLeft !== undefined
+              ? `That code is incorrect. ${pluralCount(res.attemptsLeft, "attempt")} left.`
+              : "That code is invalid or has expired. Ask for a new one.",
+    };
+  }
+  return createRecoveryCodesAction();
 }

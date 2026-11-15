@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireOnboardedSession } from "@/server/auth/dal";
+import { getRecoveryCodeStatus } from "@/server/auth/recovery-codes";
+import { isSessionFresh } from "@/server/auth/step-up";
 import { listSessions, type SessionSummary } from "@/server/auth/sessions";
 import { getProfile } from "@/server/auth/profile";
 import { getEditorStats } from "@/server/editor-stats";
@@ -13,6 +15,7 @@ import { EditorAvatar } from "@/components/admin/editor-avatar";
 import { StatCards } from "@/components/admin/stat-cards";
 import { describeUserAgent } from "@/lib/user-agent";
 import { ProfileForm } from "./profile-form";
+import { RecoveryCodesPanel } from "./recovery-codes-panel";
 import { RevokeOtherSessionsButton, RevokeSessionButton } from "./session-buttons";
 
 export const metadata: Metadata = { title: "Profile" };
@@ -37,13 +40,27 @@ export default function ProfilePage() {
         </Suspense>
       </section>
 
+      <section id="recovery-codes" className="grid scroll-mt-20 gap-4" aria-labelledby="recovery-heading">
+        <div>
+          <h2 id="recovery-heading" className="font-serif text-2xl">
+            Recovery codes
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            A way to sign in when your email isn&apos;t to hand, say on a library computer while your phone is at home.
+          </p>
+        </div>
+        <Suspense fallback={<div className="h-36 animate-pulse rounded-xl bg-muted" />}>
+          <RecoveryCodes />
+        </Suspense>
+      </section>
+
       <section className="grid gap-4" aria-labelledby="devices-heading">
         <div>
           <h2 id="devices-heading" className="font-serif text-2xl">
             Signed-in devices
           </h2>
           <p className="mt-1 text-muted-foreground">
-            Each sign-in lasts 30 days. Sign out any device you don&apos;t recognise.
+            Each sign-in lasts 30 days, or 12 hours on a public device. Sign out any device you don&apos;t recognise.
           </p>
         </div>
         <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted" />}>
@@ -105,6 +122,20 @@ async function Profile() {
 
 const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
+async function RecoveryCodes() {
+  const { editor, sessionId } = await requireOnboardedSession();
+  const [status, fresh] = await Promise.all([getRecoveryCodeStatus(editor.id), isSessionFresh(editor.id, sessionId)]);
+  return (
+    <RecoveryCodesPanel
+      email={editor.email}
+      total={status.total}
+      unused={status.unused}
+      createdLabel={status.createdAt ? dateFormat.format(status.createdAt) : null}
+      fresh={fresh}
+    />
+  );
+}
+
 async function Devices() {
   const { editor, sessionId } = await requireOnboardedSession();
   const sessions = await listSessions(editor.id, sessionId);
@@ -133,11 +164,9 @@ function DeviceRow({ session: s }: { session: SessionSummary }) {
       <div className="grid min-w-0 flex-1 gap-0.5">
         <p className="flex flex-wrap items-center gap-2 font-medium">
           {label}
-          {s.current && (
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-normal text-muted-foreground">
-              This device
-            </span>
-          )}
+          {s.current && <DeviceBadge>This device</DeviceBadge>}
+          {s.publicDevice && <DeviceBadge>Public device</DeviceBadge>}
+          {s.method === "recovery" && <DeviceBadge>Recovery code</DeviceBadge>}
         </p>
         <p className="truncate text-sm text-muted-foreground">
           Signed in {dateFormat.format(s.createdAt)}
@@ -147,5 +176,11 @@ function DeviceRow({ session: s }: { session: SessionSummary }) {
       </div>
       {!s.current && <RevokeSessionButton sessionId={s.id} label={label} />}
     </li>
+  );
+}
+
+function DeviceBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-normal text-muted-foreground">{children}</span>
   );
 }

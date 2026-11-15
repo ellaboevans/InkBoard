@@ -1,0 +1,283 @@
+import { eq, sql } from "drizzle-orm";
+import { describe, expect, it } from "vitest";
+import { getDb } from "@/db";
+import { editors, passkeys, poems, recoveryCodes, sessions } from "@/db/schema";
+import {
+  EXPORT_CONTENT_TYPES,
+  exportFileName,
+  exportToJson,
+  exportToMarkdown,
+  type EditorExport,
+} from "@/lib/export-format";
+import { generateRecoveryCodes } from "@/server/auth/recovery-codes";
+import { createSession, validateSession } from "@/server/auth/sessions";
+import { createCollection, setPoemCollection } from "@/server/collections";
+import { EXPORTS_PER_HOUR, allowExport, loadEditorExport } from "@/server/export";
+import { setSharedPassword } from "@/server/password-settings";
+import { createPoem, updatePoem } from "@/server/poems";
+
+const db = getDb();
+const SITE = "https://inkboard.test";
+const NOW = new Date("2026-11-15T12:00:00Z");
+
+// Ghanaian letters, IPA and Ewe tone marks. ɛ́ and ɔ̀ have no precomposed form,
+// so they stay letter + combining mark even in NFC.
+const GHANAIAN = "Ɛ ɛ Ɔ ɔ Ŋ ŋ Ɖ ɖ Ƒ ƒ Ɣ ɣ Ʋ ʋ Ʒ ʒ · ɛ́ ɔ̀ è ŋ́ · [ʃ ʒ ɲ ɥ ə]";
+
+async function editor(email: string, penName: string, extra: Partial<typeof editors.$inferInsert> = {}) {
+  const [row] = await db
+    .insert(editors)
+    .values({ email, penName, slug: penName.toLowerCase().replace(/\s+/g, "-"), ...extra })
+    .returning();
+  return row;
+}
+
+async function poem(editorId: string, over: Record<string, unknown>) {
+  const res = await createPoem(editorId, { title: "Poem", body: "a line", visibility: "public", status: "published", ...over });
+  if (!res.ok) throw new Error(JSON.stringify(res.errors));
+  return res.poem.id;
+}
+
+/** Ada: a public Ewe poem (with an earlier version), a private one, a draft, a collection; plus secrets of every kind. */
+async function ada() {
+  const ed = await editor("ada@example.com", "Ada Verse", {
+    tagline: "Small poems about rivers",
+    bio: `Writes in English and Ewe.\n${GHANAIAN}`,
+    links: ["https://ada.example/"],
+  });
+  const ewe = await poem(ed.id, { title: "Ŋkɔ", body: "first draft", language: "ee" });
+  const ewePoem = await db.select().from(poems).where(eq(poems.id, ewe));
+  const upd = await updatePoem(ed.id, ewe, {
+    title: "Ŋkɔ",
+    body: `ɖeka\n  ${GHANAIAN}\n\n*ɛ́yae* **ɔ̀**`,
+    language: "ee",
+    visibility: "public",
+    status: "published",
+  });
+  if (!upd.ok) throw new Error(JSON.stringify(upd));
+  const secret = await poem(ed.id, { title: "Locked room", body: "only for friends", visibility: "private", password: "poem-pass-123" });
+  const draft = await poem(ed.id, { title: "Unfinished", body: "half a line", status: "draft" });
+  const col = await createCollection(ed.id, { title: "Coastline", intro: "Poems from the shore." });
+  if (!col.ok) throw new Error();
+  await setPoemCollection(ed.id, ewe, col.collection.id);
+  await setPoemCollection(ed.id, draft, col.collection.id);
+  await db.update(editors).set({ pinnedPoemId: ewe }).where(eq(editors.id, ed.id));
+  // Secrets that must never be exported.
+  const shared = await setSharedPassword(ed.id, "shared-secret-9");
+  if (!shared.ok) throw new Error(JSON.stringify(shared));
+  const { token } = await createSession(ed.id, { userAgent: "UA-Ada", ip: "203.0.113.77" });
+  const sessionId = (await validateSession(token))!.sessionId;
+  const codes = await generateRecoveryCodes({ editorId: ed.id, sessionId });
+  if (!codes.ok) throw new Error();
+  await db.insert(passkeys).values({
+    editorId: ed.id,
+    credentialId: "CREDENTIAL-ID-ADA",
+    publicKey: "PUBLIC-KEY-ADA",
+    deviceType: "singleDevice",
+    name: "Ada's laptop",
+  });
+  return { ed, ewe, secret, draft, ewePoem: ewePoem[0], collectionId: col.collection.id, token, codes: codes.codes };
+}
+
+async function exportOf(editorId: string): Promise<EditorExport> {
+  const data = await loadEditorExport(editorId, { site: SITE, now: NOW });
+  if (!data) throw new Error("no export");
+  return data;
+}
+
+/** Every key anywhere in a JSON value. */
+const keysOf = (v: unknown): string[] =>
+  Array.isArray(v) ? v.flatMap(keysOf) : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...keysOf(x)]) : [];
+
+describe("what the export contains", () => {
+  it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
+    const a = await ada();
+    const data = await exportOf(a.ed.id);
+    expect(data).toMatchObject({ format: "inkboard-export", version: 1, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data.profile).toEqual({
+      penName: "Ada Verse",
+      slug: "ada-verse",
+      tagline: "Small poems about rivers",
+      bio: `Writes in English and Ewe.\n${GHANAIAN}`,
+      links: ["https://ada.example/"],
+      avatar: null,
+      pinnedPoemId: a.ewe,
+      joinedAt: a.ed.createdAt.toISOString(),
+    });
+    expect(data.collections).toEqual([
+      expect.objectContaining({ title: "Coastline", intro: "Poems from the shore.", poemIds: [a.ewe, a.draft] }),
+    ]);
+    expect(data.poems.map((p) => [p.title, p.visibility, p.status])).toEqual([
+      ["Ŋkɔ", "public", "published"],
+      ["Locked room", "private", "published"],
+      ["Unfinished", "public", "draft"],
+    ]);
+    const [ewe, locked, draft] = data.poems;
+    expect(locked.text).toBe("only for friends");
+    expect(draft).toMatchObject({ text: "half a line", publishedAt: null, collection: { title: "Coastline", position: 2 } });
+    expect(ewe).toMatchObject({ language: "ee", collection: { id: a.collectionId, title: "Coastline", position: 1 } });
+    expect(Object.keys(ewe).sort()).toEqual(
+      ["collection", "createdAt", "id", "language", "publishedAt", "revisions", "slug", "status", "text", "title", "updatedAt", "visibility"],
+    );
+  });
+
+  it("includes each poem's saved versions, oldest first, the newest matching the poem", async () => {
+    const a = await ada();
+    const [ewe] = (await exportOf(a.ed.id)).poems;
+    expect(ewe.revisions.map((r) => r.text)).toEqual(["first draft", ewe.text]);
+    expect(ewe.revisions[0]).toEqual({ savedAt: expect.any(String), title: "Ŋkɔ", text: "first draft", language: "ee" });
+  });
+
+  it("never includes another editor's poems, collections or profile", async () => {
+    const a = await ada();
+    const eve = await editor("eve@example.com", "Eve Other", { bio: "EVE-BIO" });
+    await poem(eve.id, { title: "EVE-TITLE", body: "EVE-TEXT", visibility: "private", password: "eve-pass-123" });
+    await createCollection(eve.id, { title: "EVE-COLLECTION" });
+    const files = [exportToJson(await exportOf(a.ed.id)), exportToMarkdown(await exportOf(a.ed.id))];
+    for (const file of files) for (const s of ["EVE-", "eve@example.com", eve.id]) expect(file).not.toContain(s);
+    // ...and Eve's own export has only Eve's.
+    const theirs = await exportOf(eve.id);
+    expect(theirs.poems.map((p) => p.title)).toEqual(["EVE-TITLE"]);
+    expect(JSON.stringify(theirs)).not.toContain("Ada");
+  });
+
+  it("never includes passwords, sign-in data, recovery codes, passkeys or the email address", async () => {
+    const a = await ada();
+    const [hashes] = await db
+      .select({ shared: editors.sharedPasswordHash, version: editors.sharedPasswordVersion })
+      .from(editors)
+      .where(eq(editors.id, a.ed.id));
+    const poemHashes = (await db.select({ h: poems.passwordHash }).from(poems).where(eq(poems.editorId, a.ed.id)))
+      .map((r) => r.h)
+      .filter(Boolean) as string[];
+    const sessionHashes = (await db.select({ h: sessions.tokenHash }).from(sessions)).map((r) => r.h);
+    const codeHashes = (await db.select({ h: recoveryCodes.codeHash }).from(recoveryCodes)).map((r) => r.h);
+    expect(hashes.shared).toMatch(/^scrypt\$/);
+
+    const data = await exportOf(a.ed.id);
+    const forbidden = [
+      "scrypt$",
+      hashes.shared!,
+      ...poemHashes,
+      "shared-secret-9",
+      "poem-pass-123",
+      a.token,
+      ...sessionHashes,
+      ...codeHashes,
+      ...a.codes,
+      "CREDENTIAL-ID-ADA",
+      "PUBLIC-KEY-ADA",
+      "Ada's laptop",
+      "ada@example.com",
+      "203.0.113.77",
+      "UA-Ada",
+      a.ed.id,
+    ];
+    for (const file of [exportToJson(data), exportToMarkdown(data)]) {
+      for (const secret of forbidden) expect(file, secret).not.toContain(secret);
+    }
+    // No field that could carry them, anywhere in the JSON.
+    for (const key of keysOf(JSON.parse(exportToJson(data)))) {
+      expect(key).not.toMatch(/password|hash|session|token|passkey|recovery|email|counter|^ip$|userAgent|signIn/i);
+    }
+  });
+
+  it("is null for an editor who hasn't onboarded (or doesn't exist)", async () => {
+    const [half] = await db.insert(editors).values({ email: "new@example.com" }).returning();
+    expect(await loadEditorExport(half.id, { site: SITE })).toBeNull();
+    expect(await loadEditorExport("00000000-0000-0000-0000-000000000000", { site: SITE })).toBeNull();
+  });
+});
+
+describe("the files", () => {
+  it("JSON: versioned, pretty, and parses back to the same data", async () => {
+    const a = await ada();
+    const data = await exportOf(a.ed.id);
+    const json = exportToJson(data);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 1,')).toBe(true);
+    expect(json.endsWith("}\n")).toBe(true);
+    expect(JSON.parse(json)).toEqual(data);
+  });
+
+  it("Markdown: the profile first, then each collection's poems in order, then the rest, each with its details", async () => {
+    const a = await ada();
+    const md = exportToMarkdown(await exportOf(a.ed.id));
+    const lines = md.split("\n");
+    expect(lines.slice(0, 4)).toEqual(["# Ada Verse", "", "*Small poems about rivers*", ""]);
+    expect(md).toContain("Links:\n- https://ada.example/");
+    expect(md).toContain("Author page: https://inkboard.test/a/ada-verse");
+    expect(md).toContain("Exported from InkBoard on 2026-11-15: 3 poems (1 draft, 1 private poem), 1 collection.");
+    const order = ["## Coastline", "Poems from the shore.", "### Ŋkɔ", "### Unfinished", "## Poems not in a collection", "### Locked room"];
+    const at = order.map((h) => md.indexOf(h));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((x, y) => x - y)).toEqual(at);
+    expect(md).toContain("- Language: Ewe (ee)\n- Visibility: Public\n- Status: Published 20");
+    expect(md).toContain("- Collection: Coastline, part 1");
+    expect(md).toContain("### Unfinished\n\n- Language: Not set\n- Visibility: Public once published\n- Status: Draft\n- Collection: Coastline, part 2");
+    expect(md).toContain("- Visibility: Private (readers need a password; the password isn't in this file)");
+    expect(md).toContain("### Locked room\n\n- Language: Not set\n");
+    expect(md).toMatch(/- Created \d{4}-\d\d-\d\d · last edited \d{4}-\d\d-\d\d\n\nonly for friends\n/);
+  });
+
+  it("keeps every poem's text exactly as written: line breaks, blank lines, indentation, Markdown", async () => {
+    const a = await ada();
+    const [stored] = await db.select({ body: poems.body }).from(poems).where(eq(poems.id, a.ewe));
+    const md = exportToMarkdown(await exportOf(a.ed.id));
+    expect(md).toContain(`\n${stored.body}\n`);
+    expect(stored.body).toContain("\n\n*ɛ́yae* **ɔ̀**");
+  });
+
+  it("round-trips Ghanaian letters, IPA and Ewe tone marks byte for byte, in NFC", async () => {
+    const a = await ada();
+    const data = await exportOf(a.ed.id);
+    const json = exportToJson(data);
+    const md = exportToMarkdown(data);
+    for (const file of [json, md]) {
+      expect(file).toContain(GHANAIAN);
+      expect(file.normalize("NFC")).toBe(file);
+      // Encoded as UTF-8 and decoded again: identical.
+      expect(new TextDecoder("utf-8", { fatal: true }).decode(new TextEncoder().encode(file))).toBe(file);
+    }
+    const back = JSON.parse(json) as EditorExport;
+    const [stored] = await db.select({ body: poems.body, title: poems.title }).from(poems).where(eq(poems.id, a.ewe));
+    expect(back.poems[0].text).toBe(stored.body);
+    expect(back.poems[0].title).toBe("Ŋkɔ");
+    expect(back.profile.bio).toBe(`Writes in English and Ewe.\n${GHANAIAN}`);
+    // ɛ́ stays ɛ + U+0301 (no precomposed form), as stored.
+    expect([...back.poems[0].text].filter((c) => c === "́").length).toBeGreaterThan(0);
+  });
+
+  it("names files after the author and the day, with a charset in the content type", () => {
+    const at = new Date("2026-11-15T23:30:00Z");
+    expect(exportFileName("ada-verse", "markdown", at)).toBe("inkboard-ada-verse-2026-11-15.md");
+    expect(exportFileName("ada-verse", "json", at)).toBe("inkboard-ada-verse-2026-11-15.json");
+    expect(exportFileName('evil"/\\..', "json", at)).toBe("inkboard-evil-2026-11-15.json");
+    expect(exportFileName('"/\\.. ', "json", at)).toBe("inkboard-poems-2026-11-15.json");
+    expect(EXPORT_CONTENT_TYPES).toEqual({
+      markdown: "text/markdown; charset=utf-8",
+      json: "application/json; charset=utf-8",
+    });
+  });
+
+  it("an editor with nothing yet gets a valid, near-empty file", async () => {
+    const ed = await editor("blank@example.com", "Blank Page");
+    const data = await exportOf(ed.id);
+    expect(data.poems).toEqual([]);
+    expect(exportToMarkdown(data)).toContain("*No poems yet.*");
+    expect(JSON.parse(exportToJson(data)).collections).toEqual([]);
+  });
+});
+
+describe("the download limit", () => {
+  it(`allows ${EXPORTS_PER_HOUR} downloads an hour per editor`, async () => {
+    const a = await editor("a@example.com", "A One");
+    const b = await editor("b@example.com", "B Two");
+    for (let i = 0; i < EXPORTS_PER_HOUR; i++) expect((await allowExport(a.id)).allowed).toBe(true);
+    const over = await allowExport(a.id);
+    expect(over.allowed).toBe(false);
+    expect(over.retryAfter).toBeGreaterThan(3000);
+    expect((await allowExport(b.id)).allowed).toBe(true);
+    const keys = (await db.execute(sql`SELECT key FROM rate_limits ORDER BY key`)) as unknown as { rows: { key: string }[] };
+    expect(keys.rows.map((r) => r.key)).toEqual([`export:${a.id}`, `export:${b.id}`].sort());
+  });
+});

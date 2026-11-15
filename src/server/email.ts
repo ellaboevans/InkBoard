@@ -6,10 +6,12 @@ import { OTP_TTL_SECONDS } from "./auth/otp-config";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./email-logo";
 import { STEP_UP_TTL_SECONDS } from "./auth/step-up-config";
 import {
+  accountDeletedEmail,
   otpEmail,
   passkeyAddedEmail,
   passkeyRemovedEmail,
   type PasskeyNoticeDetails,
+  type AccountDeletedDetails,
   recoveryCodesChangedEmail,
   recoveryCodeUsedEmail,
   signInAlertEmail,
@@ -118,4 +120,9 @@ export async function sendPasskeyAddedEmail(
 export async function sendPasskeyRemovedEmail(to: string, details: Omit<PasskeyNoticeDetails, "appUrl">): Promise<void> {
   const message = passkeyRemovedEmail({ ...details, appUrl: env().APP_URL });
   await deliver(to, message, { kind: "passkey-removed", device: details.device, passkeyName: details.passkeyName });
+}
+
+export async function sendAccountDeletedEmail(to: string, details: Omit<AccountDeletedDetails, "appUrl">): Promise<void> {
+  const message = accountDeletedEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, { kind: "account-deleted", device: details.device });
 }

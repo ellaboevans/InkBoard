@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, isNotNull, like, ne, or } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { editors, poems } from "@/db/schema";
+import { editors, poems, retiredSlugs } from "@/db/schema";
 import { isAvatarId, type AvatarId } from "@/lib/avatars";
 import { toNfc } from "@/lib/letters";
 import {
@@ -30,18 +30,23 @@ export const bioSchema = z
   .pipe(z.string().max(BIO_MAX, `Bio must be at most ${BIO_MAX} characters`))
   .transform((s) => (s === "" ? null : s));
 
-/** Find a slug not used by another editor: `rumi`, `rumi-2`, `rumi-3`, … */
+/**
+ * Find a slug not used by another editor and not retired (a deleted
+ * account's, Phase 17): `rumi`, `rumi-2`, `rumi-3`, … Both are read in one
+ * statement, so one snapshot: a deletion that commits meanwhile can't free a
+ * slug here before it shows as retired. (A trigger also refuses retired
+ * slugs; setPenName retries on that, as on a slug taken concurrently.)
+ */
 async function uniqueEditorSlug(base: string, editorId: string) {
-  const taken = await getDb()
-    .select({ slug: editors.slug })
-    .from(editors)
-    .where(
-      and(
-        ne(editors.id, editorId),
-        or(eq(editors.slug, base), like(editors.slug, `${base}-%`)),
-      ),
-    );
-  return firstFreeSlug(base, taken.map((t) => t.slug));
+  const pattern = `${base}-%`;
+  const result = (await getDb().execute(sql`
+    SELECT slug FROM ${editors}
+    WHERE ${editors.id} <> ${editorId} AND (${editors.slug} = ${base} OR ${editors.slug} LIKE ${pattern})
+    UNION ALL
+    SELECT slug FROM ${retiredSlugs}
+    WHERE ${retiredSlugs.slug} = ${base} OR ${retiredSlugs.slug} LIKE ${pattern}
+  `)) as unknown as { rows: { slug: string | null }[] };
+  return firstFreeSlug(base, result.rows.map((t) => t.slug));
 }
 
 export type SetPenNameResult =

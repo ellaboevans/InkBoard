@@ -3,6 +3,7 @@ import path from "node:path";
 import { EMAIL_LOGO_PNG_BASE64 } from "@/server/email-logo";
 import { describe, expect, it } from "vitest";
 import {
+  accountDeletedEmail,
   escapeHtml,
   formatAlertTime,
   formatNoticeTime,
@@ -257,5 +258,39 @@ describe("passkey emails", () => {
     expect(mail.html).toContain("&#60;b&#62;Mine");
     expect(mail.html).not.toContain("<b>Mine");
     expect(mail.html).toContain("Ama &#60;S&#62;");
+  });
+});
+
+describe("account deleted email", () => {
+  const mail = accountDeletedEmail({
+    penName: "Ama <S>",
+    device: "Firefox on Linux",
+    at: new Date("2026-12-31T23:59:00Z"),
+    appUrl: "https://poemhub.example",
+  });
+
+  it("says the account was deleted, from which device and when, and what to do if it wasn't them", () => {
+    expect(mail.subject).toBe("Your InkBoard account was deleted");
+    for (const part of [mail.text, visibleText(mail.html)]) {
+      expect(part).toContain("Your InkBoard account was just deleted");
+      expect(part).toContain("Firefox on Linux");
+      expect(part).toContain("Thu 31 Dec, 23:59 UTC");
+      expect(part).toMatch(/Secure your email account/);
+      expect(part).toMatch(/sign up again with this address/);
+    }
+  });
+
+  it("contains no 4–8 digit numbers and never says code", () => {
+    expect(digitRuns(mail.subject)).toEqual([]);
+    expect(digitRuns(mail.text)).toEqual([]);
+    expect(digitRuns(visibleText(mail.html))).toEqual([]);
+    const hrefs = [...mail.html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs.flatMap(digitRuns)).toEqual([]);
+    expect(`${mail.subject} ${mail.text} ${visibleText(mail.html)}`).not.toMatch(/\bcodes?\b/i);
+  });
+
+  it("escapes editor-controlled text", () => {
+    expect(mail.html).toContain("Ama &#60;S&#62;");
+    expect(mail.html).not.toContain("<S>");
   });
 });

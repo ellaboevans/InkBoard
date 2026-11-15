@@ -707,3 +707,57 @@ export function passkeyRemovedEmail(d: PasskeyNoticeDetails): EmailMessage {
 function emphasiseQuoted(step: string): string {
   return escapeHtml(step).replace(/&#34;([^&]+)&#34;/g, "<em>$1</em>");
 }
+
+export type AccountDeletedDetails = {
+  penName: string | null;
+  /** Device that deleted it (describeUserAgent). */
+  device: string;
+  at: Date;
+  appUrl: string;
+};
+
+/**
+ * "Your InkBoard account was deleted" (Phase 17), sent to the address the
+ * account had. Same digit rule as the other notices (no year, no IP).
+ */
+export function accountDeletedEmail(d: AccountDeletedDetails): EmailMessage {
+  const when = formatNoticeTime(d.at);
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const subject = "Your InkBoard account was deleted";
+  const what =
+    "Your InkBoard account was just deleted, with all its poems, collections and saved versions. Your author page and poem links no longer work.";
+  const steps = [
+    "Secure your email account and the devices that hold your passkeys: deleting an account needs a recent sign-in with one of them.",
+    "We can't bring the poems back. If you downloaded a copy, you can sign up again with this address and add them to a new account.",
+  ];
+  const text = [
+    greeting,
+    "",
+    what,
+    "",
+    `Device: ${d.device}`,
+    `When: ${when}`,
+    "",
+    "If this was you, there's nothing to do. Thank you for writing on InkBoard.",
+    "",
+    "If it wasn't you:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    "",
+    "InkBoard",
+  ].join("\n");
+  const html = securityNotice({
+    appUrl: d.appUrl,
+    preheader: `Deleted from ${d.device}. If this wasn't you, secure your email account.`,
+    footer: "This is the last message we send to this address about this account.",
+    heading: "Your account was deleted",
+    intro: `${escapeHtml(greeting)} ${escapeHtml(what)}`,
+    rows: [
+      ["Device", d.device],
+      ["When", when],
+    ],
+    steps: steps.map((s) => escapeHtml(s)),
+    closing: "Thank you for writing on InkBoard.",
+    button: [new URL("/", d.appUrl).href, "Visit the board"],
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}

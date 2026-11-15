@@ -22,7 +22,7 @@ async function main() {
   if (!/e2e|test/.test(new URL(url).pathname)) throw new Error(`Refusing to reset non-test database ${url}`);
   const pool = new pg.Pool({ connectionString: url });
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
-  await pool.query("TRUNCATE editors, email_otps, sessions, poems, rate_limits CASCADE");
+  await pool.query("TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs CASCADE");
   await pool.end();
 
   const [editor] = await getDb()

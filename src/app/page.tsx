@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AccountDeletedFlash } from "@/components/board/account-deleted-flash";
 import { BoardView } from "@/components/board/board-view";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
@@ -24,6 +25,7 @@ export default async function HomePage() {
       <SaveForOffline path="/" />
       {/* Absolute, from siteUrl(): the client has no APP_URL to build it. */}
       <BoardView sections={sections} feedUrl={absoluteUrl(SITE_FEED_PATH)} />
+      <AccountDeletedFlash />
       <JsonLd
         data={{
           "@context": "https://schema.org",

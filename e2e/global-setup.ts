@@ -12,7 +12,7 @@ export default async function globalSetup() {
   const pool = new pg.Pool({ connectionString: E2E_DATABASE_URL });
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   await pool.query(
-    "TRUNCATE editors, email_otps, sessions, poems, rate_limits CASCADE",
+    "TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs CASCADE",
   );
   await pool.end();
   await mkdir(path.dirname(OTP_OUTBOX), { recursive: true });
@@ -32,6 +32,8 @@ async function warmUp() {
     ["/sign-in"],
     ["/sign-in/link"],
     ["/sign-in/recovery"],
+    // POST-only: a GET answers 405, but compiles the route.
+    ["/sign-in/passkey/options"],
     ["/"],
     ["/admin"],
     ["/admin/onboarding"],

@@ -39,3 +39,6 @@ export const passkeyNotices: (
   | { to: string; kind: "added"; passkeyName: string; device: string; afterRecovery: boolean; at: Date; penName: string | null }
   | { to: string; kind: "removed"; passkeyName: string; device: string; at: Date; penName: string | null }
 )[] = [];
+
+/** "Your account was deleted" notices "sent" during a test. */
+export const deletionNotices: { to: string; penName: string | null; device: string; at: Date }[] = [];

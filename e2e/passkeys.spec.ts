@@ -165,6 +165,8 @@ test("signs in with a recovery code on a new laptop, then adds a passkey there f
 
   // From now on the laptop signs in with the passkey.
   await signOut(laptop);
+  // Sign-out ends with a full page load; don't race it with another navigation.
+  await expect(laptop).toHaveURL(/\/sign-in/);
   await passkeySignIn(laptop);
   await expect(laptop.getByRole("region", { name: "Add a passkey on this computer?" })).toHaveCount(0);
   await laptopContext.close();
@@ -319,4 +321,21 @@ test("no passkey options in a browser without WebAuthn", async ({ browser }) => 
   await page.waitForTimeout(500);
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0);
   await context.close();
+});
+
+test("sign-in options come from our own pages only, and the flash param stays stripped", async ({ page, request, baseURL }) => {
+  const foreign = await request.post("/sign-in/passkey/options", { headers: { Origin: "https://evil.example" } });
+  expect(foreign.status()).toBe(403);
+  const ours = await request.post("/sign-in/passkey/options", { headers: { Origin: baseURL! } });
+  expect(ours.status()).toBe(200);
+  expect(ours.headers()["cache-control"]).toBe("no-store");
+  expect(await ours.json()).toMatchObject({ rpId: "localhost", userVerification: "required", challenge: expect.any(String) });
+
+  // Autofill on: its options request on page load must not bring back a stripped flash param.
+  await virtualAuthenticator(page, { autofill: true });
+  await page.goto("/sign-in?signed-out=1");
+  await expect(page.locator("[data-sileo-toast]").getByText("Signed out")).toBeVisible();
+  await expect(page).toHaveURL(/\/sign-in$/);
+  await page.waitForTimeout(2000);
+  await expect(page).toHaveURL(/\/sign-in$/);
 });

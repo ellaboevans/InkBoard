@@ -5,6 +5,7 @@ import {
   startAuthentication,
   WebAuthnAbortService,
   type AuthenticationResponseJSON,
+  type PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import { FingerprintIcon, Loader2Icon } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
@@ -13,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { PASSKEY_SIGN_IN_FAILED } from "@/lib/passkey-messages";
 import { isCancelled, useWebAuthnSupport } from "@/lib/webauthn-client";
-import { finishPasskeySignInAction, startPasskeySignInAction } from "./actions";
+import { finishPasskeySignInAction } from "./actions";
 
 /**
  * "Sign in with a passkey" on /sign-in (docs/PLAN.md, Phase 16 round 2):
@@ -27,6 +28,18 @@ import { finishPasskeySignInAction, startPasskeySignInAction } from "./actions";
  * again once the button's attempt is over. A closed or cancelled prompt
  * isn't an error and shows nothing.
  */
+/**
+ * Sign-in options from POST /sign-in/passkey/options (null when this client
+ * is over its limit). A plain fetch, not a Server Action: the autofill asks on
+ * page load, and a Server Action in flight then made Next's router restore the
+ * URL it started from, undoing a flash param just stripped by replaceState
+ * (`/sign-in?signed-out=1` came back after "Signed out").
+ */
+async function fetchSignInOptions(): Promise<PublicKeyCredentialRequestOptionsJSON | null> {
+  const res = await fetch("/sign-in/passkey/options", { method: "POST", cache: "no-store" });
+  return res.ok ? ((await res.json()) as PublicKeyCredentialRequestOptionsJSON) : null;
+}
+
 export function PasskeySignIn({ publicDevice }: { publicDevice: boolean }) {
   const webauthn = useWebAuthnSupport();
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +65,7 @@ export function PasskeySignIn({ publicDevice }: { publicDevice: boolean }) {
     let active = true;
     void (async () => {
       if (!(await browserSupportsWebAuthnAutofill())) return;
-      const options = await startPasskeySignInAction();
+      const options = await fetchSignInOptions();
       if (!options || !active) return;
       let response: AuthenticationResponseJSON;
       try {
@@ -73,7 +86,7 @@ export function PasskeySignIn({ publicDevice }: { publicDevice: boolean }) {
     startTransition(async () => {
       setError(null);
       try {
-        const options = await startPasskeySignInAction();
+        const options = await fetchSignInOptions();
         if (!options) {
           setError("Too many attempts from this network. Try again in a few minutes, or use your email.");
           return;

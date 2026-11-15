@@ -230,4 +230,13 @@ describe("history never reaches readers", () => {
     expect(using.length).toBeGreaterThan(0);
     for (const f of using) expect(f, f).toMatch(/^src\/app\/admin\//);
   });
+
+  it("the export loader serves only the editor's own download (Phase 17)", () => {
+    const using = files("src").filter(
+      (f) => !f.startsWith("src/server/poem-history") && /revisionsForExport/.test(readFileSync(f, "utf8")),
+    );
+    expect(using).toEqual(["src/server/export.ts"]);
+    const callers = files("src").filter((f) => /from "@\/server\/export"/.test(readFileSync(f, "utf8")));
+    for (const f of callers) expect(f, f).toMatch(/^src\/app\/admin\//);
+  });
 });

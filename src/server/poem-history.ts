@@ -127,3 +127,32 @@ export async function getPoemRevision(
     .limit(1);
   return row ?? null;
 }
+
+export type ExportedRevision = {
+  poemId: string;
+  savedAt: Date;
+  title: string;
+  body: string;
+  language: string | null;
+};
+
+/**
+ * Every saved version of every one of the editor's own poems, oldest first,
+ * for the editor's own download (src/server/export.ts, Phase 17). Same
+ * scoping as the other loaders: joined to poems and filtered by the
+ * DAL-resolved editor id. Like them, never for readers.
+ */
+export async function revisionsForExport(editorId: string): Promise<ExportedRevision[]> {
+  return getDb()
+    .select({
+      poemId: poemRevisions.poemId,
+      savedAt: poemRevisions.savedAt,
+      title: poemRevisions.title,
+      body: poemRevisions.body,
+      language: poemRevisions.language,
+    })
+    .from(poemRevisions)
+    .innerJoin(poems, eq(poems.id, poemRevisions.poemId))
+    .where(eq(poems.editorId, editorId))
+    .orderBy(poemRevisions.poemId, poemRevisions.savedAt, poemRevisions.id);
+}

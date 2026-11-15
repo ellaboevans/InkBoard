@@ -389,6 +389,18 @@ export const poemRevisions = pgTable(
   (t) => [index("poem_revisions_poem_saved_idx").on(t.poemId, t.savedAt.desc())],
 );
 
+/**
+ * Author slugs of deleted accounts (docs/PLAN.md, Phase 17). A retired slug is
+ * never given to another editor, so old /a/<slug> and /p/<slug>/… links can't
+ * come to point at someone else's poems. Only the slug and when: nothing
+ * personal. A trigger (drizzle/0016_retired_slugs_guard.sql) refuses to put a
+ * retired slug on an editor.
+ */
+export const retiredSlugs = pgTable("retired_slugs", {
+  slug: text("slug").primaryKey(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Fixed-window rate limit counters (see src/server/rate-limit.ts). */
 export const rateLimits = pgTable("rate_limits", {
   key: text("key").primaryKey(),

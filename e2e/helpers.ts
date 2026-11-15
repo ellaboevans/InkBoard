@@ -294,3 +294,12 @@ export async function virtualAuthenticator(page: Page, { userVerified = true, au
     },
   };
 }
+
+/** "Your account was deleted" notices recorded for `email`. */
+export async function deletionNoticesFor(email: string): Promise<{ device: string }[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string; kind?: string; device: string })
+    .filter((m) => m.to === email && m.kind === "account-deleted")
+    .map(({ device }) => ({ device }));
+}

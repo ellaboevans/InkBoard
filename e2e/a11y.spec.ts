@@ -187,6 +187,40 @@ test("passkeys: sign-in, the profile section, its dialogs and the dashboard offe
   await libraryContext.close();
 });
 
+test("settings: download your poems and delete the account", async ({ page }) => {
+  const id = unique();
+  const email = `a11y-leave-${id}@example.com`;
+  const pen = `Leaving Poet ${id}`;
+  await signUpAs(page, email, pen);
+  await page.goto("/admin/settings");
+  await expect(page.getByRole("region", { name: "Download your poems" })).toBeVisible();
+  await scan(page, "settings: password mode, download and delete");
+  await page.setViewportSize({ width: 375, height: 812 });
+  await scan(page, "settings: phone");
+  await page.setViewportSize({ width: 1280, height: 720 });
+
+  await page.getByRole("button", { name: "Delete my account…" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Delete your account?" });
+  await expect(dialog).toBeVisible();
+  await scan(page, "settings: delete confirmation");
+  await dialog.getByRole("textbox", { name: /Type your pen name/ }).fill(pen);
+  await scan(page, "settings: delete confirmation, name typed");
+  await page.keyboard.press("Escape");
+
+  await sql(`UPDATE sessions SET email_verified_at = now() - interval '11 minutes'
+    WHERE editor_id = (SELECT id FROM editors WHERE email = '${email}')`);
+  await page.reload();
+  await page.getByRole("button", { name: "Delete my account…" }).click();
+  await expect(page.getByRole("heading", { name: "Confirm it's you" })).toBeVisible();
+  await scan(page, "settings: confirm it's you before deleting");
+  await page.getByRole("button", { name: "Email me a code" }).click();
+  await page.getByRole("textbox", { name: "Confirmation code" }).fill(await latestStepUpCode(email));
+  await dialog.getByRole("textbox", { name: /Type your pen name/ }).fill(pen);
+  await dialog.getByRole("button", { name: "Delete my account" }).click();
+  await expect(page.locator("[data-sileo-toast]").getByText("Your account was deleted")).toBeVisible({ timeout: 45_000 });
+  await scan(page, "board: after deleting an account");
+});
+
 test("sign-in link page", async ({ page }) => {
   await page.goto("/sign-in/link#" + "Q".repeat(44));
   await scan(page, "sign-in link: continue");

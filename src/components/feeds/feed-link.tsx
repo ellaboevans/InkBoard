@@ -4,8 +4,8 @@ import { ATOM_TYPE, authorFeedPath } from "@/lib/feed-links";
 
 /**
  * "Follow <pen name> in a feed reader": the visible link to an author's feed,
- * on their page. A plain <a> with the Atom type: the feed is XML, not a page
- * the router can render.
+ * on their page and under each of their poems. A plain <a> with the Atom
+ * type: the feed is XML, not a page the router can render.
  */
 export function AuthorFeedLink({ slug, penName, className }: { slug: string; penName: string; className?: string }) {
   return (

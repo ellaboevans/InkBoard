@@ -158,3 +158,63 @@ test("browsers and feed readers find the feeds; robots.txt allows them", async (
     expect(disallowed.some((d) => path.startsWith(d)), `${path} vs ${disallowed.join(", ")}`).toBe(false);
   }
 });
+
+test("the board has a visible Subscribe, on phones and desktops, that explains, opens and copies the feed", async ({ page, context, request }) => {
+  const id = unique();
+  const pen = `Subscribe Poet ${id}`;
+  const email = `subscribe-${id}@example.com`;
+  await signUpAs(page, email, pen);
+  await publish(page, `Follow me ${id}`, "a line");
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 760 });
+    await page.goto("/");
+    await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+
+    for (const view of ["board", "list view"]) {
+      if (view === "list view") await page.getByRole("button", { name: "List view", exact: true }).click();
+      const where = `${view} at ${width}px`;
+      // Icon-only on phones, but named.
+      const subscribe = page.getByRole("button", { name: "Subscribe", exact: true });
+      await expect(subscribe, where).toBeVisible();
+
+      // Keyboard: Enter opens the popover and moves focus into it.
+      await subscribe.focus();
+      await page.keyboard.press("Enter");
+      const popover = page.getByRole("dialog", { name: "Follow new poems" });
+      await expect(popover, where).toBeVisible();
+      await expect(popover).toContainText("feed reader");
+      await expect(popover.locator(":focus")).toHaveCount(1);
+
+      // The feed link: a plain <a> to the Atom feed, which serves it.
+      const open = popover.getByRole("link", { name: "Open feed" });
+      await expect(open).toHaveAttribute("href", "/feed.xml");
+      await expect(open).toHaveAttribute("type", "application/atom+xml");
+      const feed = await request.get((await open.getAttribute("href"))!);
+      expect(feed.headers()["content-type"]).toBe("application/atom+xml; charset=utf-8");
+      expect(await feed.text()).toContain(`Follow me ${id}`);
+
+      // Copy puts the absolute feed URL (from siteUrl()) on the clipboard, shown in the popover too.
+      const shown = (await popover.locator("[data-feed-url]").textContent())!;
+      expect(shown).toMatch(/^https?:\/\/[^/]+\/feed\.xml$/);
+      await popover.getByRole("button", { name: "Copy feed link" }).click();
+      await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Feed link copied" })).toBeVisible();
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown);
+
+      // Escape closes it and returns focus to Subscribe.
+      await page.keyboard.press("Escape");
+      await expect(popover).toHaveCount(0);
+      await expect(subscribe).toBeFocused();
+    }
+  }
+
+  // The reading page offers the author's feed after the poem.
+  const { rows } = await sql(
+    `SELECT e.slug, p.slug AS poem FROM poems p JOIN editors e ON e.id = p.editor_id WHERE e.email = '${email}'`,
+  );
+  await page.goto(`/p/${rows[0].slug}/${rows[0].poem}`);
+  const follow = page.getByRole("main").getByRole("link", { name: `Follow ${pen} in a feed reader` });
+  await expect(follow).toHaveAttribute("href", `/a/${rows[0].slug}/feed.xml`);
+  await expect(follow).toHaveAttribute("type", "application/atom+xml");
+});

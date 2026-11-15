@@ -17,6 +17,7 @@ import {
 } from "@/lib/board-filter";
 import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
+import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { BoardCanvas } from "./board-canvas";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 import { pluralCount } from "@/lib/plural";
@@ -30,16 +31,16 @@ import { pluralCount } from "@/lib/plural";
  * filtered one. The board data itself stays one cached list for every
  * language, narrowed here (src/lib/board-filter.ts).
  */
-export function BoardView({ sections }: { sections: BoardSection[] }) {
+export function BoardView({ sections, feedUrl }: { sections: BoardSection[]; feedUrl: string }) {
   if (sections.length === 0) return <EmptyBoard />;
   return (
-    <Suspense fallback={<Board sections={sections} language={null} />}>
-      <UrlBoard sections={sections} />
+    <Suspense fallback={<Board sections={sections} language={null} feedUrl={feedUrl} />}>
+      <UrlBoard sections={sections} feedUrl={feedUrl} />
     </Suspense>
   );
 }
 
-function UrlBoard({ sections }: { sections: BoardSection[] }) {
+function UrlBoard({ sections, feedUrl }: { sections: BoardSection[]; feedUrl: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   // The board stays mounted under the poem overlay (/p/…), whose URL has no
@@ -48,10 +49,19 @@ function UrlBoard({ sections }: { sections: BoardSection[] }) {
   const fromUrl = pathname === "/" ? params.get(LANG_PARAM) : undefined;
   const [raw, setRaw] = useState<string | null>(fromUrl ?? null);
   if (fromUrl !== undefined && fromUrl !== raw) setRaw(fromUrl);
-  return <Board sections={sections} language={raw} />;
+  return <Board sections={sections} language={raw} feedUrl={feedUrl} />;
 }
 
-function Board({ sections, language }: { sections: BoardSection[]; language: string | null }) {
+function Board({
+  sections,
+  language,
+  feedUrl,
+}: {
+  sections: BoardSection[];
+  language: string | null;
+  /** Absolute URL of the site feed, for the Subscribe popover. */
+  feedUrl: string;
+}) {
   const [mode, setMode] = useState<"canvas" | "list">("canvas");
   const options = useMemo(() => boardLanguages(sections), [sections]);
   const active = parseLanguageFilter(language, options);
@@ -63,9 +73,15 @@ function Board({ sections, language }: { sections: BoardSection[]; language: str
     onChange: (code) => window.history.pushState(null, "", `/${withLanguageParam(window.location.search, code)}`),
   };
   return mode === "canvas" ? (
-    <BoardCanvas sections={shown} allSections={sections} filter={filter} onListView={() => setMode("list")} />
+    <BoardCanvas
+      sections={shown}
+      allSections={sections}
+      filter={filter}
+      feedUrl={feedUrl}
+      onListView={() => setMode("list")}
+    />
   ) : (
-    <BoardList sections={shown} filter={filter} onCanvasView={() => setMode("canvas")} />
+    <BoardList sections={shown} filter={filter} feedUrl={feedUrl} onCanvasView={() => setMode("canvas")} />
   );
 }
 
@@ -78,10 +94,12 @@ export type BoardFilter = {
 function BoardList({
   sections,
   filter,
+  feedUrl,
   onCanvasView,
 }: {
   sections: BoardSection[];
   filter: BoardFilter;
+  feedUrl: string;
   onCanvasView: () => void;
 }) {
   const total = sections.reduce((n, s) => n + s.poems.length, 0);
@@ -95,9 +113,11 @@ function BoardList({
           </Link>
           <div data-board-toolbar className="flex flex-wrap items-center justify-end gap-2">
             <LanguageFilter id="list-language" filter={filter} />
-            <Button variant="outline" size="sm" onClick={onCanvasView}>
+            <SubscribeButton feedUrl={feedUrl} />
+            <Button variant="outline" size="sm" onClick={onCanvasView} className="max-sm:w-7 max-sm:px-0">
               <LayoutGridIcon />
-              Board view
+              {/* Icon-only on phones (like List view on the canvas), but still named. */}
+              <span className="max-sm:sr-only">Board view</span>
             </Button>
           </div>
         </header>

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { BoardView } from "@/components/board/board-view";
 import { JsonLd } from "@/components/seo/json-ld";
-import { feedAlternates } from "@/lib/feed-links";
+import { feedAlternates, SITE_FEED_PATH } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { getBoardSections } from "@/server/board-cache";
 
@@ -17,7 +17,8 @@ export default async function HomePage() {
   return (
     <main className="h-dvh">
       <h1 className="sr-only">InkBoard board</h1>
-      <BoardView sections={sections} />
+      {/* Absolute, from siteUrl(): the client has no APP_URL to build it. */}
+      <BoardView sections={sections} feedUrl={absoluteUrl(SITE_FEED_PATH)} />
       <JsonLd
         data={{
           "@context": "https://schema.org",

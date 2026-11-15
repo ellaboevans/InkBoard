@@ -3,6 +3,7 @@
 import {
   FeatherIcon,
   ListIcon,
+  LogInIcon,
   MaximizeIcon,
   MinusIcon,
   PlusIcon,
@@ -31,6 +32,7 @@ import {
 import type { BoardPoem, BoardSection } from "@/lib/board-types";
 import type { SearchResults } from "@/lib/search-types";
 import { notify } from "@/lib/notify";
+import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { BoardSearch } from "./board-search";
 import type { BoardFilter } from "./board-view";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
@@ -68,6 +70,7 @@ export function BoardCanvas({
   sections,
   allSections,
   filter,
+  feedUrl,
   onListView,
 }: {
   /** What's shown: the board narrowed by the language filter. */
@@ -75,6 +78,8 @@ export function BoardCanvas({
   /** The whole board, so search picks hidden by the filter can explain themselves. */
   allSections: BoardSection[];
   filter: BoardFilter;
+  /** Absolute URL of the site feed, for the Subscribe popover. */
+  feedUrl: string;
   onListView: () => void;
 }) {
   const layout = useMemo(() => layoutBoard(sections), [sections]);
@@ -503,7 +508,7 @@ export function BoardCanvas({
             size="sm"
             onClick={() => setSearchOpen(true)}
             aria-keyshortcuts="Meta+K Control+K /"
-            className="bg-background/85 backdrop-blur sm:min-w-52 sm:justify-start"
+            className="bg-background/85 backdrop-blur max-sm:w-7 max-sm:px-0 sm:min-w-52 sm:justify-start"
           >
             <SearchIcon />
             <span className="hidden text-muted-foreground sm:inline">Search authors & poems</span>
@@ -512,15 +517,19 @@ export function BoardCanvas({
               ⌘K
             </kbd>
           </Button>
-          <Button variant="outline" size="sm" onClick={onListView} className="bg-background/85 backdrop-blur">
+          {/* Icon-only buttons are square on phones (28px), so the toolbar fits in two rows at 320px. */}
+          <Button variant="outline" size="sm" onClick={onListView} className="bg-background/85 backdrop-blur max-sm:w-7 max-sm:px-0">
             <ListIcon />
             {/* Icon-only on phones, but still named. */}
             <span className="max-sm:sr-only">List view</span>
           </Button>
-          <Button asChild variant="outline" size="sm" className="bg-background/85 backdrop-blur">
+          <SubscribeButton feedUrl={feedUrl} />
+          <Button asChild variant="outline" size="sm" className="bg-background/85 backdrop-blur max-[359px]:w-7 max-[359px]:px-0">
             <Link href="/sign-in">
-              {/* Phones show "Sign in"; the name stays "Editor sign in". */}
-              <span aria-hidden className="sm:hidden">Sign in</span>
+              {/* Phones show "Sign in", and just an icon below 360px, so the toolbar
+                  stays two rows with Subscribe in it; the name stays "Editor sign in". */}
+              <LogInIcon aria-hidden className="hidden max-[359px]:block" />
+              <span aria-hidden className="sm:hidden max-[359px]:hidden">Sign in</span>
               <span className="max-sm:sr-only">Editor sign in</span>
             </Link>
           </Button>

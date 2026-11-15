@@ -145,9 +145,17 @@ test("board filtered by language", async ({ page }) => {
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
   await expect(page.getByRole("button", { name: "Show all languages" })).toBeVisible();
   await scan(page, "board: filtered by language");
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Follow new poems" })).toBeVisible();
+  await scan(page, "board: subscribe popover");
+  await page.keyboard.press("Escape");
   // Phone toolbar: icon-only buttons must still be named.
   await page.setViewportSize({ width: 320, height: 640 });
   await scan(page, "board: phone toolbar, filtered");
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Follow new poems" })).toBeVisible();
+  await scan(page, "board: subscribe popover on a phone");
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "List view" }).click();
   await scan(page, "list view: filtered by language");
   await page.setViewportSize({ width: 1280, height: 720 });
@@ -200,7 +208,7 @@ test("board, list view, search and reading", async ({ page }) => {
   await page.getByRole("button", { name: "Unlock poem" }).click();
   await expect(page.locator("article")).toContainText("secret");
   await scan(page, "poem page: unlocked");
-  await page.getByRole("main").getByRole("link", { name: pen }).click();
+  await page.getByRole("main").getByRole("link", { name: pen, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: pen })).toBeVisible();
   await scan(page, "author page");
 

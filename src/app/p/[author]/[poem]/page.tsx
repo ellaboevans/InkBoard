@@ -6,6 +6,7 @@ import { PoemReader, PoemReaderSkeleton } from "@/components/poem/poem-reader";
 import { Button } from "@/components/ui/button";
 import { JsonLd } from "@/components/seo/json-ld";
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
+import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
@@ -68,6 +69,21 @@ async function PoemJsonLd({ params }: Pick<Props, "params">) {
   return <JsonLd data={data} />;
 }
 
+/**
+ * After the poem, a quiet way to follow its author (full page only; in the
+ * board overlay, the toolbar's Subscribe covers the site feed).
+ */
+async function PoemFeedFooter({ params }: Pick<Props, "params">) {
+  const { author, poem } = await params;
+  const p = await getReaderPoem(author, poem);
+  if (!p) return null;
+  return (
+    <footer className="mt-14 border-t pt-6">
+      <AuthorFeedLink slug={p.authorSlug} penName={p.penName} />
+    </footer>
+  );
+}
+
 /** Full page: direct links, refreshes and shared URLs land here. */
 export default function PoemPage({ params }: Props) {
   return (
@@ -81,6 +97,9 @@ export default function PoemPage({ params }: Props) {
         </Button>
         <Suspense fallback={<PoemReaderSkeleton />}>
           <PoemReader params={params} />
+        </Suspense>
+        <Suspense>
+          <PoemFeedFooter params={params} />
         </Suspense>
         <Suspense>
           <PoemJsonLd params={params} />

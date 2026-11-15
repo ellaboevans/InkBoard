@@ -138,7 +138,8 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Same reader rules as the board: published only, pen name required, `CASE WHEN visibility = 'public'` for the body, never the email. A private entry gets `PRIVATE_ENTRY_TEXT` only.
 - Poem HTML in a feed comes only from `poemToHtml` (escape first, then `<em>`/`<strong>`, `<br>`, `&#160;`). Don't add other tags or pass raw text through.
 - Entry ids are `urn:uuid:<poem id>`: feed readers dedupe on them, so never change the scheme.
-- Visible link: `AuthorFeedLink` (`src/components/feeds/`, author page). Feed links are plain `<a type="application/atom+xml">`, never `next/link`.
+- Visible links: `SubscribeButton` (`src/components/feeds/`, board toolbar and list view, a Popover) and `AuthorFeedLink` (author page, reading page). Feed links are plain `<a type="application/atom+xml">`, never `next/link`. The copied URL is absolute and is resolved on the server (`page.tsx` passes `feedUrl`): the client has no `APP_URL`.
+- The board toolbar must stay at most two rows from 320px up (`e2e/board-language.spec.ts` checks it). Phone icon buttons are square (`max-sm:w-7 max-sm:px-0`), and below 360px "Sign in" is icon-only too. Measure before adding anything else to it.
 - Pages advertise feeds with `...feedAlternates(author?)` inside their own `alternates` (Next replaces, not merges, a parent's `alternates`). Keep feeds out of `/api/`, which robots.txt blocks.
 
 **Security headers** (`next.config.ts`): a static CSP without nonces, because nonces would disable prerendering. Only our own origin is allowed, so adding any third-party script, font, image or API means editing `csp` there. HSTS is sent in production only.

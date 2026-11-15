@@ -223,12 +223,13 @@ test("the filter indicator stays one tidy line from phones to desktops", async (
 
   for (const width of [320, 375, 768, 1280]) {
     await page.setViewportSize({ width, height: 720 });
-    // Unfiltered: the toolbar fits.
+    // Unfiltered: the toolbar with Subscribe in it fits.
     await openBoard(page, "/");
     await expectToolbar(`board toolbar at ${width}px`);
 
     await openBoard(page, "/?lang=ee");
     await expectToolbar(`filtered board toolbar at ${width}px`);
+    await expect(page.getByRole("button", { name: "Subscribe", exact: true })).toBeVisible();
     // Shortened on phones, but read in full.
     await expect(statusText()).toHaveText(EWE_STATUS);
     const showAll = page.getByRole("button", { name: "Show all languages", exact: true });
@@ -248,6 +249,9 @@ test("the filter indicator stays one tidy line from phones to desktops", async (
     await expect(page.getByRole("button", { name: "Board view" })).toBeVisible();
     await expect(statusText()).toHaveText(EWE_STATUS);
     await expectTidy(`list view at ${width}px`);
+    await expectToolbar(`list view toolbar at ${width}px`);
+    await expect(page.getByRole("button", { name: "Subscribe", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Board view", exact: true })).toBeVisible();
 
     // "Show all" still hands focus back to the filter.
     await page.getByRole("button", { name: "Show all languages", exact: true }).click();

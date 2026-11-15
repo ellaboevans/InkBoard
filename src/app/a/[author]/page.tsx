@@ -12,6 +12,9 @@ import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
+import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SaveForOffline } from "@/components/offline/save-for-offline";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { pluralCount } from "@/lib/plural";
 
 type Props = PageProps<"/a/[author]">;
@@ -55,6 +58,8 @@ async function AuthorJsonLd({ params }: Pick<Props, "params">) {
 export default function AuthorPublicPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* "You're offline · showing saved poems" (Phase 15 round 2). */}
+      <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <div className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-8">
           <Link href="/">
@@ -94,6 +99,8 @@ async function Author({ params }: Pick<Props, "params">) {
 
   return (
     <div className="grid gap-12">
+      <OfflineMarker save kind="author" title={a.penName} />
+      <SaveForOffline path={`/a/${author}`} />
       <header className="flex flex-col gap-6 sm:flex-row sm:items-start">
         {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG from our own route */}
         <img

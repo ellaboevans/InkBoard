@@ -1,0 +1,178 @@
+/**
+ * The service worker's pure rules (docs/PLAN.md, Phase 15 round 2): which
+ * request gets which strategy, and whether a fetched page may be kept.
+ *
+ * They are plain JavaScript in a string because the worker (/sw.js, built by
+ * worker.ts) embeds this source verbatim. tests/lib/offline-rules.test.ts
+ * evaluates the same string, so what's tested is exactly what ships.
+ *
+ * THE STORAGE RULE (what may be saved for offline reading):
+ *   1. Only reader pages: the board (/), poem pages (/p/a/b), author pages
+ *      (/a/a) and collection pages (/a/a/c/c). Never /admin, /sign-in, /api,
+ *      the feeds, /sw.js, anything that isn't a GET, any RSC request
+ *      (navigations, prefetches, the overlay) or Server Action.
+ *   2. The saved copy is never the response the reader got. The worker
+ *      fetches the page again with `credentials: "omit"`: no session, no
+ *      unlock cookie, so it is the same for everyone and can't hold a private
+ *      poem's unlocked text or anything specific to one editor.
+ *   3. That copy is kept only if it is a 200 text/html page carrying
+ *      <meta name="inkboard-offline" content="save"> and NOT
+ *      <meta name="inkboard-offline" content="never"> (a private poem's page
+ *      carries "never" whatever the reader unlocked). Poem text can't forge
+ *      either tag: in HTML it is escaped (`<` becomes `&lt;`).
+ *   4. A 404/410, a "never" page, or a 200 page without "save" deletes any
+ *      saved copy (unpublished, deleted or now-private poems). Other
+ *      statuses (5xx, redirects) leave things as they are.
+ */
+export const OFFLINE_RULES_JS = String.raw`
+var InkboardOffline = (function () {
+  var POEM = /^\/p\/[^/]+\/[^/]+$/;
+  var AUTHOR = /^\/a\/[^/]+$/;
+  var COLLECTION = /^\/a\/[^/]+\/c\/[^/]+$/;
+  // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
+  var STATIC_PREFIXES = ["/_next/static/", "/icons/", "/avatars/"];
+  var STATIC_FILES = ["/icon.svg", "/apple-icon", "/favicon.ico", "/manifest.webmanifest", "/install-capture.js"];
+  var CAPS = { poem: 50, other: 30 };
+
+  function readerKind(pathname) {
+    if (pathname === "/") return "board";
+    if (POEM.test(pathname)) return "poem";
+    if (COLLECTION.test(pathname)) return "collection";
+    if (AUTHOR.test(pathname)) return "author";
+    return null;
+  }
+
+  function isStatic(pathname) {
+    if (STATIC_FILES.indexOf(pathname) !== -1) return true;
+    for (var i = 0; i < STATIC_PREFIXES.length; i++) if (pathname.indexOf(STATIC_PREFIXES[i]) === 0) return true;
+    return false;
+  }
+
+  /**
+   * req: { method, url, origin, mode, rsc, prefetch }
+   *   rsc: the RSC header (or an _rsc query) is present; prefetch: a Next prefetch header is.
+   * Returns one of:
+   *   "passthrough"     not ours to handle (non-GET, other origins, RSC prefetches, /sw.js, APIs…)
+   *   "cache-first"     hashed assets, icons, avatars
+   *   "reader-page"     network-first, then the saved copy, then the offline page
+   *   "offline-page"    the offline page itself: network-first, then the copy saved at install
+   *   "online-only"     other documents (/admin, /sign-in, feeds…): network, else the offline page; never saved
+   *   "rsc-navigation"  a soft navigation: network; offline, an answer that makes Next load the page as a document
+   */
+  function strategyFor(req) {
+    var url = new URL(req.url);
+    if (req.method !== "GET") return "passthrough";
+    if (url.origin !== req.origin) return "passthrough";
+    var path = url.pathname;
+    if (path === "/sw.js") return "passthrough";
+    if (req.rsc) return req.prefetch ? "passthrough" : "rsc-navigation";
+    if (isStatic(path)) return "cache-first";
+    if (req.mode !== "navigate") return "passthrough";
+    if (path === "/offline") return "offline-page";
+    if (readerKind(path)) return "reader-page";
+    return "online-only";
+  }
+
+  /** The key a reader page is saved under: path and query, without Next's _rsc marker. */
+  function cacheKey(href) {
+    var url = new URL(href, "http://x");
+    url.searchParams.delete("_rsc");
+    return url.pathname + url.search;
+  }
+
+  var SAVE = /<meta name="inkboard-offline" content="save"/;
+  var NEVER = /<meta name="inkboard-offline" content="never"/;
+
+  /** "save" | "drop" | "keep" for a page fetched without cookies (rules 3 and 4 above). */
+  function verdict(status, contentType, html) {
+    if (status === 404 || status === 410) return "drop";
+    if (status !== 200) return "keep";
+    if (String(contentType).indexOf("text/html") !== 0) return "keep";
+    if (NEVER.test(html)) return "drop";
+    if (SAVE.test(html)) return "save";
+    return "drop";
+  }
+
+  function decode(s) {
+    return s
+      .replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  }
+  function metaContent(html, name) {
+    var m = new RegExp('<meta name="' + name + '" content="([^"]*)"').exec(html);
+    return m ? decode(m[1]) : null;
+  }
+
+  /** What the offline page lists: kind, title and author, from the page's own markers. */
+  function pageMeta(html) {
+    return {
+      kind: metaContent(html, "inkboard-offline-kind"),
+      title: metaContent(html, "inkboard-offline-title"),
+      author: metaContent(html, "inkboard-offline-author"),
+    };
+  }
+
+  /** Same-origin hashed assets a saved page needs (scripts, styles, fonts, lazy chunks named in its payload). */
+  function assetUrls(html) {
+    var seen = {};
+    var out = [];
+    var re = /\/_next\/static\/[A-Za-z0-9_\-.~@%/]+/g;
+    var m;
+    while ((m = re.exec(html))) {
+      var u = m[0].replace(/[.]+$/, "");
+      if (!seen[u]) { seen[u] = true; out.push(u); }
+    }
+    return out;
+  }
+
+  /**
+   * Keep the most recent CAPS.poem poems and CAPS.other other pages.
+   * index: [{ url, kind, savedAt }]; returns the urls to remove.
+   */
+  function overCap(index) {
+    var byTime = index.slice().sort(function (a, b) { return b.savedAt - a.savedAt; });
+    var poems = 0, others = 0, drop = [];
+    for (var i = 0; i < byTime.length; i++) {
+      var isPoem = byTime[i].kind === "poem";
+      var n = isPoem ? ++poems : ++others;
+      if (n > (isPoem ? CAPS.poem : CAPS.other)) drop.push(byTime[i].url);
+    }
+    return drop;
+  }
+
+  return {
+    readerKind: readerKind, isStatic: isStatic, strategyFor: strategyFor, cacheKey: cacheKey,
+    verdict: verdict, pageMeta: pageMeta, assetUrls: assetUrls, overCap: overCap, CAPS: CAPS,
+  };
+})();
+`;
+
+export type OfflineRules = {
+  readerKind(pathname: string): "board" | "poem" | "author" | "collection" | null;
+  isStatic(pathname: string): boolean;
+  strategyFor(req: {
+    method: string;
+    url: string;
+    origin: string;
+    mode: string;
+    rsc: boolean;
+    prefetch: boolean;
+  }): "passthrough" | "cache-first" | "reader-page" | "offline-page" | "online-only" | "rsc-navigation";
+  cacheKey(href: string): string;
+  verdict(status: number, contentType: string, html: string): "save" | "drop" | "keep";
+  pageMeta(html: string): { kind: string | null; title: string | null; author: string | null };
+  assetUrls(html: string): string[];
+  overCap(index: { url: string; kind: string; savedAt: number }[]): string[];
+  CAPS: { poem: number; other: number };
+};
+
+/** For tests: evaluates the shipped source and returns its rules. */
+export function loadOfflineRules(): OfflineRules {
+  return new Function(`${OFFLINE_RULES_JS}; return InkboardOffline;`)() as OfflineRules;
+}
+
+/** Cache names and well-known keys, shared by the worker and the offline page. */
+export const PAGES_CACHE_PREFIX = "inkboard-pages-";
+export const STATIC_CACHE_PREFIX = "inkboard-static-";
+export const SAVED_INDEX_KEY = "/__inkboard/saved.json";
+export const SAVE_MESSAGE = "inkboard:save";

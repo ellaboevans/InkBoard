@@ -38,6 +38,7 @@ import type { BoardFilter } from "./board-view";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 import { pluralCount } from "@/lib/plural";
 import { InstallSlot, InstallToolbarButton } from "@/components/install/install-nudge";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 
 /*
  * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
@@ -554,6 +555,8 @@ export function BoardCanvas({
           toolbar's, so its tail points at the install button (the last item). */}
       <div className="pointer-events-none flex items-start gap-3">
       <div className="pointer-events-none flex min-w-0 flex-1 flex-col gap-2">
+      {/* Offline: "showing saved poems" (Phase 15 round 2); in the flow, so it can't cover anything. */}
+      <OfflineIndicator className="self-center" />
       <LanguageFilterStatus filter={filter} total={total} selectId="board-language" className="self-center" />
 
       <AuthorsPanel

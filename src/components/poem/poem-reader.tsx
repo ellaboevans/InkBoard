@@ -12,6 +12,8 @@ import { getUnlockedBody } from "@/server/unlock-cookie";
 import { unlockPoemAction } from "./unlock-actions";
 import { UnlockForm } from "./unlock-form";
 import { PoemOpened } from "@/components/install/install-nudge";
+import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SaveForOffline } from "@/components/offline/save-for-offline";
 
 /*
  * The reading view, shared by the full page (/p/[author]/[poem]) and the
@@ -53,6 +55,15 @@ export async function PoemReader({
         {inDialog && <OverlayPoemShown titleId={titleId} />}
         {/* Two poems opened is one of the install nudge's triggers (idempotent per poem). */}
         <PoemOpened id={`${poem.authorSlug}/${poem.slug}`} />
+        {/* Offline reading: public poems may be saved; a private one never, even once unlocked. */}
+        {poem.visibility === "public" ? (
+          <>
+            <OfflineMarker save kind="poem" title={poem.title} author={poem.penName} />
+            <SaveForOffline path={`/p/${poem.authorSlug}/${poem.slug}`} />
+          </>
+        ) : (
+          <OfflineMarker save={false} />
+        )}
         <p className="mt-3 text-muted-foreground">
           by{" "}
           <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">

@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // E2E build dir, test output
     ".next-e2e/**",
+    // Production build for the offline E2E (playwright.offline.config.ts)
+    ".next-offline/**",
     ".next-build/**",
     ".next-preview/**",
     "test-results/**",

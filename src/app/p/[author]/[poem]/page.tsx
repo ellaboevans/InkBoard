@@ -10,6 +10,7 @@ import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 
 type Props = PageProps<"/p/[author]/[poem]">;
 
@@ -92,6 +93,8 @@ async function PoemFeedFooter({ params }: Pick<Props, "params">) {
 export default function PoemPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* "You're offline · showing saved poems" (Phase 15 round 2). */}
+      <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <div className="mx-auto max-w-2xl px-6 py-10 sm:py-16">
         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-10">
           <Link href="/">

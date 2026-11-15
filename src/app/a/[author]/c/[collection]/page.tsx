@@ -13,6 +13,9 @@ import { feedAlternates } from "@/lib/feed-links";
 import { pluralCount } from "@/lib/plural";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getCollectionPage } from "@/server/board-cache";
+import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SaveForOffline } from "@/components/offline/save-for-offline";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 
 /*
  * A collection's public page (docs/PLAN.md, Phase 14): its published poems in
@@ -84,6 +87,8 @@ async function CollectionJsonLd({ params }: Pick<Props, "params">) {
 export default function CollectionPublicPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* "You're offline · showing saved poems" (Phase 15 round 2). */}
+      <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <div className="mx-auto max-w-5xl px-6 py-10 sm:py-14">
         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-8">
           <Link href="/">
@@ -110,6 +115,8 @@ async function Collection({ params }: Pick<Props, "params">) {
 
   return (
     <div className="grid gap-10">
+      <OfflineMarker save kind="collection" title={c.title} author={c.penName} />
+      <SaveForOffline path={`/a/${author}/c/${collection}`} />
       <header className="grid max-w-3xl gap-3">
         <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <LibraryIcon className="size-4" aria-hidden />

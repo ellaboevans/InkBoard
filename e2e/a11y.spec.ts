@@ -418,3 +418,45 @@ test("toasts: success, error and info", async ({ page }) => {
   await page.getByRole("dialog", { name: /^Earlier version, saved / }).getByRole("button", { name: "Restore this version" }).click();
   await check("Version restored in the editor", "toast: info");
 });
+
+test("offline: the indicator and the offline page", async ({ context, page }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-offline-${id}@example.com`, `Offline Reader ${id}`);
+  await publish(page, `Night Letters ${id}`, "dear lamp,\nstay up with me");
+
+  // The calm indicator, on the board and on a poem page (the browser's offline event drives it).
+  await openBoard(page);
+  await context.setOffline(true);
+  await expect(page.getByRole("status").filter({ hasText: "You're offline" }).first()).toBeVisible();
+  await scan(page, "offline: board indicator");
+  await context.setOffline(false);
+  await page.getByRole("link", { name: `Night Letters ${id}`, exact: true }).click();
+  await expect(page.getByRole("dialog", { name: `Night Letters ${id}` })).toBeVisible();
+  await page.getByRole("dialog").getByRole("link", { name: /Open full page/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: `Night Letters ${id}` })).toBeVisible();
+  await context.setOffline(true);
+  await expect(page.getByRole("status").filter({ hasText: "You're offline" }).first()).toBeVisible();
+  await scan(page, "offline: poem page indicator");
+  await context.setOffline(false);
+
+  // The offline page with nothing saved (no worker under next dev)…
+  await page.goto("/offline?from=%2Fp%2Fsomeone%2Fsomething");
+  await expect(page.getByText("No poems saved yet.")).toBeVisible();
+  await scan(page, "offline page: nothing saved");
+  // …and with saved poems, written the way the worker writes its index.
+  await page.evaluate(async () => {
+    const cache = await caches.open("inkboard-pages-a11y");
+    const index = [
+      { url: "/p/odalys-moon/solstice", kind: "poem", title: "Solstice", author: "Odalys Moon", savedAt: 2 },
+      { url: "/p/ines-calloway/salt", kind: "poem", title: "Salt", author: "Ines Calloway", savedAt: 1 },
+      { url: "/", kind: "board", title: "The board", author: null, savedAt: 3 },
+    ];
+    await cache.put("/__inkboard/saved.json", new Response(JSON.stringify(index), { headers: { "content-type": "application/json" } }));
+  });
+  await page.reload();
+  await expect(page.locator("[data-saved-poems]").getByRole("link")).toHaveCount(2);
+  await scan(page, "offline page: saved poems");
+  await page.setViewportSize({ width: 375, height: 740 });
+  await scan(page, "offline page: saved poems, phone");
+  await page.evaluate(() => caches.delete("inkboard-pages-a11y"));
+});

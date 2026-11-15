@@ -46,6 +46,8 @@ async function warmUp() {
     ["/a/warm-up/feed.xml"],
     ["/avatars/a01"],
     ["/manifest.webmanifest"],
+    ["/offline"],
+    ["/sw.js"],
     ["/icons/192.png"],
     ["/icons/512.png"],
     ["/icons/maskable-512.png"],

@@ -17,6 +17,7 @@ import {
 } from "@/lib/board-filter";
 import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { BoardCanvas } from "./board-canvas";
 import { CollectionBadgeLine } from "./poem-card-face";
@@ -122,6 +123,7 @@ function BoardList({
             </Button>
           </div>
         </header>
+        <OfflineIndicator className="-mt-6 mb-8" />
         <LanguageFilterStatus filter={filter} total={total} selectId="list-language" className="-mt-6 mb-8" />
         <div className="grid gap-12">
           {sections.map((s) => (

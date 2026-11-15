@@ -8,6 +8,7 @@ import {
   createCollection,
   deleteCollection,
   moveCollectionPoem,
+  reorderCollection,
   setPoemCollection,
   updateCollection,
   type CollectionErrors,
@@ -98,6 +99,22 @@ export async function setPoemCollectionAction(poemId: string, collectionId: stri
     return { ok: false, error: "error" in res ? res.error : "This poem or collection no longer exists or isn't yours." };
   }
   invalidate([poemId]);
+  refresh();
+  return { ok: true };
+}
+
+/** Save a dragged order. The server checks it's still the same set of poems. */
+export async function reorderCollectionAction(collectionId: string, poemIds: string[]): Promise<PlaceActionResult> {
+  const editor = await requireOnboardedEditor();
+  const res = await reorderCollection(editor.id, collectionId, poemIds);
+  if (!res.ok) {
+    refresh(); // show the current order
+    return {
+      ok: false,
+      error: "stale" in res ? "The collection changed in the meantime. Here is its current order." : "This collection no longer exists or isn't yours.",
+    };
+  }
+  invalidate(poemIds);
   refresh();
   return { ok: true };
 }

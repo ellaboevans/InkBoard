@@ -7,7 +7,7 @@ import { COLLECTIONS_MAX } from "@/lib/collection-limits";
 import { pluralCount } from "@/lib/plural";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { listCollections } from "@/server/collections";
-import { NewCollectionForm } from "./collection-forms";
+import { NewCollectionDialog } from "./collection-forms";
 
 export const metadata: Metadata = { title: "Collections" };
 
@@ -67,7 +67,9 @@ async function Collections({ searchParams }: Pick<PageProps<"/admin/collections"
         )}
       </section>
       {list.length < COLLECTIONS_MAX ? (
-        <NewCollectionForm />
+        <div className="justify-self-start">
+          <NewCollectionDialog />
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground">You have the most collections allowed ({COLLECTIONS_MAX}).</p>
       )}

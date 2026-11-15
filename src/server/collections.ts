@@ -360,6 +360,27 @@ export async function moveCollectionPoem(
   });
 }
 
+export type ReorderResult = { ok: true } | { ok: false; notFound: true } | { ok: false; stale: true };
+
+/**
+ * Save a whole new order (drag and drop). `ids` must be exactly the
+ * collection's current poems, checked under the lock: if someone added,
+ * removed or moved a poem meanwhile, nothing changes and the page reloads.
+ */
+export async function reorderCollection(editorId: string, collectionId: string, ids: unknown): Promise<ReorderResult> {
+  if (!isId(collectionId) || !Array.isArray(ids) || !ids.every(isId) || new Set(ids).size !== ids.length) {
+    return { ok: false, notFound: true };
+  }
+  return getDb().transaction(async (tx): Promise<ReorderResult> => {
+    await lockEditor(tx, editorId);
+    if (!(await lockCollections(tx, editorId, [collectionId])).has(collectionId)) return { ok: false, notFound: true };
+    const current = await orderOf(tx, collectionId);
+    if (current.length !== ids.length || !current.every((id) => ids.includes(id))) return { ok: false, stale: true };
+    if (current.some((id, i) => id !== ids[i])) await applyOrder(tx, collectionId, ids);
+    return { ok: true };
+  });
+}
+
 export type PlaceResult = { ok: true; from: string | null } | { ok: false; notFound: true } | { ok: false; error: string };
 
 /**

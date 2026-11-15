@@ -37,11 +37,16 @@ export function CollectionNav({
 }) {
   if (!collection.prev && !collection.next) return null;
   return (
+    // One quiet, text-sized row: it belongs to the poem, it shouldn't compete with it.
     <nav
       aria-label={`${collection.title}, part ${collection.part} of ${collection.parts}`}
-      className="mt-12 grid gap-3 border-t pt-6 sm:grid-cols-2"
+      className="mt-10 flex items-center justify-between gap-4 border-t pt-4 text-sm text-muted-foreground"
     >
-      {collection.prev && <NeighbourLink poem={collection.prev} authorSlug={authorSlug} inDialog={inDialog} rel="prev" />}
+      {collection.prev ? (
+        <NeighbourLink poem={collection.prev} authorSlug={authorSlug} inDialog={inDialog} rel="prev" />
+      ) : (
+        <span />
+      )}
       {collection.next && <NeighbourLink poem={collection.next} authorSlug={authorSlug} inDialog={inDialog} rel="next" />}
     </nav>
   );
@@ -60,35 +65,40 @@ function NeighbourLink({
 }) {
   const next = rel === "next";
   const href = `/p/${authorSlug}/${poem.slug}`;
-  const className = `grid gap-1 rounded-xl border bg-card p-4 hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${next ? "text-right sm:col-start-2" : ""}`;
+  // Long titles are cut with an ellipsis by CSS only: screen readers still get
+  // the whole title, and hovering shows it.
+  const className = `flex min-w-0 max-w-[48%] items-center gap-1 rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none ${next ? "ml-auto" : ""}`;
   const content = (
     <>
-      <span className={`flex items-center gap-1 text-xs text-muted-foreground ${next ? "justify-end" : ""}`}>
-        {!next && <ArrowLeftIcon className="size-3.5" aria-hidden />}
-        {next ? "Next:" : "Previous:"}
-        {next && <ArrowRightIcon className="size-3.5" aria-hidden />}
-      </span>
-      <span lang={poem.language ?? undefined} className="font-serif text-lg leading-snug">
+      {!next && <ArrowLeftIcon className="size-3.5 shrink-0" aria-hidden />}
+      <span className="shrink-0">{next ? "Next:" : "Previous:"}</span>
+      <span lang={poem.language ?? undefined} className="min-w-0 truncate text-foreground">
         {poem.title}
-        {poem.visibility === "private" && (
-          <>
-            {" "}
-            <LockIcon className="inline size-3.5 text-muted-foreground" aria-hidden />
-            <span className="sr-only"> (password protected)</span>
-          </>
-        )}
       </span>
+      {poem.visibility === "private" && (
+        <>
+          <LockIcon className="size-3 shrink-0" aria-hidden />
+          <span className="sr-only"> (password protected)</span>
+        </>
+      )}
+      {next && <ArrowRightIcon className="size-3.5 shrink-0" aria-hidden />}
     </>
   );
   if (!inDialog) {
     return (
-      <a href={href} rel={rel} className={className}>
+      <a href={href} rel={rel} title={poem.title} className={className}>
         {content}
       </a>
     );
   }
   return (
-    <Link href={href} rel={rel} replace className={className}>
+    <Link
+      href={href}
+      rel={rel}
+      title={poem.title}
+      replace
+      className={className}
+    >
       {content}
     </Link>
   );

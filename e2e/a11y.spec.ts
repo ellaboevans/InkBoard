@@ -153,10 +153,11 @@ test("collections: admin pages and the reading page's navigation", async ({ page
 
   await page.goto("/admin/collections");
   await scan(page, "collections: empty");
-  const create = page.getByRole("region", { name: "New collection" });
+  await page.getByRole("button", { name: "New collection" }).click();
+  const create = page.getByRole("dialog", { name: "New collection" });
   await create.getByRole("button", { name: "Create collection" }).click();
   await expect(create.getByRole("alert")).toBeVisible();
-  await scan(page, "collections: new-collection form with an error");
+  await scan(page, "collections: new-collection dialog with an error");
   await create.getByRole("textbox", { name: "Title" }).fill(`Sequence ${id}`);
   await create.getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
@@ -169,6 +170,17 @@ test("collections: admin pages and the reading page's navigation", async ({ page
   await page.getByRole("button", { name: `Move “Third ${id}” up` }).click();
   await expect(page.getByRole("main").getByRole("status").filter({ hasText: "Moved" })).toBeVisible();
   await scan(page, "collection: with poems, after a move");
+  await page.getByRole("button", { name: "Edit details" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit collection" })).toBeVisible();
+  await scan(page, "collection: edit dialog");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 375, height: 800 });
+  await scan(page, "collection: phone, with drag handles");
+  await page.getByRole("button", { name: "Edit details" }).click();
+  await expect(page.getByRole("dialog", { name: "Edit collection" })).toBeVisible();
+  await scan(page, "collection: edit dialog on a phone");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.getByRole("button", { name: "Delete collection" }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await scan(page, "collection: delete confirmation");

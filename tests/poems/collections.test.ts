@@ -13,6 +13,7 @@ import {
   listCollections,
   moveCollectionPoem,
   poemsWithoutCollection,
+  reorderCollection,
   setPoemCollection,
   updateCollection,
 } from "@/server/collections";
@@ -200,6 +201,37 @@ describe("one collection per poem, contiguous positions", () => {
     expect(await updatePoem(ada, ids[1], input({ title: "B", status: "draft" }))).toMatchObject({ ok: true });
     expect(await order(c)).toEqual(["A", "B", "C"]);
     expect((await loadReaderPoem("ada", "c"))?.collection).toMatchObject({ part: 2, parts: 2, prev: { slug: "a" }, next: null });
+  });
+});
+
+describe("reorderCollection (drag and drop)", () => {
+  it("saves a whole new order, only for the same set of poems", async () => {
+    const { c, ids } = await cycle(["A", "B", "C", "D"]);
+    expect(await reorderCollection(ada, c, [ids[3], ids[0], ids[2], ids[1]])).toEqual({ ok: true });
+    expect(await order(c)).toEqual(["D", "A", "C", "B"]);
+    // Missing, extra, duplicated or foreign poems: refused, order unchanged.
+    const outside = await poem(ada, "Outside");
+    for (const bad of [[ids[0], ids[1], ids[2]], [...ids, outside], [ids[0], ids[0], ids[1], ids[2]]]) {
+      expect((await reorderCollection(ada, c, bad)).ok).toBe(false);
+    }
+    expect(await reorderCollection(eve, c, ids)).toEqual({ ok: false, notFound: true });
+    expect(await reorderCollection(ada, "nope", ids)).toEqual({ ok: false, notFound: true });
+    expect(await reorderCollection(ada, c, ["x"])).toEqual({ ok: false, notFound: true });
+    expect(await reorderCollection(ada, c, "not an array")).toEqual({ ok: false, notFound: true });
+    expect(await order(c)).toEqual(["D", "A", "C", "B"]);
+  });
+
+  it("races with moves and adds without gaps", async () => {
+    const { c, ids } = await cycle(["A", "B", "C", "D"]);
+    const extra = await poem(ada, "E");
+    const results = await Promise.all([
+      reorderCollection(ada, c, [...ids].reverse()),
+      moveCollectionPoem(ada, c, ids[0], "last"),
+      setPoemCollection(ada, extra, c),
+      reorderCollection(ada, c, [ids[1], ids[0], ids[2], ids[3]]),
+    ]);
+    expect(results.every((r) => typeof r === "object")).toBe(true);
+    expect((await order(c)).sort()).toEqual(["A", "B", "C", "D", "E"]);
   });
 });
 

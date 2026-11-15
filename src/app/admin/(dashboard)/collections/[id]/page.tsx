@@ -7,7 +7,7 @@ import { FlashToast } from "@/components/flash-toast";
 import { Button } from "@/components/ui/button";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { getCollection, poemsWithoutCollection } from "@/server/collections";
-import { CollectionDetailsForm } from "../collection-forms";
+import { EditCollectionDialog } from "../collection-forms";
 import { CollectionOrder, DeleteCollection } from "../collection-order";
 
 export const metadata: Metadata = { title: "Edit collection" };
@@ -44,20 +44,22 @@ async function EditCollection({ params, searchParams }: PageProps<"/admin/collec
       {created === "1" && (
         <FlashToast param="created" title="Collection created" description="Now add poems and put them in order." />
       )}
-      <div className="min-w-0">
-        <h1 className="font-serif text-3xl break-words">{collection.title}</h1>
-        {collection.intro && <p className="mt-1 whitespace-pre-line text-muted-foreground">{collection.intro}</p>}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-serif text-3xl break-words">{collection.title}</h1>
+          {collection.intro && <p className="mt-1 whitespace-pre-line text-muted-foreground">{collection.intro}</p>}
+        </div>
+        <EditCollectionDialog
+          collectionId={collection.id}
+          title={collection.title}
+          intro={collection.intro ?? ""}
+          slug={collection.slug}
+        />
       </div>
       <CollectionOrder
         collectionId={collection.id}
         poems={collection.poems.map(({ id, title, status, visibility }) => ({ id, title, status, visibility }))}
         available={available}
-      />
-      <CollectionDetailsForm
-        collectionId={collection.id}
-        title={collection.title}
-        intro={collection.intro ?? ""}
-        slug={collection.slug}
       />
       <DeleteCollection title={collection.title} collectionId={collection.id} />
     </>

@@ -1,6 +1,17 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, Loader2Icon, LockIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, Loader2Icon, LockIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
@@ -22,7 +33,12 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { COLLECTION_POEMS_MAX } from "@/lib/collection-limits";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
-import { deleteCollectionAction, moveCollectionPoemAction, setPoemCollectionAction } from "./actions";
+import {
+  deleteCollectionAction,
+  moveCollectionPoemAction,
+  reorderCollectionAction,
+  setPoemCollectionAction,
+} from "./actions";
 
 /*
  * Ordering a collection (docs/PLAN.md, Phase 14), keyboard first: every poem
@@ -37,6 +53,13 @@ import { deleteCollectionAction, moveCollectionPoemAction, setPoemCollectionActi
  * as the action, so they commit together with the refreshed order. Set after
  * the await as plain updates, they rendered first: "Moved" was announced
  * while the old order was still on screen, and focus jumped a moment later.
+ *
+ * Drag and drop (@dnd-kit) is an extra for pointers: only the grip handle
+ * starts a drag (mouse, touch, pen), so a long list still scrolls on a phone.
+ * The handle is hidden from assistive tech and not focusable; the Move
+ * buttons stay the keyboard and screen-reader path. A drop shows the new
+ * order at once (local state), saves it with one action (the same locked,
+ * editor-scoped server code), and rolls back with a toast if that fails.
  */
 
 export type OrderPoem = {
@@ -63,7 +86,17 @@ export function CollectionOrder({
   const [adding, setAdding] = useState("");
   // Where focus should go once the refreshed order renders.
   const focusNext = useRef<string | null>(null);
+  // A dropped order, shown until the refreshed list arrives (or rolled back).
+  const [dropped, setDropped] = useState<string[] | null>(null);
   const order = poems.map((p) => p.id).join(",");
+  const [seenOrder, setSeenOrder] = useState(order);
+  if (seenOrder !== order) {
+    setSeenOrder(order);
+    setDropped(null);
+  }
+  const byId = new Map(poems.map((p) => [p.id, p]));
+  const shown = dropped?.every((id) => byId.has(id)) ? dropped.map((id) => byId.get(id)!) : poems;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useLayoutEffect(() => {
     const target = focusNext.current;
@@ -114,6 +147,24 @@ export function CollectionOrder({
       };
     });
 
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id || pending) return;
+    const ids = shown.map((p) => p.id);
+    const next = arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)));
+    const poem = byId.get(String(active.id))!;
+    setDropped(next); // at once, before the save
+    run(async () => {
+      const res = await reorderCollectionAction(collectionId, next);
+      if (!res.ok) {
+        notify.error("Couldn't save the new order", res.error);
+        return () => setDropped(null); // roll back
+      }
+      return () => {
+        setAnnouncement(`Moved “${poem.title}” to position ${next.indexOf(poem.id) + 1} of ${next.length}.`);
+      };
+    });
+  };
+
   const add = () =>
     run(async () => {
       const poem = available.find((p) => p.id === adding);
@@ -139,7 +190,8 @@ export function CollectionOrder({
         <span className="text-sm text-muted-foreground tabular-nums">{pluralCount(poems.length, "poem")}</span>
       </div>
       <p id="order-help" className="text-sm text-muted-foreground">
-        Readers see published poems in this order, numbered without drafts. Use the arrow buttons to move a poem.
+        Readers see published poems in this order, numbered without drafts. Drag a poem by its handle, or use the
+        arrow buttons to move it.
       </p>
       <p role="status" className="sr-only">
         {announcement}
@@ -150,9 +202,20 @@ export function CollectionOrder({
           No poems yet. Add one below, or pick this collection in the poem editor.
         </p>
       ) : (
-        <ol className="grid gap-2" aria-describedby="order-help" aria-busy={pending || undefined}>
-          {poems.map((p, i) => (
-            <li key={p.id} className="flex items-center gap-2 rounded-lg border bg-background p-2">
+        <DndContext
+          id={`order-${collectionId}`}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={onDragEnd}
+          // Spoken drag announcements aren't needed: the handle is pointer-only.
+          accessibility={{ screenReaderInstructions: { draggable: "" }, announcements: NO_ANNOUNCEMENTS }}
+        >
+        <SortableContext items={shown.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+        {/* minmax(0,1fr): a grid item's min-width is its content by default, so a long title overflowed phones. */}
+        <ol className="grid grid-cols-[minmax(0,1fr)] gap-2" aria-describedby="order-help" aria-busy={pending || undefined}>
+          {shown.map((p, i) => (
+            <SortableRow key={p.id} id={p.id} title={p.title}>
               <span className="w-6 shrink-0 text-right font-mono text-sm text-muted-foreground tabular-nums" aria-hidden>
                 {i + 1}.
               </span>
@@ -187,7 +250,7 @@ export function CollectionOrder({
                   label={`Move “${p.title}” down`}
                   data-move="down"
                   data-poem={p.id}
-                  unavailable={i === poems.length - 1 || pending}
+                  unavailable={i === shown.length - 1 || pending}
                   onPress={() => move(p, "down")}
                 >
                   <ArrowDownIcon />
@@ -201,9 +264,11 @@ export function CollectionOrder({
                   <XIcon />
                 </OrderButton>
               </span>
-            </li>
+            </SortableRow>
           ))}
         </ol>
+        </SortableContext>
+        </DndContext>
       )}
 
       <div className="grid gap-1.5">
@@ -241,6 +306,34 @@ export function CollectionOrder({
         </p>
       </div>
     </section>
+  );
+}
+
+const NO_ANNOUNCEMENTS = { onDragStart: () => undefined, onDragOver: () => undefined, onDragEnd: () => undefined, onDragCancel: () => undefined };
+
+/** A row that can be dragged by its grip handle only. */
+function SortableRow({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+  const { setNodeRef, setActivatorNodeRef, listeners, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <li
+      ref={setNodeRef}
+      data-order-row={id}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={`relative flex min-w-0 items-center gap-2 rounded-lg border bg-background p-2 pl-1 ${isDragging ? "z-10 shadow-lg ring-2 ring-ring/40" : ""}`}
+    >
+      <span
+        ref={setActivatorNodeRef}
+        {...listeners}
+        // Pointer-only: the Move buttons are the keyboard and screen-reader path.
+        aria-hidden
+        data-drag-handle={id}
+        title={`Drag “${title}” to reorder`}
+        className="flex h-9 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-muted active:cursor-grabbing"
+      >
+        <GripVerticalIcon className="size-4" />
+      </span>
+      {children}
+    </li>
   );
 }
 

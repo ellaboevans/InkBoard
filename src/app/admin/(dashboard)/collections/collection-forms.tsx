@@ -1,9 +1,19 @@
 "use client";
 
-import { Loader2Icon, PlusIcon } from "lucide-react";
+import { Loader2Icon, PencilIcon, PlusIcon } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,32 +94,87 @@ function Fields({
   );
 }
 
-/** "New collection" on the list page: creating redirects to the new collection's page. */
-export function NewCollectionForm() {
-  const [title, setTitle] = useState("");
-  const [intro, setIntro] = useState("");
-  const [state, formAction, pending] = useActionState(withErrorToast(createCollectionAction), {});
+type DialogFormProps = {
+  title: string;
+  description: string;
+  submitLabel: string;
+  initial: { title: string; intro: string };
+  /** Resolves with errors, or redirects / closes on success. */
+  action: (prev: CollectionFormState, formData: FormData) => Promise<CollectionFormState>;
+  onSaved?: () => void;
+  footnote?: React.ReactNode;
+};
+
+/**
+ * The form inside a dialog. Mounted only while the dialog is open, so each
+ * opening starts from the saved values; while open, a validation error keeps
+ * what was typed (controlled fields). Toasts fire from the action wrapper.
+ */
+function DialogForm({ title: heading, description, submitLabel, initial, action, onSaved, footnote }: DialogFormProps) {
+  const [title, setTitle] = useState(initial.title);
+  const [intro, setIntro] = useState(initial.intro);
+  const [state, formAction, pending] = useActionState(
+    withErrorToast(async (prev: CollectionFormState, formData: FormData) => {
+      const next = await action(prev, formData);
+      if (next.savedAt) onSaved?.();
+      else if (next.errors) notify.error(`Couldn't ${submitLabel.toLowerCase()}`, next.errors.form ?? Object.values(next.errors)[0]);
+      return next;
+    }),
+    {},
+  );
   return (
-    <section aria-labelledby="new-collection" className="grid gap-4 rounded-xl border bg-card p-5">
-      <h2 id="new-collection" className="font-serif text-xl">
-        New collection
-      </h2>
+    <>
+      <DialogHeader>
+        <DialogTitle>{heading}</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
       <form action={formAction} className="grid gap-4" noValidate>
-        <Fields idPrefix="new-collection" title={title} setTitle={setTitle} intro={intro} setIntro={setIntro} errors={state.errors} />
-        <Button type="submit" disabled={pending} className="justify-self-start">
-          {pending ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
-          Create collection
-        </Button>
+        <Fields idPrefix="collection" title={title} setTitle={setTitle} intro={intro} setIntro={setIntro} errors={state.errors} />
+        {footnote}
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button type="submit" disabled={pending}>
+            {pending && <Loader2Icon className="animate-spin" />}
+            {submitLabel}
+          </Button>
+        </DialogFooter>
       </form>
-    </section>
+    </>
   );
 }
 
-/** Title and intro of an existing collection. The page refreshes on save (the action calls refresh()). */
-export function CollectionDetailsForm({
+/** "New collection": creating redirects to the new collection's page. */
+export function NewCollectionDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button>
+          <PlusIcon />
+          New collection
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogForm
+          title="New collection"
+          description="Group poems into a sequence, like a cycle or a chapbook. You'll add and order poems next."
+          submitLabel="Create collection"
+          initial={{ title: "", intro: "" }}
+          action={createCollectionAction}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** "Edit details": title and intro. Closes on save; the page refreshes (the action calls refresh()). */
+export function EditCollectionDialog({
   collectionId,
-  title: savedTitle,
-  intro: savedIntro,
+  title,
+  intro,
   slug,
 }: {
   collectionId: string;
@@ -117,32 +182,33 @@ export function CollectionDetailsForm({
   intro: string;
   slug: string;
 }) {
-  const [title, setTitle] = useState(savedTitle);
-  const [intro, setIntro] = useState(savedIntro);
-  const [state, formAction, pending] = useActionState(
-    withErrorToast(async (prev: CollectionFormState, formData: FormData) => {
-      const next = await updateCollectionAction(collectionId, prev, formData);
-      // From the action's result, not an effect, so it fires once per save.
-      if (next.savedAt) notify.success("Collection saved", "Readers see the new title right away.");
-      return next;
-    }),
-    {},
-  );
+  const [open, setOpen] = useState(false);
   return (
-    <section aria-labelledby="collection-details" className="grid gap-4 rounded-xl border bg-card p-5">
-      <h2 id="collection-details" className="font-serif text-xl">
-        Details
-      </h2>
-      <form action={formAction} className="grid gap-4" noValidate>
-        <Fields idPrefix="collection" title={title} setTitle={setTitle} intro={intro} setIntro={setIntro} errors={state.errors} />
-        <p className="text-xs text-muted-foreground">
-          Its link name, <span className="font-mono">{slug}</span>, stays the same when you rename it.
-        </p>
-        <Button type="submit" disabled={pending} className="justify-self-start">
-          {pending && <Loader2Icon className="animate-spin" />}
-          Save details
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <PencilIcon />
+          Edit details
         </Button>
-      </form>
-    </section>
+      </DialogTrigger>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogForm
+          title="Edit collection"
+          description="Its title and intro. Readers see the new title right away."
+          submitLabel="Save details"
+          initial={{ title, intro }}
+          action={updateCollectionAction.bind(null, collectionId)}
+          onSaved={() => {
+            setOpen(false); // Radix returns focus to "Edit details"
+            notify.success("Collection saved", "Readers see the new title right away.");
+          }}
+          footnote={
+            <p className="text-xs text-muted-foreground">
+              Its link name, <span className="font-mono">{slug}</span>, stays the same when you rename it.
+            </p>
+          }
+        />
+      </DialogContent>
+    </Dialog>
   );
 }

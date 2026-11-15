@@ -35,25 +35,52 @@ test("an editor builds an ordered collection; a reader steps through it", async 
   await page.goto("/admin");
   await page.getByRole("link", { name: "Collections", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Collections" })).toBeVisible();
-  // A validation error keeps what was typed.
-  const create = page.getByRole("region", { name: "New collection" });
-  await create.getByRole("textbox", { name: /Intro/ }).fill("A sequence about dry wind.");
-  await create.getByRole("button", { name: "Create collection" }).click();
-  await expect(create.getByRole("alert")).toHaveText("Give the collection a title");
-  await expect(create.getByRole("textbox", { name: /Intro/ })).toHaveValue("A sequence about dry wind.");
-  await create.getByRole("textbox", { name: "Title" }).fill(cycle);
-  await create.getByRole("button", { name: "Create collection" }).click();
+  // "New collection" opens a dialog. A validation error keeps what was typed.
+  const newButton = page.getByRole("button", { name: "New collection" });
+  await newButton.click();
+  let form = page.getByRole("dialog", { name: "New collection" });
+  await expect(form.getByRole("textbox", { name: "Title" })).toBeFocused();
+  await form.getByRole("textbox", { name: /Intro/ }).fill("A sequence about dry wind.");
+  await form.getByRole("button", { name: "Create collection" }).click();
+  await expect(form.getByRole("alert")).toHaveText("Give the collection a title");
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Couldn't create collection" })).toBeVisible();
+  await expect(form.getByRole("textbox", { name: /Intro/ })).toHaveValue("A sequence about dry wind.");
+  // Escape closes it and returns focus to the button.
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect(newButton).toBeFocused();
+  await newButton.click();
+  form = page.getByRole("dialog", { name: "New collection" });
+  await form.getByRole("textbox", { name: "Title" }).fill(cycle);
+  await form.getByRole("textbox", { name: /Intro/ }).fill("A sequence about dry wind.");
+  await form.getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Collection created" })).toBeVisible();
   const collectionUrl = new URL(page.url()).pathname;
+  // No stray code comments rendered as text.
+  await expect(page.getByRole("main")).not.toContainText(/\/\/|minmax/);
 
-  // Details: prefilled with the saved values; the intro can change.
-  const details = page.getByRole("region", { name: "Details" });
-  await expect(details.getByRole("textbox", { name: "Title" })).toHaveValue(cycle);
-  await details.getByRole("textbox", { name: /Intro/ }).fill("Dry wind, seven days.");
-  await details.getByRole("button", { name: "Save details" }).click();
+  // "Edit details" opens a dialog prefilled with the saved values.
+  const editButton = page.getByRole("button", { name: "Edit details" });
+  await editButton.click();
+  form = page.getByRole("dialog", { name: "Edit collection" });
+  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue(cycle);
+  await form.getByRole("textbox", { name: "Title" }).fill("");
+  await form.getByRole("textbox", { name: /Intro/ }).fill("Edited intro.");
+  await form.getByRole("button", { name: "Save details" }).click();
+  await expect(form.getByRole("alert")).toHaveText("Give the collection a title");
+  await expect(form.getByRole("textbox", { name: /Intro/ })).toHaveValue("Edited intro.");
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect(editButton).toBeFocused();
+  await editButton.click();
+  await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue(cycle); // nothing was saved
+  await form.getByRole("textbox", { name: /Intro/ }).fill("Dry wind, seven days.");
+  await form.getByRole("button", { name: "Save details" }).click();
+  await expect(form).toHaveCount(0);
+  await expect(editButton).toBeFocused();
   await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Collection saved" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("paragraph").filter({ hasText: "Dry wind, seven days." })).toBeVisible();
+  await expect(page.getByRole("main")).toContainText("Dry wind, seven days.");
 
   // Add poems from the collection page: each goes to the end.
   const main = page.getByRole("main");
@@ -92,6 +119,20 @@ test("an editor builds an ordered collection; a reader steps through it", async 
   await page.keyboard.press("Enter");
   await expect(list.getByRole("listitem")).toHaveText([new RegExp(three), new RegExp(one), new RegExp(draft)]);
 
+  // Drag by the grip handle: Draft to the top. The new order shows at once and is saved.
+  const handle = page.locator(`[data-drag-handle]`).nth(2);
+  const target = await list.getByRole("listitem").first().boundingBox();
+  const from = (await handle.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y - 10, { steps: 5 });
+  await page.mouse.move(from.x + from.width / 2, target!.y + 4, { steps: 10 });
+  await page.mouse.up();
+  await expect(list.getByRole("listitem")).toHaveText([new RegExp(draft), new RegExp(three), new RegExp(one)]);
+  await expect(status).toHaveText(`Moved “${draft}” to position 1 of 3.`);
+  await page.reload();
+  await expect(list.getByRole("listitem")).toHaveText([new RegExp(draft), new RegExp(three), new RegExp(one)]);
+
   // Assign the private poem from the poem editor's Collection picker: it goes to the end.
   const { rows } = await sql(`SELECT p.id, p.slug, e.slug AS author FROM poems p JOIN editors e ON e.id = p.editor_id WHERE e.email = '${email}'`);
   const byTitle = (t: string) => rows.find((r) => r.slug === t.toLowerCase().replace(/ /g, "-"))!;
@@ -102,7 +143,7 @@ test("an editor builds an ordered collection; a reader steps through it", async 
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
   await page.goto(collectionUrl);
-  await expect(list.getByRole("listitem")).toHaveText([new RegExp(three), new RegExp(one), new RegExp(draft), new RegExp(two)]);
+  await expect(list.getByRole("listitem")).toHaveText([new RegExp(draft), new RegExp(three), new RegExp(one), new RegExp(two)]);
 
   // Reader, in the board overlay: Three is part 1 of 3 (the draft doesn't count).
   await page.goto("/");
@@ -168,9 +209,9 @@ test("another editor's collection is not found", async ({ page, browser }) => {
   const id = unique();
   await signUpAs(page, `cyc-own-${id}@example.com`, `Owner ${id}`);
   await page.goto("/admin/collections");
-  const create = page.getByRole("region", { name: "New collection" });
-  await create.getByRole("textbox", { name: "Title" }).fill(`Mine ${id}`);
-  await create.getByRole("button", { name: "Create collection" }).click();
+  await page.getByRole("button", { name: "New collection" }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Title" }).fill(`Mine ${id}`);
+  await page.getByRole("dialog").getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   const url = new URL(page.url()).pathname;
 
@@ -183,4 +224,35 @@ test("another editor's collection is not found", async ({ page, browser }) => {
   await intruder.goto("/admin/collections/not-a-uuid");
   await expect(intruder.getByRole("heading", { name: "Collection not found" })).toBeVisible();
   await other.close();
+});
+
+test("a dropped order that can't be saved rolls back with an error", async ({ page }) => {
+  const id = unique();
+  const email = `cyc-stale-${id}@example.com`;
+  await signUpAs(page, email, `Stale ${id}`);
+  for (const t of ["A", "B", "C"]) await publish(page, `${t} ${id}`, "x");
+  await page.goto("/admin/collections");
+  await page.getByRole("button", { name: "New collection" }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Title" }).fill(`Stale ${id}`);
+  await page.getByRole("dialog").getByRole("button", { name: "Create collection" }).click();
+  await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  for (const t of ["A", "B", "C"]) {
+    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: `${t} ${id}` });
+    await page.getByRole("button", { name: "Add to collection" }).click();
+    await expect(page.getByRole("button", { name: `Remove “${t} ${id}” from the collection` })).toBeVisible();
+  }
+  // Behind the page's back (another tab, say), C leaves the collection.
+  await sql(`UPDATE poems SET collection_id = NULL, collection_position = NULL WHERE title = 'C ${id}'`);
+
+  const list = page.getByRole("main").getByRole("list").filter({ has: page.getByRole("button", { name: /^Move / }) });
+  const from = (await page.locator("[data-drag-handle]").nth(1).boundingBox())!;
+  const to = (await list.getByRole("listitem").first().boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y - 10, { steps: 5 });
+  await page.mouse.move(from.x + from.width / 2, to.y + 4, { steps: 10 });
+  await page.mouse.up();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Couldn't save the new order" })).toBeVisible();
+  // Rolled back to what the server has: A, B (C has gone).
+  await expect(list.getByRole("listitem")).toHaveText([new RegExp(`A ${id}`), new RegExp(`B ${id}`)]);
 });

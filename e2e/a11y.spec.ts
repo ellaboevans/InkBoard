@@ -103,6 +103,19 @@ test("admin screens", async ({ page }) => {
   await scan(page, "delete confirmation");
   await page.keyboard.press("Escape");
 
+  // History: a saved change makes an earlier version; open it to compare.
+  await page.getByRole("textbox", { name: "Poem" }).fill("kept\n  and changed");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const history = page.getByRole("region", { name: "History" });
+  await expect(history.getByRole("link")).toHaveCount(2);
+  await scan(page, "edit poem: history panel");
+  await history.getByRole("link").nth(1).click();
+  const version = page.getByRole("dialog", { name: /^Earlier version/ });
+  await expect(version.locator("ins, del").first()).toBeVisible();
+  await scan(page, "edit poem: earlier version with changes marked");
+  await page.keyboard.press("Escape");
+  await expect(version).toHaveCount(0);
+
   await page.goto("/admin");
   await expect(page.getByRole("link", { name: `Seen ${id}` })).toBeVisible();
   await scan(page, "dashboard: with poems");

@@ -65,6 +65,10 @@ Add UI primitives with `npx shadcn@latest add <component>` (Radix base, `radix-n
 - Limits: shared with the client in `src/lib/poem-limits.ts`.
 - Server Actions (`src/app/admin/poems/actions.ts`) re-authorize, then call `updateTag(BOARD_TAG)` / `updateTag(poemTag(id))` from `src/server/cache-tags.ts`. Any new mutation that changes what readers see must do the same.
 
+**Revision history** (`poem_revisions`, `src/server/poem-history.ts`, docs/PLAN.md Phase 13). `recordRevision` runs only inside the save transactions in `poems.ts`, after the editor → poem locks, and only when title, text or language changed; it prunes to `REVISIONS_KEPT` (20) in the same transaction.
+- Editor-only: reads join `poems` and filter by the DAL-resolved `editorId`; never read it for readers (no board, feed, search or share-card query). A test fails if any other module references the table, or if its loaders are used outside `src/app/admin/`.
+- Never add password, hash or visibility columns to it. A restore only fills the editor form (`poem-history.tsx`); the normal save records it, so don't add a second save path.
+
 **Private-poem passwords** have two modes per editor (`editors.password_mode`): `per_poem` (`poems.password_hash`) or `shared` (`editors.shared_password_hash`, with poem hashes null).
 - Switching is handled in `src/server/password-settings.ts`, the reader side in `src/server/unlock.ts`.
 - The rule "a private poem is always readable with some password" is enforced in the DB by triggers (`drizzle/0002_password_mode_triggers.sql`), which raise `check_violation` (23514); `guardPasswordInvariant` in `poems.ts` turns that into a form error.

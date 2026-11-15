@@ -92,6 +92,13 @@ sign_in_devices    id · editor_id → editors · device_key (HMAC of the device
                    UNIQUE (editor_id, ip_key)
 ```
 
+Phase 11c adds `poems.language` (BCP 47 tag, nullable). Phase 13 adds:
+
+```
+poem_revisions  id · poem_id → poems (ON DELETE CASCADE) · title · body · language · saved_at (clock_timestamp())
+                INDEX (poem_id, saved_at DESC); newest 20 per poem; no password, hash or visibility columns
+```
+
 "A private poem is always readable with some password" (its own in per-poem mode, the
 author's shared one in shared mode) is enforced by triggers in
 `drizzle/0002_password_mode_triggers.sql`, which replaced Phase 0's
@@ -110,7 +117,8 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /admin                 Dashboard: my poems (R4)
 /admin/onboarding      First sign-in: choose pen name (the section label)
 /admin/poems/new       Create poem (R2, R3)
-/admin/poems/[id]      Edit poem, visibility, password, publish, delete (R2, R3)
+/admin/poems/[id]      Edit poem, visibility, password, publish, delete (R2, R3); History panel,
+                       ?version=<revision id> opens a saved version read-only (Phase 13)
 /admin/settings        Private-poem password mode: per poem or one shared (R11)
 /admin/profile         Avatar, pen name, tagline, bio, links, pinned poem, stats, signed-in devices
 /avatars/[id]          Curated avatar SVGs (prerendered, cached forever)
@@ -383,12 +391,23 @@ Readers can follow InkBoard, or one poet, in a feed reader, with no account and 
 - **Discovery:** `<link rel="alternate" type="application/atom+xml">` via `feedAlternates()` (`src/lib/feed-links.ts`): the board's feed on `/`; the author's feed then the board's on author pages and poem pages. Visible entry points: a **Subscribe** button in the board toolbar (canvas and list view; icon-only on phones, still named) opens a small popover that says what a feed is, shows the absolute feed URL (from `siteUrl()`), and offers *Copy feed link* (toast) and *Open feed*. Author pages and full reading pages have a "Follow … in a feed reader" link to the author's feed (`AuthorFeedLink`); the board overlay doesn't, since the toolbar's Subscribe is right behind it. `robots.txt` doesn't block either feed, and no CSP change was needed (same origin, no scripts).
 - **Tests:** builder unit tests (escaping, Markdown, whitespace, language, private entries, empty feeds) and loader integration tests (drafts and non-onboarded editors excluded, no private text or email, ordering, the 50 limit, author scoping). E2E fetches both feeds and parses them with the browser's XML parser, follows an unpublish, a retitle and a rename, checks autodiscovery on the board, author and poem pages, the author-page link and robots.txt.
 
+### Phase 13: Revision history ✅
+A bad save or a mistaken paste can be undone: editors see earlier versions of a poem and bring one back.
+- **Data** (`poem_revisions`, migration 0011, `src/server/poem-history.ts`): a snapshot of the title, text and language each time a save *changes* one of them, written in the save's own transaction in `poems.ts`. Creating a poem records version 1; a status, visibility or password change, or an identical re-save, records nothing. The newest snapshot always equals the poem.
+  - Poems from before history existed (or inserted by the seed) have no snapshots; their first content edit records the replaced state first (dated by the poem's `updated_at`), so that edit can be undone too.
+  - The newest 20 per poem are kept, pruned in the same transaction. Saves already lock the editor row, then the poem row, so one editor's saves (and their pruning) run one at a time, and `saved_at` uses `clock_timestamp()` so queued saves keep their real order.
+  - Deleting a poem deletes its history (FK cascade). The table has no password, hash or visibility columns.
+- **Editor-only:** reads join `poems` and filter `poems.editor_id` by the DAL-resolved editor, so another editor's poem or revision id behaves like a missing one; malformed ids are rejected before SQL. Nothing reader-facing (board, author page, reading page, feeds, search, share cards, the board cache) reads the table, and a test checks that only `schema.ts`, `poem-history.ts` and `poems.ts` reference it, and only `/admin` uses its loaders. History changes nothing readers see, so it needs no `updateTag` of its own.
+- **Editor UI** (`poems/poem-history.tsx`): a *History* panel in the poem editor's sidebar lists versions newest first with a server-formatted time (UTC) and a preview (the first line that save added, else the first line); the newest is marked *Current*. A version is opened by URL (`?version=<id>`, so Back closes it) in a read-only dialog that compares it with the text in the editor now: a line diff (`src/lib/line-diff.ts`) with `−` lines only in the editor and `+` lines only in the version, marked by symbol, strike-through and screen-reader text as well as colour; title and language differences are listed too.
+- **Restore** puts the version's title, text and language into the editor as unsaved changes (with a toast); the editor saves as usual, so a restore is itself recorded as a version and can be undone, and a published poem keeps its slug. There is no second save path.
+- **Tests:** integration tests (versions only on content changes, normalised whitespace isn't a change, the legacy baseline, the 20-version cap per poem, cascade on delete, cross-editor and malformed ids, no password data, concurrent saves in order and at the cap, the reader-isolation check), line-diff unit tests, an E2E for viewing (keyboard, diff, focus back on Escape), restoring and saving, readers seeing only the current text, malformed and foreign `?version=` ids, and axe scans of the History panel and the version dialog.
+
 ## 5. Requirements traceability
 
 | Req | Phase | Status |
 | --- | ----- | ------ |
 | R1 Canvas board | 3 | ✅ pan/zoom/pinch/keyboard, minimap, list view |
-| R2 Poem CRUD | 2 | ✅ tested (unit + E2E) |
+| R2 Poem CRUD | 2, 13 | ✅ tested (unit + E2E); revision history and restore (Phase 13) |
 | R3 Public/private + password | 2, 4 | ✅ |
 | R4 Admin dashboard | 1 (shell), 2, 7 | ✅ sidebar shell, stats, filterable table, rich profile |
 | R5 Neon | 0, 6 | ✅ schema + driver switch; live on Neon since launch |
@@ -403,7 +422,7 @@ Readers can follow InkBoard, or one poet, in a feed reader, with no account and 
 | N2 OTP rules | 1 | ✅ tested |
 | N3 Rate limits | 1, 4 | ✅ OTP and unlock |
 | N4 Sessions | 1, 6 | ✅ tested; editors can list and revoke devices (Phase 6) |
-| N5 Server-side authorisation | 1, 2 | ✅ tested (cross-editor IDOR, unit + E2E) |
+| N5 Server-side authorisation | 1, 2, 13 | ✅ tested (cross-editor IDOR, unit + E2E; revision ids too) |
 | N6 Poem password hashing/revocation | 2, 4 | ✅ |
 | N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
 | N8 Board caching | 3, 12 | ✅ tag-invalidated on every admin save (E2E); feeds share the tag |

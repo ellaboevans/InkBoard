@@ -9,6 +9,7 @@ import { editors, poems } from "@/db/schema";
 import { BODY_MAX, PASSWORD_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
 import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/lib/slug";
 import { hashPassword } from "./passwords";
+import { recordRevision, sameContent } from "./poem-history";
 
 /*
  * Editor-side poem management (R2, R3, N5, N6).
@@ -17,6 +18,9 @@ import { hashPassword } from "./passwords";
  * every query by it, so an editor can never read or modify another editor's
  * poem, even by guessing its id. Unknown and foreign ids both look like
  * "not found". Password hashes never leave this module.
+ *
+ * Saves that change the title, text or language also record a version in
+ * poem_revisions, in the same transaction (src/server/poem-history.ts).
  */
 
 export { BODY_MAX, PASSWORD_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
@@ -233,6 +237,8 @@ export async function createPoem(
             publishedAt: data.status === "published" ? sql`now()` : null,
           })
           .returning({ id: poems.id, slug: poems.slug, status: poems.status });
+        // Version 1 of its history.
+        await recordRevision(tx, poem.id, { title: data.title, body: data.body, language: data.language });
         return { ok: true, poem };
       }),
     ),
@@ -256,7 +262,15 @@ export async function updatePoem(
       getDb().transaction(async (tx) => {
         const shared = (await lockPasswordMode(tx, editorId)) === "shared";
         const [current] = await tx
-          .select({ title: poems.title, status: poems.status, publishedAt: poems.publishedAt, passwordHash: poems.passwordHash })
+          .select({
+            title: poems.title,
+            body: poems.body,
+            language: poems.language,
+            status: poems.status,
+            publishedAt: poems.publishedAt,
+            updatedAt: poems.updatedAt,
+            passwordHash: poems.passwordHash,
+          })
           .from(poems)
           .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
           .for("update");
@@ -310,6 +324,14 @@ export async function updatePoem(
           })
           .where(and(eq(poems.id, poemId), eq(poems.editorId, editorId)))
           .returning({ id: poems.id, slug: poems.slug, status: poems.status });
+
+        // A new version only when the content changed (not for status,
+        // visibility or password changes). Stored values are normalised the
+        // same way as `data`, so this compares like with like.
+        const next = { title: data.title, body: data.body, language: data.language };
+        if (!sameContent(next, current)) {
+          await recordRevision(tx, poemId, next, { ...current, savedAt: current.updatedAt });
+        }
         return { ok: true as const, poem };
       }),
     ),

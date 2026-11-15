@@ -190,6 +190,34 @@ export const poems = pgTable(
   ],
 );
 
+/**
+ * Revision history (docs/PLAN.md, Phase 13): a snapshot of a poem's title,
+ * text and language each time a save changes one of them, newest 20 per poem
+ * (pruned in the saving transaction, src/server/poem-history.ts). The newest
+ * row matches the poem itself. Editor-only: scoped through `poems.editor_id`,
+ * never read for readers. Deliberately no password or visibility columns.
+ */
+export const poemRevisions = pgTable(
+  "poem_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    poemId: uuid("poem_id")
+      .notNull()
+      .references(() => poems.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    language: text("language"),
+    /**
+     * clock_timestamp(), not now(): saves of one editor queue on the editor
+     * row lock, and now() (transaction start) could order them backwards.
+     */
+    savedAt: timestamp("saved_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [index("poem_revisions_poem_saved_idx").on(t.poemId, t.savedAt.desc())],
+);
+
 /** Fixed-window rate limit counters (see src/server/rate-limit.ts). */
 export const rateLimits = pgTable("rate_limits", {
   key: text("key").primaryKey(),

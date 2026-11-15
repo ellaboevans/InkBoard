@@ -226,3 +226,93 @@ test("the editor shows a live card preview that opens the full poem", async ({ p
   await expect(preview.locator("[data-card]")).toContainText("Enter the password to read");
   await expect(preview.locator("[data-card]")).not.toContainText("three, indented");
 });
+
+test("history: view an earlier version, restore it, save; readers never see history", async ({ page, browser, request }) => {
+  const id = unique();
+  const pen = `History Poet ${id}`;
+  const email = `history-${id}@example.com`;
+  const good = `first draft line ${id}\n  second line`;
+  const bad = `a bad paste ${id}`;
+  await signUpAs(page, email, pen);
+  await writePoem(page, `Kept ${id}`, good);
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible({ timeout: 45_000 });
+  const poemId = poemIdFromUrl(page);
+  const history = page.getByRole("region", { name: "History" });
+  await expect(history).toContainText("Earlier versions appear here");
+
+  // A mistaken paste, saved.
+  await page.getByRole("textbox", { name: "Poem" }).fill(bad);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
+  await expect(history).toContainText("1 earlier version");
+  const versions = history.getByRole("link");
+  await expect(versions).toHaveCount(2);
+  await expect(versions.first()).toContainText("Current");
+  await expect(versions.first()).toContainText(bad);
+  await expect(versions.nth(1)).toContainText(`first draft line ${id}`);
+
+  // Open the earlier version from the keyboard: read-only, with the differences marked.
+  await versions.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\?version=[0-9a-f-]{36}$/);
+  const dialog = page.getByRole("dialog", { name: /^Earlier version, saved / });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("3 lines differ");
+  await expect(dialog.locator("ins")).toHaveText([`Only in this version: first draft line ${id}`, "Only in this version:   second line"]);
+  await expect(dialog.locator("del")).toHaveText([`Only in the editor: ${bad}`]);
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  // Escape closes it and puts focus back on that version.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/admin/poems/${poemId}$`));
+  await expect(versions.nth(1)).toBeFocused();
+
+  // Until the restore is saved, readers still get the current text, and never the history.
+  const poemUrl = (await sql(`SELECT e.slug, p.slug AS poem FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.id = '${poemId}'`))
+    .rows.map((r) => `/p/${r.slug}/${r.poem}`)[0];
+
+  // Restore: it goes into the editor as unsaved changes.
+  await versions.nth(1).click();
+  await dialog.getByRole("button", { name: "Restore this version" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Poem" })).toHaveValue(good);
+  await expect(page.getByRole("textbox", { name: "Title" })).toBeFocused();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Version restored in the editor" })).toBeVisible();
+  const before = await (await request.get(poemUrl)).text();
+  expect(before).toContain(`a bad paste ${id}`);
+  expect(before).not.toContain(`first draft line ${id}`);
+
+  // Saving as usual keeps it, as a new version (so the restore can be undone too).
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
+  await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+  await expect(versions).toHaveCount(3);
+  await expect(versions.first()).toContainText(`first draft line ${id}`);
+  await expect(versions.nth(1)).toContainText(bad);
+  // The published poem kept its URL.
+  expect((await request.get(poemUrl)).status()).toBe(200);
+
+  // Readers: the reading page, the board, the author page, the feeds and search show only the current text.
+  const { rows } = await sql(`SELECT slug FROM editors WHERE email = '${email}'`);
+  for (const path of [poemUrl, "/", `/a/${rows[0].slug}`, "/feed.xml", `/a/${rows[0].slug}/feed.xml`, `/api/search?q=${encodeURIComponent(`a bad paste ${id}`)}`]) {
+    const res = await request.get(path);
+    const text = await res.text();
+    expect(text, path).not.toContain(`a bad paste ${id}`);
+    if (path !== "/" && !path.startsWith("/api/")) expect(text, path).toContain(`first draft line ${id}`);
+  }
+
+  // A malformed or someone else's version id just shows the editor.
+  await page.goto(`/admin/poems/${poemId}?version=not-a-uuid`);
+  await expect(page.getByRole("textbox", { name: "Poem" })).toHaveValue(good);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const versionId = (await sql(`SELECT id FROM poem_revisions WHERE poem_id = '${poemId}' ORDER BY saved_at LIMIT 1`)).rows[0].id;
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  await signUpAs(otherPage, `history-other-${id}@example.com`, `Other Poet ${id}`);
+  await otherPage.goto(`/admin/poems/${poemId}?version=${versionId}`);
+  await expect(otherPage.getByRole("heading", { name: /not found/i })).toBeVisible();
+  expect(await otherPage.content()).not.toContain(`first draft line ${id}`);
+  await other.close();
+});

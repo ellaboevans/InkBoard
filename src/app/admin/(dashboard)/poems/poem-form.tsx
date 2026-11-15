@@ -40,6 +40,7 @@ import { unstable_rethrow } from "next/navigation";
 import { notify, withErrorToast } from "@/lib/notify";
 import type { PoemFormState } from "./actions";
 import { CardPreview } from "./card-preview";
+import { HistoryPanel, VersionDialog, type HistoryItem, type SelectedVersion } from "./poem-history";
 
 /** Fields the Special letters bar types into (the last one used). */
 const BODY_AND_TITLE = ["body", "title"];
@@ -87,9 +88,21 @@ type Props = {
   passwordMode: "per_poem" | "shared";
   /** Shown in the card preview's reading view ("by …"). */
   penName: string;
+  /** Editing only: saved versions, newest first, and the one opened by ?version=. */
+  history?: HistoryItem[];
+  selectedVersion?: SelectedVersion | null;
 };
 
-export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode, penName }: Props) {
+export function PoemForm({
+  action,
+  poem,
+  deleteAction,
+  justCreated,
+  passwordMode,
+  penName,
+  history,
+  selectedVersion = null,
+}: Props) {
   const shared = passwordMode === "shared";
   // Toast from the action's result rather than an effect, so it fires exactly
   // once per save (effects re-run under StrictMode and when Next re-shows a
@@ -175,6 +188,15 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
   }
 
   useOnceToast(justCreated ? "Poem created" : null, "created", "Keep editing, or head back to your poems.");
+
+  /** Put a saved version into the editor as unsaved changes; saving as usual keeps it. */
+  function restoreVersion(v: SelectedVersion) {
+    setTitle(v.title);
+    setBody(v.body);
+    setLanguage(v.language ?? "");
+    setClientErrors(null);
+    notify.info("Version restored in the editor", "Save to keep it, or keep editing. Nothing has changed yet.");
+  }
 
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
@@ -438,9 +460,23 @@ export function PoemForm({ action, poem, deleteAction, justCreated, passwordMode
             )}
           </section>
 
+          {poem && history && (
+            <HistoryPanel poemId={poem.id} items={history} selectedId={selectedVersion?.id ?? null} />
+          )}
+
           {poem && deleteAction && <DeletePoem title={saved.title} action={deleteAction} />}
         </aside>
       </form>
+
+      {poem && (
+        <VersionDialog
+          poemId={poem.id}
+          version={selectedVersion}
+          editor={{ title, body, language }}
+          dirty={title !== saved.title || body !== saved.body || language !== saved.language}
+          onRestore={restoreVersion}
+        />
+      )}
     </div>
   );
 }

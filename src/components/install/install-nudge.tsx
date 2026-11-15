@@ -73,6 +73,9 @@ export function InstallNudgeHost() {
   );
 }
 
+/** Layers that own Escape: dialogs (the poem overlay, search), alert dialogs, menus, listboxes. */
+const LAYERS = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+
 type Copy = { title: string; why: string };
 function copyFor(audience: Audience, method: InstallMethod, platform: Platform): Copy {
   const writer = audience === "writer";
@@ -135,16 +138,21 @@ function InstallCard({
     target?.focus({ preventScroll: true });
   };
 
-  // Esc dismisses (like "Not now"), unless a dialog or menu is open: Esc is theirs then.
+  // Esc dismisses (like "Not now"), unless it belongs to a dialog or menu.
+  // Decided from the key's own target first: Radix may already have closed
+  // (and removed) the poem overlay by the time this listener runs, and a
+  // hidden <Activity> copy of a dialog can be the first one in the DOM.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
-      const layer = document.querySelector<HTMLElement>('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]');
-      if (layer?.checkVisibility()) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest(LAYERS)) return;
+      if ([...document.querySelectorAll<HTMLElement>(LAYERS)].some((l) => l.checkVisibility())) return;
       dismiss(notNow);
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    // Capture: runs before Radix's own Escape handling can close and remove the layer.
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   });
 
 
@@ -175,6 +183,7 @@ function InstallCard({
       {compact && (
         // Points at the toolbar install button, the last item in the toolbar.
         <span
+          data-install-tail
           aria-hidden
           className="absolute -top-[7px] right-2 size-3 rotate-45 border-t border-l bg-card"
         />

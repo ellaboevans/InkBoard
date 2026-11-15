@@ -499,7 +499,7 @@ export function BoardCanvas({
           only gets the space right of its left edge (half the screen), so
           its text wraps word by word on phones. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-4">
-      <header className="relative flex items-start justify-between gap-2">
+      <header className="flex items-start justify-between gap-2">
         <Link
           href="/"
           className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-xl border bg-background/85 px-3 py-2 shadow-sm backdrop-blur"
@@ -545,13 +545,15 @@ export function BoardCanvas({
           {/* Last, so the install card below can point its tail at it (docs/PLAN.md, Phase 15). */}
           <InstallToolbarButton />
         </div>
-        {/* Wide screens: the install card hangs from the toolbar's right edge. */}
-        <InstallSlot
-          kind="board-top"
-          className="pointer-events-none absolute top-full right-0 mt-2.5 w-[23.25rem] max-w-full empty:hidden"
-        />
       </header>
 
+      {/* Below the toolbar: the filter status and Authors on the left, and (wide
+          screens) the install card on the right, as a column of this flow, so it
+          can never cover them. Nothing moves vertically when it opens; the status
+          pill centres in the space left of it. The card's right edge is the
+          toolbar's, so its tail points at the install button (the last item). */}
+      <div className="pointer-events-none flex items-start gap-3">
+      <div className="pointer-events-none flex min-w-0 flex-1 flex-col gap-2">
       <LanguageFilterStatus filter={filter} total={total} selectId="board-language" className="self-center" />
 
       <AuthorsPanel
@@ -564,6 +566,12 @@ export function BoardCanvas({
           if (window.innerWidth < 640) setAuthorsOpen(false);
         }}
       />
+      </div>
+      <InstallSlot
+        kind="board-top"
+        className="pointer-events-none mt-0.5 w-[23.25rem] max-w-[60%] shrink-0 empty:hidden"
+      />
+      </div>
       </div>
 
       <BoardSearch

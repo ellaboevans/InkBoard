@@ -30,7 +30,7 @@ const phone = (ua: string, width = 390, height = 844): BrowserContextOptions => 
 /** A synthetic `beforeinstallprompt` after load; prompt() is recorded on window. */
 async function fakeInstallPrompt(context: BrowserContext, outcome: "accepted" | "dismissed" = "accepted") {
   await context.addInitScript((outcome) => {
-    addEventListener("DOMContentLoaded", () => {
+    addEventListener("load", () => {
       const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & Record<string, unknown>;
       e.prompt = async () => {
         (window as unknown as { __prompted: number }).__prompted = ((window as unknown as { __prompted?: number }).__prompted ?? 0) + 1;
@@ -60,6 +60,12 @@ async function openBoard(page: Page) {
 const card = (page: Page) => page.locator("[data-install-card]");
 const prompted = (page: Page) => page.evaluate(() => (window as unknown as { __prompted?: number }).__prompted ?? 0);
 const installButton = (page: Page) => page.getByRole("button", { name: "Install InkBoard" });
+
+/** A button's height in whole CSS px, once the card's entrance animation is over (it can measure 43.9999 mid-slide). */
+async function touchHeight(l: Locator) {
+  await l.page().waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  return Math.round((await box(l)).height);
+}
 
 function overlaps(a: { x: number; y: number; width: number; height: number }, b: typeof a) {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -181,7 +187,9 @@ test("readers who open two poems get the card on the board (not in the first sec
 
   for (const title of poemTitles) {
     await page.getByRole("link", { name: title, exact: true }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    // Wait for the poem itself (the dialog is named by its title once loaded), not the
+    // "Loading poem" skeleton: a poem closed before it rendered was never read, so it isn't counted.
+    await expect(page.getByRole("dialog", { name: title })).toBeVisible();
     await page.keyboard.press("Escape"); // closes the poem, not the (absent) card
     await expect(page.getByRole("dialog")).toHaveCount(0);
   }
@@ -207,7 +215,7 @@ test("iPhone Safari: the two-step instructions, below the zoom bar, pointing at 
   // No toolbar button on phones.
   await expect(installButton(page)).toBeHidden();
   for (const name of ["Not now", "Got it"]) {
-    expect((await box(region.getByRole("button", { name }))).height).toBeGreaterThanOrEqual(44);
+    expect(await touchHeight(region.getByRole("button", { name }))).toBeGreaterThanOrEqual(44);
   }
 
   await region.getByRole("button", { name: "Got it" }).click();
@@ -290,7 +298,7 @@ test("editors: the writer card right after their first-ever publish, not after l
   await expect(region).toContainText("Your poems one tap away, ready when a line arrives.");
   await expect(page.locator('[data-install-slot="editor"] [data-install-card="writer"]')).toBeVisible();
   for (const name of ["Not now", "Install"]) {
-    expect((await box(region.getByRole("button", { name }))).height).toBeGreaterThanOrEqual(44);
+    expect(await touchHeight(region.getByRole("button", { name }))).toBeGreaterThanOrEqual(44);
   }
   await region.getByRole("button", { name: "Install" }).click();
   await expect.poll(() => prompted(page)).toBe(1);
@@ -384,3 +392,72 @@ for (const width of [320, 375, 768, 1280]) {
     await context.close();
   });
 }
+
+test("wide screens: with a language filter and the Authors list open, the card covers neither (and still points at its button)", async ({ browser }) => {
+  // An Ewe poem, so the board can be filtered.
+  const setup = await browser.newContext();
+  const editor = await setup.newPage();
+  const id = unique();
+  await signUpAs(editor, `nudge-lang-${id}@example.com`, `Nudge Ewe ${id}`);
+  await editor.goto("/admin/poems/new");
+  await editor.getByRole("textbox", { name: "Title" }).fill(`Ŋdi ${id}`);
+  await editor.getByRole("textbox", { name: "Poem" }).fill("ŋdi nyuie");
+  await editor.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
+  await editor.getByRole("button", { name: "Publish to board" }).click();
+  await expect(editor.getByText("Poem created")).toBeVisible();
+  await setup.close();
+
+  for (const width of [640, 700, 768, 1024, 1280]) {
+    const context = await browser.newContext({ viewport: { width, height: 800 } });
+    await fakeInstallPrompt(context);
+    await returningReader(context);
+    const page = await context.newPage();
+    await page.goto("/?lang=ee");
+    await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+    const pill = page.locator("[data-filter-status]");
+    await expect(pill).toBeVisible();
+    const region = card(page);
+    await expect(region).toBeVisible();
+    await page.getByRole("button", { name: /^Authors/ }).click();
+    const list = page.getByRole("navigation", { name: "Authors" });
+    await expect(list).toBeVisible();
+    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+
+    const cardBox = await box(region);
+    expect(overlaps(cardBox, await box(pill)), `${width}px: card vs filter pill`).toBe(false);
+    expect(overlaps(cardBox, await box(list)), `${width}px: card vs Authors list`).toBe(false);
+    expect(overlaps(cardBox, await box(page.getByRole("button", { name: /^Authors/ }))), `${width}px: card vs Authors button`).toBe(false);
+    // The tail still points at the toolbar's install button.
+    const tail = await box(region.locator("[data-install-tail]"));
+    const button = await box(installButton(page));
+    expect(Math.abs(tail.x + tail.width / 2 - (button.x + button.width / 2)), `${width}px: tail under the button`).toBeLessThan(4);
+    expect(tail.y).toBeGreaterThan(button.y + button.height);
+    // The pill stays on screen, and nothing scrolls sideways.
+    expect((await box(pill)).x).toBeGreaterThanOrEqual(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    if (process.env.INSTALL_SHOTS) await page.screenshot({ path: `${process.env.INSTALL_SHOTS}/filter-${width}.png` });
+    await context.close();
+  }
+});
+
+test("Esc that closes a poem overlay doesn't dismiss the card", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await fakeInstallPrompt(context);
+  await returningReader(context);
+  const page = await context.newPage();
+  await openBoard(page);
+  await expect(page.getByRole("region", { name: "Install InkBoard" })).toBeVisible();
+  for (const title of poemTitles) {
+    await page.getByRole("link", { name: title, exact: true }).click();
+    await expect(page.getByRole("dialog", { name: title })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Install InkBoard" })).toBeVisible();
+  }
+  const memory = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), KEY);
+  expect(memory.notNowUntil).toBeUndefined();
+  // With nothing else open, Esc is the card's.
+  await page.keyboard.press("Escape");
+  await expect(card(page)).toHaveCount(0);
+  await context.close();
+});

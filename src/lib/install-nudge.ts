@@ -11,9 +11,11 @@
 export const PROMPT_READY_EVENT = "inkboard:install-prompt";
 
 /**
- * Inline in the root layout's <head>: catches `beforeinstallprompt` before
- * React hydrates and keeps it on window (Chrome then skips its own
- * mini-infobar). The client store picks it up from there.
+ * Served as /install-capture.js (src/app/install-capture.js/route.ts) and
+ * loaded by the root layout as an async resource script: catches
+ * `beforeinstallprompt` before the page's load event and keeps it on window
+ * (Chrome then skips its own mini-infobar). The client store picks it up
+ * from there.
  */
 export const INSTALL_CAPTURE_SCRIPT = `addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__inkboardInstallPrompt=e;dispatchEvent(new Event("${PROMPT_READY_EVENT}"))});`;
 

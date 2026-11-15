@@ -4,7 +4,6 @@ import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { InstallNudgeHost } from "@/components/install/install-nudge";
 import { Toaster } from "@/components/toaster";
-import { INSTALL_CAPTURE_SCRIPT } from "@/lib/install-nudge";
 import { BASE_OPEN_GRAPH, BRAND, SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -127,11 +126,13 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
       className={`${mono.variable} h-full antialiased`}
       style={fontStacks}
     >
-      <head>
-        {/* Catches `beforeinstallprompt` before hydration (install nudge, docs/PLAN.md Phase 15). Static, so prerendering is unaffected. */}
-        <script dangerouslySetInnerHTML={{ __html: INSTALL_CAPTURE_SCRIPT }} />
-      </head>
       <body className="flex min-h-full flex-col">
+        {/* Catches `beforeinstallprompt` (install nudge, docs/PLAN.md Phase 15). An async
+            src script is a React resource: hoisted into <head> on the server and run before
+            the page's load event (Chrome fires the event after it), and never re-created as
+            a raw <script> on the client, which React warns about. An inline script, or
+            next/script's beforeInteractive, renders one. Static: prerendering is unaffected. */}
+        <script async src="/install-capture.js" />
         {children}
         {/* Poem overlay over the board (src/app/@modal). */}
         {modal}

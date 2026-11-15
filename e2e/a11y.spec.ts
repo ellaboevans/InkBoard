@@ -307,7 +307,7 @@ test("board, list view, search and reading", async ({ page }) => {
 test("install nudge: every card state", async ({ browser }) => {
   // Chromium's beforeinstallprompt, simulated; this load counts as a second visit.
   const prompt = () =>
-    addEventListener("DOMContentLoaded", () => {
+    addEventListener("load", () => {
       const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & Record<string, unknown>;
       e.prompt = async () => {};
       e.userChoice = Promise.resolve({ outcome: "dismissed" });

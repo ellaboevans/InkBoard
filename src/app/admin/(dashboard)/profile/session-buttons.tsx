@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { revokeOtherSessionsAction, revokeSessionAction, type RevokeResult } from "./actions";
+import { pluralCount } from "@/lib/plural";
 
 function useRevoke(run: () => Promise<RevokeResult>, success: (count: number) => string) {
   const [pending, startTransition] = useTransition();
@@ -45,7 +46,7 @@ export function RevokeSessionButton({ sessionId, label }: { sessionId: string; l
 
 export function RevokeOtherSessionsButton() {
   const { pending, onClick } = useRevoke(revokeOtherSessionsAction, (n) =>
-    n === 1 ? "Signed out 1 other device" : `Signed out ${n} other devices`,
+    `Signed out ${pluralCount(n, "other device")}`,
   );
   return (
     <Button type="button" variant="outline" size="sm" disabled={pending} onClick={onClick}>

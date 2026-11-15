@@ -11,6 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PASSWORD_MIN } from "@/lib/poem-limits";
 import type { PasswordMode } from "@/server/password-settings";
 import { savePasswordSettingsAction, type PasswordSettingsState } from "./actions";
+import { pluralCount } from "@/lib/plural";
 
 export function PasswordSettingsForm({
   mode: savedMode,
@@ -44,7 +45,7 @@ export function PasswordSettingsForm({
   const switchingToPerPoem = mode === "per_poem" && savedMode === "shared";
   const changingShared = mode === "shared" && savedMode === "shared";
   const canSave = switchingToPerPoem || switchingToShared || (changingShared && password !== "");
-  const poems = `${privatePoemCount} private ${privatePoemCount === 1 ? "poem" : "poems"}`;
+  const poems = pluralCount(privatePoemCount, "private poem");
   const error = clientError ?? state.error;
 
   return (

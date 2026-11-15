@@ -5,6 +5,7 @@ import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { BoardFilter } from "./board-view";
+import { plural } from "@/lib/plural";
 
 /** "All languages" plus every language that has poems on the board. */
 export function LanguageFilter({ id, filter, className }: { id: string; filter: BoardFilter; className?: string }) {
@@ -64,7 +65,7 @@ export function LanguageFilterStatus({
         >
           <span data-filter-status-text className="min-w-0 truncate">
             {/* Spaces sit outside the sr-only spans: an sr-only span is a block, which drops its edge spaces. */}
-            <span className="max-sm:sr-only">Showing</span> {name} <span className="max-sm:sr-only">poems</span> ·{" "}
+            <span className="max-sm:sr-only">Showing</span> {name} <span className="max-sm:sr-only">{plural(total, "poem")}</span> ·{" "}
             <span className="tabular-nums">{total}</span>
           </span>
           <Button

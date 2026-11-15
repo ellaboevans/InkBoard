@@ -10,6 +10,7 @@ import {
   UNLOCK_TTL_SECONDS,
 } from "@/server/unlock";
 import { UNLOCK_COOKIE } from "@/server/unlock-cookie";
+import { pluralCount } from "@/lib/plural";
 
 export type UnlockState = { error?: string };
 
@@ -32,7 +33,7 @@ export async function unlockPoemAction(
   if (!res.ok) {
     if (res.error === "rate_limited") {
       const minutes = Math.max(1, Math.ceil(res.retryAfter / 60));
-      return { error: `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+      return { error: `Too many attempts. Try again in ${pluralCount(minutes, "minute")}.` };
     }
     if (res.error === "not_found") return { error: "This poem is no longer available." };
     return { error: "That password isn't right." };

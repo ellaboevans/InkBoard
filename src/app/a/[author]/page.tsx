@@ -12,6 +12,7 @@ import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
+import { pluralCount } from "@/lib/plural";
 
 type Props = PageProps<"/a/[author]">;
 
@@ -108,7 +109,7 @@ async function Author({ params }: Pick<Props, "params">) {
             {a.tagline && <p className="mt-2 text-lg text-muted-foreground">{a.tagline}</p>}
           </div>
           <p className="text-sm text-muted-foreground">
-            {a.poems.length} {a.poems.length === 1 ? "poem" : "poems"}
+            {pluralCount(a.poems.length, "poem")}
             {privateCount > 0 && <> · {privateCount} password protected</>}
             {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
           </p>

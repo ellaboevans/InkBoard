@@ -3,6 +3,7 @@ import { OG_SIZE, OgCard, truncate } from "@/components/brand/og-card";
 import { ogFonts } from "@/components/brand/og-fonts";
 import { SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
+import { pluralCount } from "@/lib/plural";
 
 export const alt = `An author on ${SITE_NAME}`;
 export const size = OG_SIZE;
@@ -20,7 +21,7 @@ export default async function Image({ params }: { params: Promise<{ author: stri
       kicker="Poems by"
       title={a.penName}
       quote={a.tagline ? truncate(a.tagline, 140) : null}
-      footer={`${n} ${n === 1 ? "poem" : "poems"} on ${SITE_NAME}`}
+      footer={`${pluralCount(n, "poem")} on ${SITE_NAME}`}
     />,
     { ...size, fonts },
   );

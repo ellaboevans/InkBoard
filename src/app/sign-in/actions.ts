@@ -5,6 +5,7 @@ import { deviceIdForSignIn, getRequestMeta, startSession } from "@/server/auth/d
 import { requestOtp, verifyLinkToken, verifyOtp } from "@/server/auth/otp";
 import type { Editor } from "@/db/schema";
 import { notifyIfNewSignIn } from "@/server/auth/sign-in-alerts";
+import { pluralCount } from "@/lib/plural";
 
 export type SignInState =
   | { step: "email"; email?: string; error?: string }
@@ -18,7 +19,7 @@ export type SignInState =
     };
 
 const waitMessage = (s: number) =>
-  `Please wait ${s} second${s === 1 ? "" : "s"} before requesting another code.`;
+  `Please wait ${pluralCount(s, "second")} before requesting another code.`;
 
 /**
  * Single state machine for the sign-in card, driven by the `intent` field:
@@ -76,7 +77,7 @@ export async function signInAction(
           : res.error === "rate_limited"
             ? `Too many attempts. Try again in ${Math.ceil(res.retryAfter / 60)} min.`
             : res.attemptsLeft !== undefined
-              ? `That code is incorrect. ${res.attemptsLeft} attempt${res.attemptsLeft === 1 ? "" : "s"} left.`
+              ? `That code is incorrect. ${pluralCount(res.attemptsLeft, "attempt")} left.`
               : "That code is invalid or has expired.";
       return { ...prev, error, notice: undefined };
     }

@@ -34,6 +34,7 @@ import { notify } from "@/lib/notify";
 import { BoardSearch } from "./board-search";
 import type { BoardFilter } from "./board-view";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
+import { pluralCount } from "@/lib/plural";
 
 /*
  * Infinite canvas (R1): a "world" div of absolutely positioned DOM nodes,
@@ -462,7 +463,8 @@ export function BoardCanvas({
         className="absolute inset-0 cursor-grab touch-none overflow-clip opacity-0 outline-none select-none [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] data-[panning=true]:cursor-grabbing data-[ready=true]:opacity-100 data-[ready=true]:transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <p id="board-help" className="sr-only">
-          {total} {activeLanguage && `${activeLanguage} `}poems by {sections.length} authors. Drag or use the arrow keys
+          {pluralCount(total, activeLanguage ? `${activeLanguage} poem` : "poem")} by{" "}
+          {pluralCount(sections.length, "author")}. Drag or use the arrow keys
           to move around, plus and minus to zoom, zero to see everything. Tab
           moves between authors and poems. A list view is also available.
         </p>
@@ -491,7 +493,7 @@ export function BoardCanvas({
           <FeatherIcon className="size-4 text-primary" aria-hidden />
           <span className="font-serif text-lg leading-none">InkBoard</span>
           <span className="hidden text-xs text-muted-foreground sm:inline">
-            {sections.length} authors · {total} poems
+            {pluralCount(sections.length, "author")} · {pluralCount(total, "poem")}
           </span>
         </Link>
         <div data-board-toolbar className="pointer-events-auto flex flex-wrap justify-end gap-2">
@@ -610,7 +612,7 @@ function World({
         return (
           <section
             key={section.editorId}
-            aria-label={`${section.penName}, ${section.poems.length} ${section.poems.length === 1 ? "poem" : "poems"}`}
+            aria-label={`${section.penName}, ${pluralCount(section.poems.length, "poem")}`}
             style={{ ["--hue" as string]: hue }}
           >
             <div
@@ -631,7 +633,7 @@ function World({
               <span className="size-2.5 shrink-0 self-center rounded-full section-dot" aria-hidden />
               <h2 className="min-w-0 truncate font-serif text-[28px] leading-tight">{section.penName}</h2>
               <span className="shrink-0 text-sm text-muted-foreground">
-                {section.poems.length} {section.poems.length === 1 ? "poem" : "poems"}
+                {pluralCount(section.poems.length, "poem")}
               </span>
             </button>
             {/* Overview label: legible when zoomed far out. */}

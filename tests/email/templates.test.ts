@@ -19,6 +19,17 @@ describe("sign-in code email", () => {
   const link = signInLinkUrl("https://poemhub.example", token);
   const mail = otpEmail({ code: "482910", link, appUrl: "https://poemhub.example", ttlMinutes: 10 });
 
+  it("says how long the code lasts, singular or plural", () => {
+    expect(mail.text).toContain("expire in 10 minutes and work once");
+    expect(mail.html).toContain("expires in 10 minutes.");
+    const short = otpEmail({ code: "482910", link, appUrl: "https://poemhub.example", ttlMinutes: 1 });
+    for (const part of [short.text, short.html]) {
+      expect(part).not.toContain("1 minutes");
+    }
+    expect(short.text).toContain("expire in 1 minute and work once");
+    expect(short.html).toContain("expires in 1 minute.");
+  });
+
   it("puts the link token in the URL fragment, never the path or query", () => {
     expect(link).toBe(`https://poemhub.example/sign-in/link#${token}`);
   });

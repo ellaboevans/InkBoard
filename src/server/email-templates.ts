@@ -25,6 +25,7 @@
  */
 
 import { EMAIL_LOGO_CID } from "./email-logo";
+import { pluralCount } from "@/lib/plural";
 
 export type EmailMessage = {
   subject: string;
@@ -157,7 +158,7 @@ export function otpEmail({
     "Enter it on the sign-in page, or open this link to sign in:",
     link,
     "",
-    `The code and link expire in ${ttlMinutes} minutes and work once. The link signs in whichever device opens it.`,
+    `The code and link expire in ${pluralCount(ttlMinutes, "minute")} and work once. The link signs in whichever device opens it.`,
     "",
     "Didn't try to sign in? Ignore this email. Nobody can get in without it.",
     "",
@@ -167,7 +168,7 @@ export function otpEmail({
 
   const html = frame({
     appUrl,
-    preheader: `Your InkBoard sign-in code is ${code}. It expires in ${ttlMinutes} minutes.`,
+    preheader: `Your InkBoard sign-in code is ${code}. It expires in ${pluralCount(ttlMinutes, "minute")}.`,
     footer: "You're receiving this because someone asked to sign in to InkBoard with this address.",
     body: `
 ${heading("Your sign-in code")}
@@ -178,7 +179,7 @@ ${para("Your InkBoard sign-in code is:", { top: 14, color: C.muted })}
 <p style="margin:0;font-family:${MONO};font-size:38px;line-height:44px;font-weight:700;letter-spacing:10px;color:${C.ink}"><strong>${escapeHtml(code)}</strong></p>
 </td></tr></table>
 </td></tr>
-${para(`Enter it on the sign-in page. It expires in ${ttlMinutes} minutes.`, { top: 14, size: 14, color: C.muted })}
+${para(`Enter it on the sign-in page. It expires in ${pluralCount(ttlMinutes, "minute")}.`, { top: 14, size: 14, color: C.muted })}
 ${divider()}
 ${para("<strong>Or skip the typing.</strong> This button signs you in on the device you open it on.", { top: 24, size: 15 })}
 ${button(link, "Sign in to InkBoard")}

@@ -17,6 +17,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import type { SearchResults } from "@/lib/search-types";
+import { pluralCount } from "@/lib/plural";
 
 const MIN = 2;
 const DEBOUNCE_MS = 150;
@@ -142,7 +143,7 @@ export function BoardSearch({
                   <UserRoundIcon aria-hidden />
                   <span className="font-serif text-[15px]">{a.penName}</span>
                   <span className="ml-auto text-xs text-muted-foreground">
-                    {a.poemCount} {a.poemCount === 1 ? "poem" : "poems"}
+                    {pluralCount(a.poemCount, "poem")}
                   </span>
                 </CommandItem>
               ))}

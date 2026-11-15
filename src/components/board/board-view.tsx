@@ -19,6 +19,7 @@ import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
 import { BoardCanvas } from "./board-canvas";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
+import { pluralCount } from "@/lib/plural";
 
 /**
  * Canvas by default, with a plain list as an accessible alternative (N7).
@@ -108,7 +109,7 @@ function BoardList({
                 <span className="section-dot size-2.5 rounded-full" aria-hidden />
                 {s.penName}
                 <span className="font-sans text-sm text-muted-foreground">
-                  {s.poems.length} {s.poems.length === 1 ? "poem" : "poems"}
+                  {pluralCount(s.poems.length, "poem")}
                 </span>
               </h2>
               <ul className="mt-2 divide-y">

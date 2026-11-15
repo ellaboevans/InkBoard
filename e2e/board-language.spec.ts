@@ -26,8 +26,8 @@ async function openBoard(page: Page, url = "/") {
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
 }
 
-/** "Showing Ewe poems · N". */
-const EWE_STATUS = /^Showing Ewe poems · \d+$/;
+/** "Showing Ewe poem · 1" or "Showing Ewe poems · N": the noun agrees with the count. */
+const EWE_STATUS = /^Showing Ewe (poem · 1|poems · (0|[2-9]|\d{2,}))$/;
 
 const filter = (page: Page) => page.getByRole("combobox", { name: "Language" });
 const status = (page: Page) => page.getByRole("status").filter({ hasText: /^Showing / });
@@ -254,4 +254,18 @@ test("the filter indicator stays one tidy line from phones to desktops", async (
     await expect(filter(page)).toBeFocused();
     await expect(status(page)).toHaveCount(0);
   }
+});
+
+test("one author and one poem read in the singular", async ({ page }) => {
+  // Ga is used by no other spec; clear any left from a retry so the filtered board has exactly one poem.
+  await sql("UPDATE poems SET language = NULL WHERE language = 'gaa'");
+  const id = unique();
+  await signUpAs(page, `lang-one-${id}@example.com`, `Single Poet ${id}`);
+  await publish(page, `Ŋmɛ ${id}`, "Ŋmɛ", "Ga");
+
+  await openBoard(page, "/?lang=gaa");
+  await expect(page.getByRole("link", { name: "InkBoard 1 author · 1 poem", exact: true })).toBeVisible();
+  await expect(page.locator("#board-help")).toHaveText(/^1 Ga poem by 1 author\. Drag/);
+  await expect(page.getByRole("region", { name: `Single Poet ${id}, 1 poem` })).toBeAttached();
+  await expect(page.locator("[data-filter-status-text]").filter({ visible: true })).toHaveText("Showing Ga poem · 1");
 });

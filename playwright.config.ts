@@ -37,6 +37,8 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       DATABASE_URL: E2E_DATABASE_URL,
+      // Passkeys accept exactly this origin (src/server/auth/webauthn-config.ts).
+      APP_URL: E2E_BASE_URL,
       NEXT_DIST_DIR: ".next-e2e",
       E2E_OTP_OUTBOX: OTP_OUTBOX,
       RESEND_API_KEY: "",

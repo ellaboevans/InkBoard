@@ -99,6 +99,13 @@
       "when": 1794748971458,
       "tag": "0013_recovery_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794754431731,
+      "tag": "0014_passkeys",
+      "breakpoints": true
     }
   ]
 }

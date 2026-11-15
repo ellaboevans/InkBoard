@@ -6,6 +6,11 @@ import { requestOtp, verifyLinkToken, verifyOtp } from "@/server/auth/otp";
 import type { Editor } from "@/db/schema";
 import { notifyIfNewSignIn } from "@/server/auth/sign-in-alerts";
 import { verifyRecoveryCode } from "@/server/auth/recovery-codes";
+import { finishPasskeySignIn, startPasskeySignIn } from "@/server/auth/passkeys";
+import { relyingParty } from "@/server/auth/webauthn-config";
+import { setCeremonyToken, takeCeremonyToken } from "@/server/auth/webauthn-cookie";
+import { PASSKEY_SIGN_IN_FAILED } from "@/lib/passkey-messages";
+import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server";
 import type { SessionOptions } from "@/server/auth/sessions";
 import { pluralCount } from "@/lib/plural";
 
@@ -153,6 +158,46 @@ export async function recoverySignInAction(
     };
   }
   await completeSignIn(res.editor, ip, userAgent, { publicDevice: isPublicDevice(formData), method: "recovery" });
+  return {};
+}
+
+/**
+ * Options for a passkey sign-in (the button, or autofill on the email field).
+ * Null when this client is over its limit: the passkey options just don't
+ * appear. The challenge is tied to this browser by a short-lived cookie.
+ */
+export async function startPasskeySignInAction(): Promise<PublicKeyCredentialRequestOptionsJSON | null> {
+  const { ip } = await getRequestMeta();
+  const res = await startPasskeySignIn({ rp: relyingParty(), ip });
+  if (!res.ok) return null;
+  await setCeremonyToken("authentication", res.token);
+  return res.options;
+}
+
+export type PasskeySignInState = { error?: string };
+
+/**
+ * Finish a passkey sign-in. Every failure gets one calm message; success
+ * starts the session through the DAL (method "passkey", which counts as a
+ * recent verification) and runs the new-device/network notice.
+ */
+export async function finishPasskeySignInAction(response: unknown, publicDevice: boolean): Promise<PasskeySignInState> {
+  const { ip, userAgent } = await getRequestMeta();
+  const res = await finishPasskeySignIn({
+    token: await takeCeremonyToken("authentication"),
+    response,
+    rp: relyingParty(),
+    ip,
+  });
+  if (!res.ok) {
+    return {
+      error:
+        res.error === "rate_limited"
+          ? `Too many attempts. Try again in ${Math.ceil(res.retryAfter / 60)} min.`
+          : PASSKEY_SIGN_IN_FAILED,
+    };
+  }
+  await completeSignIn(res.editor, ip, userAgent, { publicDevice: publicDevice === true, method: "passkey" });
   return {};
 }
 

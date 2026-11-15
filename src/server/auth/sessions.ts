@@ -14,8 +14,12 @@ export const PUBLIC_SESSION_TTL_SECONDS = 12 * 60 * 60;
 export type SessionOptions = {
   /** "This isn't my device" was ticked: short-lived, and the cookie dies with the browser. */
   publicDevice?: boolean;
-  /** How the editor proved who they are. A recovery code doesn't prove inbox access. */
-  method?: "email" | "recovery";
+  /**
+   * How the editor proved who they are. An email sign-in proves inbox access
+   * and a passkey sign-in proves a passkey (both count for step-up); a
+   * recovery code proves neither.
+   */
+  method?: "email" | "recovery" | "passkey";
 };
 
 /** The subset of an editor that is safe to hand to UI code. */
@@ -47,8 +51,10 @@ export async function createSession(
       ip: meta.ip ?? null,
       publicDevice: options.publicDevice ?? false,
       method,
-      // An email sign-in just proved inbox access; a recovery code didn't.
+      // An email sign-in just proved inbox access, a passkey sign-in a passkey
+      // with user verification; a recovery code proved neither.
       emailVerifiedAt: method === "email" ? sql`now()` : null,
+      passkeyVerifiedAt: method === "passkey" ? sql`now()` : null,
     })
     .returning({ expiresAt: sessions.expiresAt });
   return { token, expiresAt: row.expiresAt };
@@ -110,7 +116,7 @@ export type SessionSummary = {
   ip: string | null;
   /** Signed in with "This isn't my device" ticked. */
   publicDevice: boolean;
-  method: "email" | "recovery";
+  method: "email" | "recovery" | "passkey";
   current: boolean;
 };
 

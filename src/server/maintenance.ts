@@ -13,6 +13,7 @@ import { safeEqual, sha256 } from "./crypto";
 export type CleanupResult = {
   otps: number;
   stepUpCodes: number;
+  webauthnChallenges: number;
   sessions: number;
   rateLimits: number;
   signInLocations: number;
@@ -37,6 +38,11 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
     WHERE expires_at < now() - interval '1 day'
        OR consumed_at < now() - interval '1 day'
   `);
+  // WebAuthn challenges (Phase 16 round 2): used ones are already deleted;
+  // these are the ones nobody finished. Expired is useless, so no grace.
+  const webauthnChallenges = await db.execute(sql`
+    DELETE FROM webauthn_challenges WHERE expires_at < now()
+  `);
   // Sessions: past their (fixed) expiry by more than a day.
   const sessions = await db.execute(sql`
     DELETE FROM sessions WHERE expires_at < now() - interval '1 day'
@@ -57,6 +63,7 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   return {
     otps: count(otps),
     stepUpCodes: count(stepUpCodes),
+    webauthnChallenges: count(webauthnChallenges),
     sessions: count(sessions),
     rateLimits: count(rateLimits),
     signInLocations: count(signInLocations),

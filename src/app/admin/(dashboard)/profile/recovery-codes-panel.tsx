@@ -1,16 +1,14 @@
 "use client";
 
-import { REGEXP_ONLY_DIGITS } from "input-otp";
 import {
   CopyIcon,
   DownloadIcon,
   KeyRoundIcon,
   Loader2Icon,
-  MailIcon,
   PrinterIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertDialog,
@@ -21,19 +19,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
-import { Label } from "@/components/ui/label";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import { RECOVERY_CODES_LOW, formatRecoveryCode, recoveryCodesText } from "@/lib/recovery-code-format";
-import {
-  confirmStepUpAction,
-  createRecoveryCodesAction,
-  requestStepUpAction,
-  type RecoveryCodesResult,
-} from "./actions";
+import { createRecoveryCodesAction } from "./actions";
+import { StepUpCard, focusOnMount } from "./step-up-card";
 
 type Props = {
   email: string;
@@ -42,11 +33,11 @@ type Props = {
   unused: number;
   /** When the current set was made, preformatted on the server. */
   createdLabel: string | null;
-  /** The session proved inbox access recently (a hint only: the server re-checks). */
+  /** The session was verified recently (a hint only: the server re-checks). */
   fresh: boolean;
+  /** The editor can confirm with a passkey instead of an email code. */
+  hasPasskeys: boolean;
 };
-
-type StepUp = { sent: false } | { sent: true; email: string; resendAt: number };
 
 /**
  * The profile's "Recovery codes" section (docs/PLAN.md, Phase 16): status,
@@ -54,32 +45,25 @@ type StepUp = { sent: false } | { sent: true; email: string; resendAt: number };
  * shown once with Copy, Download and Print. The codes live only in this
  * component's state; "I've saved them" (or a full reload) clears them.
  */
-export function RecoveryCodesPanel({ email, total, unused, createdLabel, fresh }: Props) {
+export function RecoveryCodesPanel({ email, total, unused, createdLabel, fresh, hasPasskeys }: Props) {
   const [codes, setCodes] = useState<string[] | null>(null);
-  const [stepUp, setStepUp] = useState<StepUp | null>(null);
+  const [stepUp, setStepUp] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const handle = (res: RecoveryCodesResult) => {
-    if (res.ok) {
-      setCodes(res.codes);
-      setStepUp(null);
-      setError(null);
-      notify.success(total === 0 ? "Recovery codes ready" : "New recovery codes ready", "Save them now: they won't be shown again.");
-    } else if ("stepUp" in res) {
-      setStepUp({ sent: false });
-      setError(null);
-    } else {
-      setError(res.error);
-      notify.error("Couldn't confirm it's you", res.error);
-    }
-  };
-
-  const run = (task: () => Promise<void>) =>
+  const make = () =>
     startTransition(async () => {
       try {
-        await task();
+        const res = await createRecoveryCodesAction();
+        if (res.ok) {
+          setCodes(res.codes);
+          setStepUp(false);
+          notify.success(
+            total === 0 ? "Recovery codes ready" : "New recovery codes ready",
+            "Save them now: they won't be shown again.",
+          );
+        } else if ("stepUp" in res) setStepUp(true);
+        else notify.error("Couldn't make recovery codes", res.error);
       } catch {
         notify.error(UNEXPECTED_ERROR.title, UNEXPECTED_ERROR.description);
       }
@@ -87,28 +71,10 @@ export function RecoveryCodesPanel({ email, total, unused, createdLabel, fresh }
 
   const create = () => {
     setConfirmReplace(false);
-    // Not recently signed in: go straight to the confirmation (the server would ask anyway).
-    if (!fresh) {
-      setStepUp({ sent: false });
-      return;
-    }
-    run(async () => handle(await createRecoveryCodesAction()));
+    // Not recently verified: go straight to the confirmation (the server would ask anyway).
+    if (!fresh) setStepUp(true);
+    else make();
   };
-
-  const sendCode = () =>
-    run(async () => {
-      const res = await requestStepUpAction();
-      if (res.ok) {
-        setStepUp({ sent: true, email: res.email, resendAt: res.resendAt });
-        setError(null);
-        notify.success("Check your email", `We sent a 6-digit code to ${res.email}.`);
-      } else {
-        setError(res.error);
-        notify.error("Couldn't send a code", res.error);
-      }
-    });
-
-  const confirm = (code: string) => run(async () => handle(await confirmStepUpAction(code)));
 
   if (codes) {
     return <NewCodes codes={codes} email={email} onDone={() => setCodes(null)} />;
@@ -117,17 +83,12 @@ export function RecoveryCodesPanel({ email, total, unused, createdLabel, fresh }
   if (stepUp) {
     return (
       <StepUpCard
-        key={stepUp.sent ? stepUp.resendAt : 0}
         email={email}
-        stepUp={stepUp}
-        pending={pending}
-        error={error}
-        onSend={sendCode}
-        onConfirm={confirm}
-        onCancel={() => {
-          setStepUp(null);
-          setError(null);
-        }}
+        hasPasskeys={hasPasskeys}
+        what="Making recovery codes"
+        // Confirmed: make the codes straight away (the server checks freshness again).
+        onConfirmed={make}
+        onCancel={() => setStepUp(false)}
       />
     );
   }
@@ -183,131 +144,6 @@ export function RecoveryCodesPanel({ email, total, unused, createdLabel, fresh }
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function StepUpCard({
-  email,
-  stepUp,
-  pending,
-  error,
-  onSend,
-  onConfirm,
-  onCancel,
-}: {
-  email: string;
-  stepUp: StepUp;
-  pending: boolean;
-  error: string | null;
-  onSend: () => void;
-  onConfirm: (code: string) => void;
-  onCancel: () => void;
-}) {
-  const [code, setCode] = useState("");
-  const secondsLeft = useCountdown(stepUp.sent ? stepUp.resendAt : 0);
-  // Clear the slots after a wrong code (adjusting state during render, not in an effect).
-  const [seenError, setSeenError] = useState(error);
-  if (seenError !== error) {
-    setSeenError(error);
-    if (error) setCode("");
-  }
-
-  return (
-    <div className="grid gap-4 rounded-xl border bg-card p-6">
-      <div className="grid gap-1">
-        <h3 ref={focusOnMount} tabIndex={-1} className="font-medium outline-none">
-          Confirm it&apos;s you
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          {stepUp.sent ? (
-            <>
-              We sent a 6-digit code to <span className="font-medium text-foreground">{stepUp.email}</span>. It expires in
-              10 minutes.
-            </>
-          ) : (
-            <>
-              Making recovery codes needs a recent sign-in. We&apos;ll email a 6-digit code to{" "}
-              <span className="font-medium text-foreground">{email}</span> to confirm it&apos;s you.
-            </>
-          )}
-        </p>
-      </div>
-
-      {stepUp.sent && (
-        <form
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.length === 6) onConfirm(code);
-          }}
-        >
-          <div className="grid gap-2">
-            <Label htmlFor="step-up-code">Confirmation code</Label>
-            <InputOTP
-              id="step-up-code"
-              maxLength={6}
-              pattern={REGEXP_ONLY_DIGITS}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={setCode}
-              onComplete={(v: string) => onConfirm(v)}
-              disabled={pending}
-              aria-invalid={error ? true : undefined}
-              autoFocus
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-              </InputOTPGroup>
-              <InputOTPSeparator />
-              <InputOTPGroup>
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={pending || code.length !== 6}>
-              {pending && <Loader2Icon className="animate-spin" />}
-              Confirm and make codes
-            </Button>
-            <Button type="button" variant="ghost" disabled={pending || secondsLeft > 0} onClick={onSend}>
-              {secondsLeft > 0 ? `Resend code in ${secondsLeft}s` : "Resend code"}
-            </Button>
-            <Button type="button" variant="link" className="px-0" disabled={pending} onClick={onCancel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {!stepUp.sent && (
-        <>
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" disabled={pending} onClick={onSend}>
-              {pending ? <Loader2Icon className="animate-spin" /> : <MailIcon />}
-              Email me a code
-            </Button>
-            <Button type="button" variant="link" className="px-0" disabled={pending} onClick={onCancel}>
-              Cancel
-            </Button>
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -412,25 +248,4 @@ function PrintSheet({ codes, email }: { codes: string[]; email: string }) {
     </div>,
     document.body,
   );
-}
-
-/** Move focus to a heading when its card appears (a ref callback runs once, on mount). */
-function focusOnMount(el: HTMLElement | null) {
-  el?.focus();
-}
-
-function useCountdown(until: number): number {
-  const calc = () => Math.max(0, Math.ceil((until - Date.now()) / 1000));
-  const [left, setLeft] = useState(calc);
-  useEffect(() => {
-    if (until === 0) return;
-    const id = setInterval(() => {
-      const next = calc();
-      setLeft(next);
-      if (next === 0) clearInterval(id);
-    }, 1000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [until]);
-  return left;
 }

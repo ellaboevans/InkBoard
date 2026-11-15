@@ -7,6 +7,9 @@ import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./email-logo";
 import { STEP_UP_TTL_SECONDS } from "./auth/step-up-config";
 import {
   otpEmail,
+  passkeyAddedEmail,
+  passkeyRemovedEmail,
+  type PasskeyNoticeDetails,
   recoveryCodesChangedEmail,
   recoveryCodeUsedEmail,
   signInAlertEmail,
@@ -97,4 +100,22 @@ export async function sendRecoveryCodesChangedEmail(to: string, details: Omit<Re
 export async function sendStepUpEmail(to: string, code: string): Promise<void> {
   const message = stepUpEmail({ code, appUrl: env().APP_URL, ttlMinutes: STEP_UP_TTL_SECONDS / 60 });
   await deliver(to, message, { kind: "step-up", code });
+}
+
+export async function sendPasskeyAddedEmail(
+  to: string,
+  details: Omit<PasskeyNoticeDetails, "appUrl"> & { afterRecovery: boolean },
+): Promise<void> {
+  const message = passkeyAddedEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, {
+    kind: "passkey-added",
+    device: details.device,
+    passkeyName: details.passkeyName,
+    afterRecovery: details.afterRecovery,
+  });
+}
+
+export async function sendPasskeyRemovedEmail(to: string, details: Omit<PasskeyNoticeDetails, "appUrl">): Promise<void> {
+  const message = passkeyRemovedEmail({ ...details, appUrl: env().APP_URL });
+  await deliver(to, message, { kind: "passkey-removed", device: details.device, passkeyName: details.passkeyName });
 }

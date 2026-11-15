@@ -581,3 +581,129 @@ ${bottomSpace}`,
   });
   return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
 }
+
+export type PasskeyNoticeDetails = {
+  penName: string | null;
+  /** The passkey's name (editor-chosen). Shown only if it has no 4+ digit run (see passkeyLabel). */
+  passkeyName: string;
+  /** Device that made the change (describeUserAgent). */
+  device: string;
+  at: Date;
+  appUrl: string;
+};
+
+/**
+ * A passkey's name as the notices show it. Names are typed by the editor and
+ * may hold a year or a model number ("MacBook 2024"); the notices must have no
+ * 4–8 digit numbers at all, so such a name is left out rather than altered.
+ */
+export function passkeyLabel(name: string): string | null {
+  return /\d{4}/.test(name) ? null : name;
+}
+
+/**
+ * "A passkey was added to your account". Same digit rule as the recovery
+ * notices: no year, no IP address. `afterRecovery`: it was added under the
+ * recovery-code exception (no email check), which deserves its own warning.
+ */
+export function passkeyAddedEmail(d: PasskeyNoticeDetails & { afterRecovery: boolean }): EmailMessage {
+  const profileUrl = new URL("/admin/profile", d.appUrl).href;
+  const when = formatNoticeTime(d.at);
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const label = passkeyLabel(d.passkeyName);
+  const subject = "A passkey was added to your InkBoard account";
+  const what = `A new passkey${label ? ` (“${label}”)` : ""} was just added to your InkBoard account. It can sign in without your email.`;
+  const why = d.afterRecovery
+    ? "It was added right after a recovery code was used to sign in, so if that wasn't you, someone may have one of your recovery codes."
+    : null;
+  const steps = [
+    `Remove that passkey under "Passkeys" on your profile.`,
+    `Sign out any device you don't recognise under "Signed-in devices".`,
+    "Make a new set of recovery codes there, which cancels every old one.",
+  ];
+  const text = [
+    greeting,
+    "",
+    what,
+    ...(why ? [why] : []),
+    "",
+    `Device: ${d.device}`,
+    `When: ${when}`,
+    "",
+    "If this was you, there's nothing to do.",
+    "",
+    "If it wasn't you:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    "",
+    `Your profile: ${profileUrl}`,
+    "",
+    "InkBoard",
+  ].join("\n");
+  const html = securityNotice({
+    appUrl: d.appUrl,
+    preheader: `Passkey added from ${d.device}. If this wasn't you, remove it from your profile.`,
+    footer: "We send this whenever a passkey is added to your account.",
+    heading: "A passkey was added",
+    intro: `${escapeHtml(greeting)} ${escapeHtml(what)}${why ? ` <strong>${escapeHtml(why)}</strong>` : ""}`,
+    rows: [
+      ["Device", d.device],
+      ["When", when],
+    ],
+    steps: steps.map(emphasiseQuoted),
+    closing: "A passkey only works on the devices or password manager that hold it.",
+    button: [profileUrl, "Review your passkeys"],
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+/** "A passkey was removed from your account". Same rules as passkeyAddedEmail. */
+export function passkeyRemovedEmail(d: PasskeyNoticeDetails): EmailMessage {
+  const profileUrl = new URL("/admin/profile", d.appUrl).href;
+  const when = formatNoticeTime(d.at);
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const label = passkeyLabel(d.passkeyName);
+  const subject = "A passkey was removed from your InkBoard account";
+  const what = `A passkey${label ? ` (“${label}”)` : ""} was just removed from your InkBoard account. It can no longer sign in.`;
+  const steps = [
+    `Sign out any device you don't recognise under "Signed-in devices" on your profile.`,
+    "Secure your email account: removing a passkey needs a recent sign-in or a confirmation.",
+    "Add your passkey again from your profile if you still want it.",
+  ];
+  const text = [
+    greeting,
+    "",
+    what,
+    "",
+    `Device: ${d.device}`,
+    `When: ${when}`,
+    "",
+    "If this was you, there's nothing to do.",
+    "",
+    "If it wasn't you:",
+    ...steps.map((s, i) => `${i + 1}. ${s}`),
+    "",
+    `Your profile: ${profileUrl}`,
+    "",
+    "InkBoard",
+  ].join("\n");
+  const html = securityNotice({
+    appUrl: d.appUrl,
+    preheader: `Passkey removed from ${d.device}.`,
+    footer: "We send this whenever a passkey is removed from your account.",
+    heading: "A passkey was removed",
+    intro: `${escapeHtml(greeting)} ${escapeHtml(what)}`,
+    rows: [
+      ["Device", d.device],
+      ["When", when],
+    ],
+    steps: steps.map(emphasiseQuoted),
+    closing: "Your other passkeys, recovery codes and email sign-in are unchanged.",
+    button: [profileUrl, "Review your account"],
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+/** Escape a step and show its "quoted" section names in italics. */
+function emphasiseQuoted(step: string): string {
+  return escapeHtml(step).replace(/&#34;([^&]+)&#34;/g, "<em>$1</em>");
+}

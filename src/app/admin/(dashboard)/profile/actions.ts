@@ -99,8 +99,11 @@ export async function requestStepUpAction(): Promise<StepUpRequestResult> {
   return { ok: true, email: res.email, resendAt: Date.now() + res.resendIn * 1000 };
 }
 
-/** Check the confirmation code, then make the codes in the same round trip. */
-export async function confirmStepUpAction(code: string): Promise<RecoveryCodesResult> {
+/**
+ * Check an emailed confirmation code. On success this session counts as
+ * freshly verified (step-up.ts), and the caller retries what needed it.
+ */
+export async function verifyStepUpCodeAction(code: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { editor, sessionId } = await requireOnboardedSession();
   const res = await verifyStepUpCode({ editorId: editor.id, sessionId, code });
   if (!res.ok) {
@@ -116,5 +119,6 @@ export async function confirmStepUpAction(code: string): Promise<RecoveryCodesRe
               : "That code is invalid or has expired. Ask for a new one.",
     };
   }
-  return createRecoveryCodesAction();
+  refresh();
+  return { ok: true };
 }

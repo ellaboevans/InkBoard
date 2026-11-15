@@ -7,6 +7,9 @@ import {
   formatAlertTime,
   formatNoticeTime,
   otpEmail,
+  passkeyAddedEmail,
+  passkeyLabel,
+  passkeyRemovedEmail,
   recoveryCodesChangedEmail,
   recoveryCodeUsedEmail,
   signInAlertEmail,
@@ -207,5 +210,52 @@ describe("step-up confirmation email", () => {
     }
     expect(mail.html).not.toContain("/sign-in/link");
     expect(mail.text).not.toContain("/sign-in/link");
+  });
+});
+
+describe("passkey emails", () => {
+  const appUrl = "https://poemhub.example";
+  const at = new Date("2026-12-31T23:59:00Z");
+  const base = { penName: "Ama <S>", device: "Chrome on macOS", at, appUrl };
+  const added = (passkeyName: string, afterRecovery = false) => passkeyAddedEmail({ ...base, passkeyName, afterRecovery });
+  const removed = (passkeyName: string) => passkeyRemovedEmail({ ...base, passkeyName });
+  const all = [added("Chrome on macOS"), added("MacBook 2024", true), removed("Pixel 8"), removed("Desk 12345678")];
+
+  it("say what changed, from which device and when, and what to do if it wasn't them", () => {
+    const mail = added("Chrome on macOS");
+    expect(mail.subject).toBe("A passkey was added to your InkBoard account");
+    for (const part of [mail.text, visibleText(mail.html)]) {
+      expect(part).toContain("“Chrome on macOS”");
+      expect(part).toContain("Thu 31 Dec, 23:59 UTC");
+      expect(part).toMatch(/Remove that passkey/);
+      expect(part).toMatch(/Sign out any device you don't recognise/);
+    }
+    expect(removed("Pixel 8").subject).toBe("A passkey was removed from your InkBoard account");
+    expect(removed("Pixel 8").text).toContain("A passkey (“Pixel 8”) was just removed");
+  });
+
+  it("warn when a passkey was added right after a recovery-code sign-in", () => {
+    expect(added("Laptop", true).text).toContain("someone may have one of your recovery codes");
+    expect(added("Laptop", false).text).not.toContain("recovery code was used");
+  });
+
+  it("contain no 4–8 digit numbers, leaving out a passkey name that has one", () => {
+    expect(passkeyLabel("MacBook 2024")).toBeNull();
+    expect(passkeyLabel("Pixel 8")).toBe("Pixel 8");
+    for (const mail of all) {
+      expect(digitRuns(mail.subject)).toEqual([]);
+      expect(digitRuns(mail.text)).toEqual([]);
+      expect(digitRuns(visibleText(mail.html))).toEqual([]);
+      const hrefs = [...mail.html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+      expect(hrefs.flatMap(digitRuns)).toEqual([]);
+    }
+    expect(added("MacBook 2024").text).toContain("A new passkey was just added");
+  });
+
+  it("escape editor-controlled text", () => {
+    const mail = added("<b>Mine</b>");
+    expect(mail.html).toContain("&#60;b&#62;Mine");
+    expect(mail.html).not.toContain("<b>Mine");
+    expect(mail.html).toContain("Ama &#60;S&#62;");
   });
 });

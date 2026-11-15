@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { requireOnboardedEditor } from "@/server/auth/dal";
+import { requireOnboardedSession } from "@/server/auth/dal";
+import { shouldOfferPasskey } from "@/server/auth/passkeys";
 import { getProfile } from "@/server/auth/profile";
 import { getRecoveryCodeStatus } from "@/server/auth/recovery-codes";
 import { getEditorStats } from "@/server/editor-stats";
@@ -13,6 +14,7 @@ import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
 import { FirstPublishFlash } from "@/components/install/install-nudge";
 import { RecoveryNotice } from "./recovery-notice";
+import { PasskeyOffer } from "./passkey-offer";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -25,12 +27,13 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 }
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
-  const editor = await requireOnboardedEditor();
-  const [poems, stats, profile, recovery, flash] = await Promise.all([
+  const { editor, sessionId } = await requireOnboardedSession();
+  const [poems, stats, profile, recovery, offerPasskey, flash] = await Promise.all([
     listEditorPoems(editor.id),
     getEditorStats(editor.id),
     getProfile(editor.id),
     getRecoveryCodeStatus(editor.id),
+    shouldOfferPasskey(editor.id, sessionId),
     searchParams,
   ]);
   const rows: DashboardPoem[] = poems.map((p) => ({
@@ -81,6 +84,7 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
         {poems.length > 0 && <NewPoemButton />}
       </div>
 
+      {offerPasskey && <PasskeyOffer />}
       <RecoveryNotice status={recovery} />
 
       <StatCards stats={stats} />

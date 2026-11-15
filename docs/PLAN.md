@@ -38,6 +38,7 @@ account; every later sign-in sends a fresh code.
 | R12 | Poets can write, and readers can read, poems in Ghanaian languages (Ewe, Twi/Akan, Nzema, Ga) with their own letters and tone marks, and linguists can write IPA. Every letter renders in our typefaces, on the site and in share cards, and works in links and search. |
 | R13 | Editors can sign in without their email: single-use recovery codes, made on their profile and kept by them, work from any computer. Email codes stay the main way in. |
 | R14 | "This isn't my device" at sign-in: a short session that ends when the browser closes, with nothing about the browser remembered, shown as "Public device" in the device list. |
+| R15 | Editors can add passkeys on their own computers (from the profile, or from an offer right after a recovery-code sign-in) and sign in with one, with no email and no username. They can name, rename and remove them. |
 
 ### Non-functional (derived — needed to meet the brief safely)
 
@@ -53,6 +54,7 @@ account; every later sign-in sends a fresh code.
 | N8  | Performance: public board data is cached (`"use cache"` + tags) and invalidated when an editor publishes/edits. |
 | N9  | No user enumeration from the sign-in form (same response whether or not an account exists / is allowed). |
 | N10 | Recovery codes: ≥ 50 bits each, stored only as HMAC, compared in constant time, single use under concurrency, tiered guess limits (IP → email+client → email), no enumeration, an email on every use and every new set. Making or replacing them needs proof of inbox access within 10 minutes (step-up). |
+| N11 | Passkeys: random single-use challenges (~5 min) tied to the browser, and for registration to the editor and session; exact origin and RP ID from APP_URL; user verification required to sign in; only public key material stored; the counter must rise; IP rate limits; every query scoped by editor; adding and removing need a recent verification (with one documented exception after a recovery-code sign-in), never added on a public device; an email for every passkey added or removed. |
 
 ## 3. Architecture & key decisions
 
@@ -125,6 +127,17 @@ sessions        + public_device (bool) · sign_in_method (email|recovery) · ema
 editors         + recovery_prompt_dismissed_at
 ```
 
+Phase 16 round 2 (passkeys) adds:
+
+```
+passkeys             id · editor_id → editors (CASCADE) · credential_id (base64url, unique) · public_key (COSE, base64url)
+                     · counter (bigint) · transports · device_type · backed_up · name · created_at · last_used_at
+webauthn_challenges  id · token_hash (SHA-256 of the cookie token, unique) · purpose (registration|authentication|step-up)
+                     · challenge · editor_id · session_id · expires_at (~5 min) · created_at; deleted when taken
+editors              + webauthn_user_id (opaque random user handle, unique)
+sessions             + sign_in_method 'passkey' · passkey_verified_at · passkey_offer_dismissed_at
+```
+
 Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(pen_name)` and
 `search_normalize(title)`, in `drizzle/0003_search.sql` only (drizzle-kit doesn't model them).
 
@@ -134,7 +147,7 @@ Phase 5 adds GIN expression indexes (tsvector + trigram) over `search_normalize(
 /                      Public canvas board (R1, R9) + search (R10)
 /p/[author]/[poem]     Reading view; password gate for private poems (R8)
 /a/[author]            Author's public page: avatar, tagline, bio, links, poems (pinned first)
-/sign-in               Email → OTP (R7); "This isn't my device" (R14)
+/sign-in               Email → OTP (R7); "This isn't my device" (R14); "Sign in with a passkey" + autofill (R15)
 /sign-in/recovery      Email + recovery code (R13, Phase 16)
 /admin                 Dashboard: my poems (R4)
 /admin/onboarding      First sign-in: choose pen name (the section label)
@@ -462,7 +475,7 @@ InkBoard already had a manifest (`display: standalone`), but nothing told people
   - **Offline experience:** `experimental.useOffline` is on. `OfflineIndicator` ("You're offline · showing saved poems") uses `useOffline()` or `navigator.onLine` (a page loaded from the saved copy may not have failed a fetch yet); a `role="status"` region, always rendered. On the board it sits in the top overlay flow column (clear of the zoom bar and the install card), elsewhere at the bottom. `/offline` (static, precached at install) lists the poems saved on this device straight from CacheStorage, offers "Try that page again" and the saved board.
   - **Tests:** unit tests for the strategy of each request kind, what's never touched, the storage verdicts (including forged markers), listing metadata, asset discovery, caps and the worker source. A production E2E (`playwright.offline.config.ts`: fixtures, `next build` into `.next-offline`, `next start`; command in the config header) covers reading online then offline (reload and from the board), the board offline, an unread poem → the offline page with the saved list, a private poem unlocked online never stored (no cache body contains its text), `/admin` and `/sign-in` never cached, an unpublished poem dropped on the next online visit, and a rebuilt app picking up the new worker, migrating saved poems and loading without failed chunks. axe scans of the indicator (board, poem page) and the offline page (empty, with poems, phone).
 
-### Phase 16: Signing in without email (round 1: recovery codes, "This isn't my device") ✅ (R13, R14, N10)
+### Phase 16: Signing in without email (round 1: recovery codes, "This isn't my device"; round 2: passkeys) ✅ (R13, R14, R15, N10, N11)
 Some editors read their email only on their phone, so a computer without it (their own new laptop, a library PC) can't sign in. SMS is out (cost, and it's the same phone). Round 1 adds recovery codes and a public-device option; **round 2 is passkeys**. Email codes and links are unchanged and stay the main way in.
 - **Codes** (`src/lib/recovery-code-format.ts`, pure; `src/server/auth/recovery-codes.ts`): 10 per set, 12 Crockford base32 symbols each (60 bits; `generateRecoveryCode` in `crypto.ts`, unbiased), shown as `XXXX-XXXX-XXXX` in Geist Mono with a slashed zero. Input is normalised before checking: NFKC, case, whitespace, any dash or underscore, and O→0, I/L→1 (U isn't in the alphabet). Stored as `hmac("recovery-code", editorId:code)` only.
 - **Using one** (`/sign-in/recovery`, linked quietly from both sign-in steps as "Can't get to your email? Use a recovery code"): email + code. Rate limits are counted first, in tiers: `recovery:verify:ip:<bucket>` (20/15 min), then `recovery:verify:email-ip:{h,d}:<sha256>:<bucket>` (10/h, 20/day), then `recovery:verify:email:{h,d}:<sha256>` (30/h, 100/day); a client over its own budget never reaches the shared tier, so it can't lock the editor out. Then the same work for everyone: one editor lookup, one code lookup (a nil id stands in for no editor / not allowlisted), and ten constant-time comparisons against real or decoy hashes, without early exit. Unknown email, not allowed, no codes, wrong and used codes all get one message. A match is used with `UPDATE … WHERE used_at IS NULL` (one winner under concurrency). Success starts the session through the DAL (`sign_in_method = 'recovery'`), runs the usual new-device/network alert, and emails "A recovery code was used to sign in · N left" (device, time, what to do).
@@ -473,7 +486,15 @@ Some editors read their email only on their phone, so a computer without it (the
 - **Emails:** the two recovery notices say "code", so they carry no 4–8 digit numbers at all (time without the year, no IP address, never a code); the step-up email follows the code-email rules (code first, alone, no other digit runs, no sign-in link). Templates are pure, in `email-templates.ts`; the E2E outbox records `recovery-used`, `recovery-codes-changed` and `step-up`.
 - **Data:** migration `0013_recovery_codes.sql` (generated). The cleanup cron also deletes step-up codes a day after expiry or use; recovery codes don't expire (a new set replaces them).
 - **Tests:** integration (`tests/auth/recovery-codes.test.ts`): format, entropy and normalisation; generation and hashing; replacement; concurrent new sets; single use with concurrent attempts; wrong codes; every rate-limit tier, including that blocked guesses never reach the shared tier; no enumeration (same answer and the same five rate-limit keys for unknown, not allowed, no codes and wrong); the step-up rule (fresh, aged, pre-feature, recovery sign-in, other editor, expired, session-bound codes, attempt cap under concurrency, cooldown); the remaining count; the emails; public-device sessions. Template tests for the three emails. E2E: `e2e/recovery-codes.spec.ts` (set up, Copy, Download, Print, sign in from a fresh context, used code refused, generic error, step-up, setup prompt and dismissal across devices, low-codes notice), `e2e/public-device.spec.ts` (cookie without expiry, 12 h, no device cookie, "Public device", unticked unchanged, box survives an error); new states in `e2e/a11y.spec.ts`.
-- **Round 2:** passkeys (WebAuthn), registered from the profile with the same step-up rule.
+- **Round 2: passkeys** ✅ (R15, N11). The flow it's designed for: an editor makes recovery codes on their phone, signs in on their own laptop with one, and adds a passkey there; from then on that laptop signs in with the passkey. SimpleWebAuthn (`@simplewebauthn/server` 14.1, `@simplewebauthn/browser` 14.0).
+  - **Server** (`src/server/auth/passkeys.ts`, framework-free like `otp.ts`): registration (discoverable credential: resident key required, user verification preferred, "none" attestation, the editor's passkeys excluded, an opaque random user handle per editor in `editors.webauthn_user_id`), sign-in (usernameless, user verification required), passkey step-up, list/rename/remove, and the offer. The relying party comes from APP_URL (`webauthn-config.ts`): RP ID = its host, the only accepted origin = its exact origin; `playwright.config.ts` sets APP_URL to the E2E server.
+  - **Challenges** (`webauthn_challenges`): SimpleWebAuthn's random 32 bytes, about 5 minutes, deleted when taken (`DELETE … RETURNING`, whatever happens next, so each works once), tied to the browser through a random token in a short-lived httpOnly SameSite=Strict cookie (`webauthn-cookie.ts`, one per ceremony kind, stored here only as SHA-256) and, for registration and step-up, to the editor and session. The cleanup cron deletes expired ones.
+  - **Verification:** origin, RP ID, challenge and signature by SimpleWebAuthn; user verification checked twice (the library's flag and our own); the counter must rise unless both sides are 0 (synced passkeys), checked again here and moved with a conditional `UPDATE … WHERE counter = old`, so a replayed or raced assertion loses; the response's user handle must be the passkey's editor's; allowlist re-checked. Every failure is one generic answer. Sign-in verification is rate-limited per IP bucket (30/15 min, counted first), options too (60/15 min), registration per editor, passkey confirmation per session. Only the credential id, COSE public key, counter, transports and backup flags are stored.
+  - **Step-up:** a passkey sign-in or a passkey confirmation (profile, "Use a passkey") now counts as a recent verification (`sessions.passkey_verified_at`), for passkeys and recovery codes alike. Adding or removing a passkey needs one (`passkeyGate`). **Exception:** within 10 minutes of a recovery-code sign-in, in that same session, a passkey may be added without one, because that editor has no email on that computer. The trade-off: a stolen recovery code (plus the email address) could also add a passkey and keep access; the "recovery code used" and "passkey added" emails (the latter says it followed a recovery sign-in) are what warn the editor, and removing a passkey or replacing codes from such a session still needs a step-up. **Never on a public device:** a "This isn't my device" session can't add a passkey (it would stay on a computer the editor doesn't control); removing is allowed with a step-up.
+  - **UI:** `/sign-in` gets "Sign in with a passkey" and autofill on the email field (`autocomplete="email webauthn"`, conditional UI), both only where the browser has WebAuthn; "This isn't my device" applies; the button aborts the autofill request, which restarts afterwards; a cancelled prompt shows nothing; failures get one calm message. Profile → "Passkeys" (after Recovery codes): name (from the device, editable), added, last used, "Synced"; Add, Rename (dialog), Remove (confirm); the shared "Confirm it's you" card (`step-up-card.tsx`: email code or passkey). After a recovery-code sign-in on a non-public device, the dashboard offers once to add a passkey here ("Not now" is stored on the session). Device list: "Passkey" badge.
+  - **Emails:** "A passkey was added" (device, time, what to do; a warning when it followed a recovery sign-in) and "A passkey was removed". Same digit rule as the recovery notices; a passkey name containing a 4+ digit run is left out of them rather than altered.
+  - **CSP:** unchanged. WebAuthn isn't governed by CSP, the actions are same-origin, and Permissions-Policy leaves `publickey-credentials-*` at its same-origin default; an E2E test records no `securitypolicyviolation` through registration and sign-in.
+  - **Tests:** integration (`tests/auth/passkeys.test.ts`) with a software authenticator (`tests/support/fake-authenticator.ts`: real P-256 keys and real signed responses, so SimpleWebAuthn's checks run unmocked): registration options and storage; duplicates; wrong origin, port, RP ID or challenge; malformed responses; challenge single use (sequential and concurrent), expiry, browser binding, editor/session/purpose binding; missing user verification; forged signature; unknown and removed credentials; user-handle mismatch; allowlist; IP rate limits (incl. IPv6 /64); counter rising, replayed, rewound, zero, non-counting and raced; scoping of list, rename, remove and confirmation; the step-up rules incl. the recovery exception's limits and the public-device block (also re-checked at finish); emails; the offer. Template tests for both emails. E2E (`e2e/passkeys.spec.ts`, Chromium's virtual authenticator): add, sign out, sign in; rename and remove (a removed passkey can't sign in; public-device passkey sign-in); recovery code → offer → passkey in a fresh context; "Not now"; public device can't add; step-up by email code to add and by passkey to remove; cancelled prompt shows nothing; autofill; user verification required; no WebAuthn, no buttons. Chrome's virtual authenticator answers autofill requests by itself (a real browser waits for the person to pick the passkey), so specs switch autofill off unless they test it (`virtualAuthenticator(page, { autofill })`). New states in `e2e/a11y.spec.ts`.
 
 ## 5. Requirements traceability
 
@@ -500,9 +521,11 @@ Some editors read their email only on their phone, so a computer without it (the
 | N7 Accessibility | 3, 4, 6 | ✅ board done (links, focus pan, list view); axe passes on every screen (E2E, light theme); manual VoiceOver pass passed |
 | N8 Board caching | 3, 12 | ✅ tag-invalidated on every admin save (E2E); feeds share the tag |
 | N9 No user enumeration | 1, 16 | ✅ tested (sign-in codes; recovery codes too) |
-| R13 Sign in without email (recovery codes) | 16 | ✅ round 1 tested (unit + E2E); round 2: passkeys |
+| R13 Sign in without email (recovery codes) | 16 | ✅ round 1 tested (unit + E2E) |
 | R14 "This isn't my device" | 16 | ✅ tested (unit + E2E: cookie without expiry, 12 h, no device cookie, "Public device") |
 | N10 Recovery code security and step-up | 16 | ✅ tested (hashing, concurrency, rate-limit tiers, enumeration, step-up, emails) |
+| R15 Passkeys (add, name, remove, sign in without email) | 16 (round 2) | ✅ tested (integration with real signatures + E2E with Chromium's virtual authenticator) |
+| N11 Passkey security (challenges, origin/RP ID, UV, counter, scoping, step-up, emails) | 16 (round 2) | ✅ tested (see Phase 16 round 2) |
 | Installable app (manifest, icons, install nudge, offline reading) | 15 | ✅ round 1: installability (Chrome, no errors) and the nudge; round 2: service worker and offline reading (production E2E, private poems never stored) |
 
 ## 6. Decisions and open questions
@@ -516,7 +539,7 @@ Decided:
 - **Email provider?** Resend, with a verified sending domain (done at launch).
 - **Which local languages?** Ewe, Twi/Akan, Nzema and Ga for poets, and IPA for linguists (Phase 11). The interface stays in English.
 - **Board layout?** An automatic grid of author sections. Letting editors arrange positions could be a later phase.
-- **Signing in without email?** Recovery codes and "This isn't my device" now (Phase 16), passkeys next. No SMS (cost, and it's the same phone).
+- **Signing in without email?** Recovery codes and "This isn't my device" (Phase 16), then passkeys (round 2). No SMS (cost, and it's the same phone).
 
 No open questions remain.
 

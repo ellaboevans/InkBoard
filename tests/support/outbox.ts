@@ -33,3 +33,9 @@ export function lastStepUpCodeFor(email: string): string {
   if (!mail) throw new Error(`No step-up email sent to ${email}`);
   return mail.code;
 }
+
+/** "Passkey added" / "passkey removed" notices "sent" during a test. */
+export const passkeyNotices: (
+  | { to: string; kind: "added"; passkeyName: string; device: string; afterRecovery: boolean; at: Date; penName: string | null }
+  | { to: string; kind: "removed"; passkeyName: string; device: string; at: Date; penName: string | null }
+)[] = [];

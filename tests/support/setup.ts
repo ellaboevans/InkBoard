@@ -1,11 +1,11 @@
 import { sql } from "drizzle-orm";
 import { beforeEach, vi } from "vitest";
 import { getDb } from "@/db";
-import { alerts, outbox, recoveryNotices, stepUpCodes, welcomes } from "./outbox";
+import { alerts, outbox, passkeyNotices, recoveryNotices, stepUpCodes, welcomes } from "./outbox";
 
 // Capture outgoing emails instead of sending/logging them.
 vi.mock("@/server/email", async () => {
-  const { alerts, outbox, recoveryNotices, stepUpCodes, welcomes } = await import("./outbox");
+  const { alerts, outbox, passkeyNotices, recoveryNotices, stepUpCodes, welcomes } = await import("./outbox");
   return {
     sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
       outbox.push({ to, code, linkToken });
@@ -29,6 +29,19 @@ vi.mock("@/server/email", async () => {
     sendStepUpEmail: vi.fn(async (to: string, code: string) => {
       stepUpCodes.push({ to, code });
     }),
+    sendPasskeyAddedEmail: vi.fn(
+      async (
+        to: string,
+        d: { passkeyName: string; device: string; afterRecovery: boolean; at: Date; penName: string | null },
+      ) => {
+        passkeyNotices.push({ to, kind: "added", ...d });
+      },
+    ),
+    sendPasskeyRemovedEmail: vi.fn(
+      async (to: string, d: { passkeyName: string; device: string; at: Date; penName: string | null }) => {
+        passkeyNotices.push({ to, kind: "removed", ...d });
+      },
+    ),
   };
 });
 
@@ -46,6 +59,7 @@ beforeEach(async () => {
   welcomes.length = 0;
   recoveryNotices.length = 0;
   stepUpCodes.length = 0;
+  passkeyNotices.length = 0;
   await getDb().execute(
     sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits CASCADE`,
   );

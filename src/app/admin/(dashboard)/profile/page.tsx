@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { requireOnboardedSession } from "@/server/auth/dal";
 import { getRecoveryCodeStatus } from "@/server/auth/recovery-codes";
+import { listPasskeys, passkeyGate } from "@/server/auth/passkeys";
 import { isSessionFresh } from "@/server/auth/step-up";
 import { listSessions, type SessionSummary } from "@/server/auth/sessions";
 import { getProfile } from "@/server/auth/profile";
@@ -16,6 +17,7 @@ import { StatCards } from "@/components/admin/stat-cards";
 import { describeUserAgent } from "@/lib/user-agent";
 import { ProfileForm } from "./profile-form";
 import { RecoveryCodesPanel } from "./recovery-codes-panel";
+import { PasskeysPanel } from "./passkeys-panel";
 import { RevokeOtherSessionsButton, RevokeSessionButton } from "./session-buttons";
 
 export const metadata: Metadata = { title: "Profile" };
@@ -51,6 +53,20 @@ export default function ProfilePage() {
         </div>
         <Suspense fallback={<div className="h-36 animate-pulse rounded-xl bg-muted" />}>
           <RecoveryCodes />
+        </Suspense>
+      </section>
+
+      <section id="passkeys" className="grid scroll-mt-20 gap-4" aria-labelledby="passkeys-heading">
+        <div>
+          <h2 id="passkeys-heading" className="font-serif text-2xl">
+            Passkeys
+          </h2>
+          <p className="mt-1 text-muted-foreground">
+            Sign in on your own computers with a fingerprint, face or device PIN, without email or codes.
+          </p>
+        </div>
+        <Suspense fallback={<div className="h-36 animate-pulse rounded-xl bg-muted" />}>
+          <Passkeys />
         </Suspense>
       </section>
 
@@ -124,7 +140,11 @@ const dateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
 
 async function RecoveryCodes() {
   const { editor, sessionId } = await requireOnboardedSession();
-  const [status, fresh] = await Promise.all([getRecoveryCodeStatus(editor.id), isSessionFresh(editor.id, sessionId)]);
+  const [status, fresh, keys] = await Promise.all([
+    getRecoveryCodeStatus(editor.id),
+    isSessionFresh(editor.id, sessionId),
+    listPasskeys(editor.id),
+  ]);
   return (
     <RecoveryCodesPanel
       email={editor.email}
@@ -132,6 +152,25 @@ async function RecoveryCodes() {
       unused={status.unused}
       createdLabel={status.createdAt ? dateFormat.format(status.createdAt) : null}
       fresh={fresh}
+      hasPasskeys={keys.length > 0}
+    />
+  );
+}
+
+async function Passkeys() {
+  const { editor, sessionId } = await requireOnboardedSession();
+  const [keys, gate] = await Promise.all([listPasskeys(editor.id), passkeyGate(editor.id, sessionId, "add")]);
+  return (
+    <PasskeysPanel
+      email={editor.email}
+      gate={gate}
+      passkeys={keys.map((k) => ({
+        id: k.id,
+        name: k.name,
+        createdLabel: dateFormat.format(k.createdAt),
+        lastUsedLabel: k.lastUsedAt ? dateFormat.format(k.lastUsedAt) : null,
+        backedUp: k.backedUp,
+      }))}
     />
   );
 }
@@ -167,6 +206,7 @@ function DeviceRow({ session: s }: { session: SessionSummary }) {
           {s.current && <DeviceBadge>This device</DeviceBadge>}
           {s.publicDevice && <DeviceBadge>Public device</DeviceBadge>}
           {s.method === "recovery" && <DeviceBadge>Recovery code</DeviceBadge>}
+          {s.method === "passkey" && <DeviceBadge>Passkey</DeviceBadge>}
         </p>
         <p className="truncate text-sm text-muted-foreground">
           Signed in {dateFormat.format(s.createdAt)}

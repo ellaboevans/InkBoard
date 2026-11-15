@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   index,
@@ -66,11 +67,18 @@ export const editors = pgTable(
      * prompt (docs/PLAN.md, Phase 16). Server-side, so it holds on every device.
      */
     recoveryPromptDismissedAt: timestamp("recovery_prompt_dismissed_at", { withTimezone: true }),
+    /**
+     * The WebAuthn user handle (base64url of 32 random bytes) given to this
+     * editor's passkeys, made at their first passkey (Phase 16, round 2).
+     * Opaque on purpose: authenticators may show or sync it, so never the email or id.
+     */
+    webauthnUserId: text("webauthn_user_id"),
     ...timestamps,
   },
   (t) => [
     uniqueIndex("editors_email_key").on(t.email),
     uniqueIndex("editors_slug_key").on(t.slug),
+    uniqueIndex("editors_webauthn_user_id_key").on(t.webauthnUserId),
     check(
       "editors_shared_mode_requires_password",
       sql`${t.passwordMode} = 'per_poem' OR ${t.sharedPasswordHash} IS NOT NULL`,
@@ -101,8 +109,8 @@ export const emailOtps = pgTable(
   ],
 );
 
-/** How a session was started: an email code or link, or a recovery code (Phase 16). */
-export const signInMethod = pgEnum("sign_in_method", ["email", "recovery"]);
+/** How a session was started: an email code or link, a recovery code, or a passkey (Phase 16). */
+export const signInMethod = pgEnum("sign_in_method", ["email", "recovery", "passkey"]);
 
 /** Server-side sessions. The cookie holds a random token; we store its SHA-256. */
 export const sessions = pgTable(
@@ -129,6 +137,15 @@ export const sessions = pgTable(
      * be recent, so a stolen long-lived session can't quietly do it.
      */
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+    /**
+     * When this session last proved possession of one of the editor's
+     * passkeys with user verification: a passkey sign-in, or a passkey
+     * confirmation on the profile (round 2). Counts for step-up like
+     * email_verified_at.
+     */
+    passkeyVerifiedAt: timestamp("passkey_verified_at", { withTimezone: true }),
+    /** "Not now" on the add-a-passkey offer shown after a recovery-code sign-in. */
+    passkeyOfferDismissedAt: timestamp("passkey_offer_dismissed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -160,6 +177,65 @@ export const recoveryCodes = pgTable(
     index("recovery_codes_editor_idx").on(t.editorId),
     uniqueIndex("recovery_codes_code_hash_key").on(t.codeHash),
   ],
+);
+
+/**
+ * Passkeys (docs/PLAN.md, Phase 16 round 2): WebAuthn credentials an editor
+ * registered for signing in without email. Only public data is stored: the
+ * credential id, the COSE public key, the signature counter, transports and
+ * the backup flags. Every query is scoped by the DAL-resolved editor id.
+ */
+export const passkeys = pgTable(
+  "passkeys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    /** base64url credential id, as the browser reports it. */
+    credentialId: text("credential_id").notNull(),
+    /** base64url of the COSE-encoded public key. */
+    publicKey: text("public_key").notNull(),
+    /** Signature counter (uint32); 0 for authenticators that don't count (synced passkeys). */
+    counter: bigint("counter", { mode: "number" }).notNull().default(0),
+    transports: jsonb("transports").$type<string[]>().notNull().default([]),
+    /** singleDevice | multiDevice */
+    deviceType: text("device_type").notNull(),
+    /** Synced to the editor's account (iCloud Keychain, Google Password Manager…). */
+    backedUp: boolean("backed_up").notNull().default(false),
+    /** Editor-chosen label; defaults to the device it was added on. */
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("passkeys_credential_id_key").on(t.credentialId),
+    index("passkeys_editor_idx").on(t.editorId),
+  ],
+);
+
+export const webauthnPurpose = pgEnum("webauthn_purpose", ["registration", "authentication", "step-up"]);
+
+/**
+ * WebAuthn challenges: random, single use (deleted when used), about 5
+ * minutes long, and tied to the browser that asked through a short-lived
+ * httpOnly cookie whose token is stored only as a SHA-256. Registration and
+ * step-up challenges are also tied to the editor and the session.
+ */
+export const webauthnChallenges = pgTable(
+  "webauthn_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull(),
+    purpose: webauthnPurpose("purpose").notNull(),
+    /** base64url, as sent in the options. */
+    challenge: text("challenge").notNull(),
+    editorId: uuid("editor_id").references(() => editors.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("webauthn_challenges_token_hash_key").on(t.tokenHash)],
 );
 
 /**

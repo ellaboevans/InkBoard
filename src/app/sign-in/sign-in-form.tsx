@@ -5,6 +5,7 @@ import { Loader2Icon, MailIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { PublicDeviceCheckbox } from "@/components/auth/public-device-checkbox";
+import { PasskeySignIn } from "./passkey-sign-in";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,7 +76,8 @@ function EmailStep({
             id="email"
             name="email"
             type="email"
-            autoComplete="email"
+            // "webauthn": passkeys are offered in this field's autofill (PasskeySignIn).
+            autoComplete="email webauthn"
             inputMode="email"
             placeholder="you@example.com"
             defaultValue={state.email}
@@ -96,6 +98,7 @@ function EmailStep({
           Email me a sign-in code
         </Button>
       </form>
+      <PasskeySignIn publicDevice={publicDevice} />
       <RecoveryLink />
     </div>
   );

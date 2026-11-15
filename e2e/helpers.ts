@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, type Page } from "@playwright/test";
+import { expect, type CDPSession, type Page } from "@playwright/test";
 import pg from "pg";
 import { E2E_DATABASE_URL, OTP_OUTBOX } from "../playwright.config";
 
@@ -226,4 +226,71 @@ export async function recoverySignIn(page: Page, email: string, code: string, { 
   await page.getByRole("textbox", { name: "Recovery code" }).fill(code);
   if (publicDevice) await page.getByRole("checkbox", { name: "This isn't my device" }).check();
   await page.getByRole("button", { name: "Sign in with recovery code" }).click();
+}
+
+export type PasskeyNotice =
+  | { kind: "passkey-added"; device: string; passkeyName: string; afterRecovery: boolean }
+  | { kind: "passkey-removed"; device: string; passkeyName: string };
+
+/** "Passkey added" / "passkey removed" notices recorded for `email`. */
+export async function passkeyNoticesFor(email: string): Promise<PasskeyNotice[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string } & PasskeyNotice)
+    .filter((m) => m.to === email && (m.kind === "passkey-added" || m.kind === "passkey-removed"))
+    .map((m) => {
+      const notice: Partial<typeof m> = { ...m };
+      delete notice.to;
+      return notice as PasskeyNotice;
+    });
+}
+
+export type VirtualCredential = {
+  credentialId: string;
+  isResidentCredential: boolean;
+  rpId?: string;
+  privateKey: string;
+  userHandle?: string;
+  signCount: number;
+};
+
+/**
+ * A Chromium virtual authenticator on this page (CDP WebAuthn domain): a
+ * platform ("internal") authenticator with resident keys and user
+ * verification, answering prompts automatically. Credentials stay in it for
+ * the page's life.
+ */
+export async function virtualAuthenticator(page: Page, { userVerified = true, autofill = false } = {}) {
+  // Chrome's virtual authenticator answers the sign-in page's autofill
+  // (conditional) request by itself, which a real browser only does when the
+  // person picks the passkey from the email field's suggestions. Tests of the
+  // button switch autofill off; the autofill test leaves it on.
+  if (!autofill) {
+    await page.addInitScript(() => {
+      if (window.PublicKeyCredential) PublicKeyCredential.isConditionalMediationAvailable = async () => false;
+    });
+  }
+  const cdp: CDPSession = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable", { enableUI: false });
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: userVerified,
+      automaticPresenceSimulation: true,
+    },
+  });
+  return {
+    async credentials(): Promise<VirtualCredential[]> {
+      return (await cdp.send("WebAuthn.getCredentials", { authenticatorId })).credentials as VirtualCredential[];
+    },
+    async addCredential(credential: VirtualCredential) {
+      await cdp.send("WebAuthn.addCredential", { authenticatorId, credential });
+    },
+    async setUserVerified(isUserVerified: boolean) {
+      await cdp.send("WebAuthn.setUserVerified", { authenticatorId, isUserVerified });
+    },
+  };
 }

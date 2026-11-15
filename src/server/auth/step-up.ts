@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/db";
 import { editors, sessions, stepUpCodes } from "@/db/schema";
@@ -10,11 +10,14 @@ import { STEP_UP_TTL_SECONDS, STEP_UP_WINDOW_SECONDS } from "./step-up-config";
 
 /*
  * Step-up (docs/PLAN.md, Phase 16): before a sensitive change (making or
- * replacing recovery codes), the session must have proved access to the
- * editor's inbox recently: an email sign-in within STEP_UP_WINDOW_SECONDS, or
- * a confirmation code emailed now. A stolen long-lived session cookie alone
- * can't do it, and a recovery-code sign-in doesn't count (it never touched
- * the inbox). Codes work like sign-in codes (HMAC only, attempts counted
+ * replacing recovery codes, adding or removing a passkey), the session must
+ * have proved, within STEP_UP_WINDOW_SECONDS, access to the editor's inbox
+ * (an email sign-in, or a confirmation code emailed now) or possession of one
+ * of their passkeys with user verification (a passkey sign-in, or a passkey
+ * confirmation: passkeys.ts). A stolen long-lived session cookie alone can't
+ * do it, and a recovery-code sign-in doesn't count (it proved neither).
+ * (Adding a passkey right after a recovery sign-in is the one exception:
+ * passkeyStepUp in passkeys.ts.) Codes work like sign-in codes (HMAC only, attempts counted
  * before comparing, conditional consume) and are bound to the session that
  * asked, so a code can't confirm some other browser.
  */
@@ -31,8 +34,8 @@ const hashCode = (sessionId: string, code: string) => hmac("step-up", `${session
 type Db = Pick<ReturnType<typeof getDb>, "select">;
 
 /**
- * Whether this live session of this editor proved inbox access within the
- * step-up window. Times come from the database clock. Pass a transaction to
+ * Whether this live session of this editor proved inbox access, or a
+ * passkey, within the step-up window. Times come from the database clock. Pass a transaction to
  * check inside one (generateRecoveryCodes does, under the editor lock).
  */
 export async function isSessionFresh(editorId: string, sessionId: string, db: Db = getDb()): Promise<boolean> {
@@ -44,7 +47,10 @@ export async function isSessionFresh(editorId: string, sessionId: string, db: Db
         eq(sessions.id, sessionId),
         eq(sessions.editorId, editorId),
         gt(sessions.expiresAt, sql`now()`),
-        gt(sessions.emailVerifiedAt, sql`now() - make_interval(secs => ${STEP_UP_WINDOW_SECONDS})`),
+        or(
+          gt(sessions.emailVerifiedAt, sql`now() - make_interval(secs => ${STEP_UP_WINDOW_SECONDS})`),
+          gt(sessions.passkeyVerifiedAt, sql`now() - make_interval(secs => ${STEP_UP_WINDOW_SECONDS})`),
+        ),
       ),
     )
     .limit(1);

@@ -11,6 +11,7 @@ import {
   sql,
   toastContrast,
   expectBackOnList,
+  virtualAuthenticator,
 } from "./helpers";
 
 /*
@@ -128,6 +129,62 @@ test("recovery codes: sign-in, dashboard notices and the profile section", async
   await page.setViewportSize({ width: 375, height: 812 });
   await scan(page, "dashboard: recovery codes running low (phone)");
   await page.setViewportSize({ width: 1280, height: 720 });
+});
+
+test("passkeys: sign-in, the profile section, its dialogs and the dashboard offer", async ({ page, browser }) => {
+  await virtualAuthenticator(page);
+  await page.goto("/sign-in");
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
+  await scan(page, "sign-in: with the passkey button");
+
+  const id = unique();
+  const email = `a11y-pk-${id}@example.com`;
+  await signUpAs(page, email, `Passkey Poet ${id}`);
+  await page.goto("/admin/profile#passkeys");
+  await expect(page.getByRole("button", { name: "Add a passkey" })).toBeVisible();
+  await scan(page, "profile: no passkeys");
+  await page.getByRole("button", { name: "Add a passkey" }).click();
+  await expect(page.getByRole("list", { name: "Your passkeys" })).toBeVisible({ timeout: 45_000 });
+  await scan(page, "profile: a passkey");
+  await page.getByRole("button", { name: /^Rename / }).click();
+  await expect(page.getByRole("dialog", { name: "Rename passkey" })).toBeVisible();
+  await scan(page, "profile: rename passkey dialog");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Remove / }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await scan(page, "profile: remove passkey dialog");
+  await page.keyboard.press("Escape");
+
+  // An older sign-in: the step-up card, now with "Use a passkey".
+  await sql(`UPDATE sessions SET email_verified_at = now() - interval '11 minutes', passkey_verified_at = NULL
+    WHERE editor_id = (SELECT id FROM editors WHERE email = '${email}')`);
+  await page.reload();
+  await page.getByRole("button", { name: "Add a passkey" }).click();
+  await expect(page.getByRole("button", { name: "Use a passkey" })).toBeVisible();
+  await scan(page, "profile: confirm it's you, with a passkey option");
+
+  // After a recovery-code sign-in: the dashboard's offer; on a public device, the explanation.
+  await sql(`UPDATE sessions SET email_verified_at = now() WHERE editor_id = (SELECT id FROM editors WHERE email = '${email}')`);
+  await page.goto("/admin/profile");
+  await createRecoveryCodes(page);
+  const codes = (await page.getByRole("list", { name: "Recovery codes" }).innerText()).match(/[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}/g)!;
+  const laptopContext = await browser.newContext();
+  const laptop = await laptopContext.newPage();
+  await virtualAuthenticator(laptop);
+  await recoverySignIn(laptop, email, codes[0]);
+  await expect(laptop.getByRole("region", { name: "Add a passkey on this computer?" })).toBeVisible({ timeout: 45_000 });
+  await scan(laptop, "dashboard: add-a-passkey offer");
+  await laptop.setViewportSize({ width: 375, height: 812 });
+  await scan(laptop, "dashboard: add-a-passkey offer (phone)");
+  await laptopContext.close();
+  const libraryContext = await browser.newContext();
+  const library = await libraryContext.newPage();
+  await recoverySignIn(library, email, codes[1], { publicDevice: true });
+  await expect(library).toHaveURL(/\/admin/, { timeout: 45_000 });
+  await library.goto("/admin/profile#passkeys");
+  await expect(library.getByRole("main")).toContainText("so a passkey can't be added here");
+  await scan(library, "profile: passkeys on a public device");
+  await libraryContext.close();
 });
 
 test("sign-in link page", async ({ page }) => {

@@ -10,6 +10,8 @@ import {
   retiredSlugs,
   sessions,
   signInDevices,
+  pushDeliveries,
+  pushSubscriptions,
   signInLocations,
   stepUpCodes,
   webauthnChallenges,
@@ -70,6 +72,12 @@ async function populated(email: string, penName: string) {
   ]);
   await db.insert(signInLocations).values({ editorId: ed.id, ipKey: `net-${ed.id}` });
   await db.insert(signInDevices).values({ editorId: ed.id, deviceKey: `dev-${ed.id}` });
+  // A notification slot a reader's device used for one of their poems (Phase 18).
+  const [device] = await db
+    .insert(pushSubscriptions)
+    .values({ endpoint: `https://fcm.googleapis.com/fcm/send/${ed.id}`, p256dh: "k", auth: "a" })
+    .returning({ id: pushSubscriptions.id });
+  await db.insert(pushDeliveries).values({ subscriptionId: device.id, editorId: ed.id, poemId: one.id });
   // Not linked by foreign keys: a pending sign-in code and rate-limit counters naming them.
   await requestOtp({ email: ed.email });
   await rateLimit(`signin-alert:${ed.id}`, 5, 86400);
@@ -161,6 +169,7 @@ describe("deleting an account", () => {
         "passkeys",
         "poem_revisions",
         "poems",
+        "push_deliveries",
         "recovery_codes",
         "sessions",
         "sign_in_devices",

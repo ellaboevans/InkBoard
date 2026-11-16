@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { ATOM_TYPE, SITE_FEED_PATH } from "@/lib/feed-links";
 import { notify } from "@/lib/notify";
+import { NotificationsSetting } from "@/components/notifications/notifications-setting";
 
 /**
  * "Subscribe" in the board toolbar (canvas and list view): a small popover
  * that says what a feed is, opens it, and copies its link (docs/PLAN.md,
- * Phase 12). Icon-only on phones, still named "Subscribe".
+ * Phase 12), and turns notifications on or off on this device (Phase 18).
+ * Icon-only on phones, still named "Subscribe".
  *
  * `feedUrl` is the absolute URL from siteUrl(), resolved on the server (the
  * client has no APP_URL). The "Open feed" link is a plain <a>: it's XML, not
@@ -43,7 +45,7 @@ export function SubscribeButton({ feedUrl, className }: { feedUrl: string; class
         align="end"
         collisionPadding={16}
         aria-labelledby={titleId}
-        className="w-80 max-w-[calc(100vw-2rem)]"
+        className="max-h-(--radix-popover-content-available-height) w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
       >
         <PopoverHeader>
           <PopoverTitle id={titleId}>Follow new poems</PopoverTitle>
@@ -67,6 +69,8 @@ export function SubscribeButton({ feedUrl, className }: { feedUrl: string; class
             </a>
           </Button>
         </div>
+        {/* Phase 18: renders nothing where notifications aren't configured. */}
+        <NotificationsSetting className="border-t pt-3" />
       </PopoverContent>
     </Popover>
   );

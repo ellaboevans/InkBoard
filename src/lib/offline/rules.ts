@@ -140,9 +140,40 @@ var InkboardOffline = (function () {
     return drop;
   }
 
+  // ---- notifications about new poems (Phase 18) -------------------------------
+  // A push is { title, author, url, tag } (src/lib/push-rules.ts). Every push
+  // must show a notification (iOS revokes subscriptions that get silent ones),
+  // so anything malformed still shows a plain one that opens the board.
+  function str(v, max) {
+    return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
+  }
+  function notificationFor(data) {
+    var d = data && typeof data === "object" ? data : {};
+    var url = typeof d.url === "string" && POEM.test(d.url) ? d.url : "/";
+    var title = str(d.title, 200);
+    var author = str(d.author, 100);
+    var tag = typeof d.tag === "string" && /^poem:[0-9a-f-]{36}$/.test(d.tag) ? d.tag : "inkboard";
+    return {
+      title: title || "A new poem on InkBoard",
+      options: {
+        body: author ? "New poem by " + author : "Tap to read it.",
+        icon: "/icons/192.png",
+        badge: "/icons/badge-96.png",
+        tag: tag,
+        data: { url: url },
+      },
+    };
+  }
+  /** Where a tap goes: our own poem path (or the board), absolute on this origin. */
+  function clickUrl(data, origin) {
+    var url = data && typeof data.url === "string" && POEM.test(data.url) ? data.url : "/";
+    return origin + url;
+  }
+
   return {
     readerKind: readerKind, isStatic: isStatic, strategyFor: strategyFor, cacheKey: cacheKey,
     verdict: verdict, pageMeta: pageMeta, assetUrls: assetUrls, overCap: overCap, CAPS: CAPS,
+    notificationFor: notificationFor, clickUrl: clickUrl,
   };
 })();
 `;
@@ -164,6 +195,11 @@ export type OfflineRules = {
   assetUrls(html: string): string[];
   overCap(index: { url: string; kind: string; savedAt: number }[]): string[];
   CAPS: { poem: number; other: number };
+  notificationFor(data: unknown): {
+    title: string;
+    options: { body: string; icon: string; badge: string; tag: string; data: { url: string } };
+  };
+  clickUrl(data: unknown, origin: string): string;
 };
 
 /** For tests: evaluates the shipped source and returns its rules. */

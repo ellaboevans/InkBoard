@@ -400,6 +400,8 @@ A third-party SDK (OneSignal, Firebase JS) *would* need CSP changes (§8).
 
 ## 9. Recommendation and phased plan
 
+> **Status (Nov 2026):** Phase A is built as Phase 18 in `docs/PLAN.md`, with the owner's decisions (private poems never, one per author per device in 12 h, three per device in 24 h). Setup and device testing: `docs/NOTIFICATIONS.md`.
+
 **Build it ourselves on standard Web Push with `web-push`, in our existing worker, with no third party.** Start with "all new poems", per device, and design the table for author follows from day one.
 
 | Phase | Scope | Effort |

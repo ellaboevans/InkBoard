@@ -120,6 +120,20 @@
       "when": 1794767984762,
       "tag": "0016_retired_slugs_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794807974189,
+      "tag": "0017_push_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794807979582,
+      "tag": "0018_notified_at_backfill",
+      "breakpoints": true
     }
   ]
 }

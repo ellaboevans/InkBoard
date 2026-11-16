@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { UNUSED_SUBSCRIPTION_DAYS } from "@/lib/push-rules";
 import { safeEqual, sha256 } from "./crypto";
 
 /*
@@ -18,6 +19,8 @@ export type CleanupResult = {
   rateLimits: number;
   signInLocations: number;
   signInDevices: number;
+  pushSubscriptions: number;
+  pushDeliveries: number;
 };
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
@@ -60,6 +63,19 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const signInDevices = await db.execute(sql`
     DELETE FROM sign_in_devices WHERE last_seen_at < now() - interval '1 year'
   `);
+  // Notification addresses (Phase 18) we haven't been able to use for 90
+  // days: we tried since the last success (or since it was made) and nothing
+  // has succeeded in 90 days. A device we simply had nothing to send to stays.
+  const pushSubscriptions = await db.execute(sql`
+    DELETE FROM push_subscriptions
+    WHERE COALESCE(last_success_at, created_at) < now() - make_interval(days => ${UNUSED_SUBSCRIPTION_DAYS})
+      AND last_attempt_at IS NOT NULL
+      AND last_attempt_at > COALESCE(last_success_at, created_at)
+  `);
+  // What the limits count: the longest window is 24 hours.
+  const pushDeliveries = await db.execute(sql`
+    DELETE FROM push_deliveries WHERE sent_at < now() - interval '2 days'
+  `);
   return {
     otps: count(otps),
     stepUpCodes: count(stepUpCodes),
@@ -68,6 +84,8 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
     rateLimits: count(rateLimits),
     signInLocations: count(signInLocations),
     signInDevices: count(signInDevices),
+    pushSubscriptions: count(pushSubscriptions),
+    pushDeliveries: count(pushDeliveries),
   };
 }
 

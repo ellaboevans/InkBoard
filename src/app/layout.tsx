@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { InstallNudgeHost } from "@/components/install/install-nudge";
+import { NotificationsOfferHost } from "@/components/notifications/notifications-setting";
 import { ServiceWorkerRegistration } from "@/components/offline/service-worker";
 import { Toaster } from "@/components/toaster";
 import { BASE_OPEN_GRAPH, BRAND, SITE_DESCRIPTION, SITE_NAME, siteUrl } from "@/lib/site";
@@ -139,6 +140,7 @@ export default function RootLayout({ children, modal }: LayoutProps<"/">) {
         {modal}
         {/* Client-only: renders nothing until the browser says a card is due. */}
         <InstallNudgeHost />
+        <NotificationsOfferHost />
         {/* Offline reading (Phase 15 round 2): production builds only. */}
         <ServiceWorkerRegistration />
         <Toaster />

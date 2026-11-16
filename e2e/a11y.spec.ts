@@ -13,6 +13,7 @@ import {
   expectBackOnList,
   virtualAuthenticator,
 } from "./helpers";
+import { fakePush, type FakePush } from "./push-stub";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -635,5 +636,47 @@ test("dashboard: the row of a poem just published", async ({ browser }) => {
   await page.setViewportSize({ width: 375, height: 740 });
   await expect(page.locator("[data-just-published]").filter({ visible: true })).toContainText("Just published");
   await scan(page, "dashboard: just published, phone");
+  await context.close();
+});
+
+test("notifications on this device: every state of the switch, and the after-install offer", async ({ browser, page: writer }) => {
+  test.setTimeout(300_000);
+  const id = unique();
+  await signUpAs(writer, `a11y-notify-${id}@example.com`, `Bell Poet ${id}`);
+  await publish(writer, `Lamplight ${id}`, "one bulb over the stall,\nmoths keeping the hours");
+  // The browser's push half is stubbed (e2e/push-stub.ts); the UI is real.
+  const IPHONE =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+  const states: [string, FakePush, Record<string, unknown>?][] = [
+    ["off", { permission: "default" }],
+    ["on", { permission: "granted", subscribed: true }],
+    ["blocked", { permission: "denied" }],
+    ["unsupported", { permission: "default", unsupported: true }],
+    ["iPhone, not installed", { permission: "default", unsupported: true }, { userAgent: IPHONE, isMobile: true, hasTouch: true }],
+  ];
+  for (const [name, push, extra] of states) {
+    for (const width of [375, 1280]) {
+      const context = await browser.newContext({ viewport: { width, height: 800 }, ...extra });
+      await fakePush(context, push);
+      const page = await context.newPage();
+      await openBoard(page);
+      await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Follow new poems" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator("[data-push-setting]")).toBeVisible();
+      const how = dialog.getByRole("button", { name: "How notifications work" });
+      if (name !== "unsupported") await how.click();
+      await scan(page, `subscribe popover, notifications ${name}, ${width}px`);
+      await context.close();
+    }
+  }
+
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true, hasTouch: true });
+  await fakePush(context, { permission: "default" });
+  const page = await context.newPage();
+  await openBoard(page);
+  await page.evaluate(() => dispatchEvent(new Event("appinstalled")));
+  await expect(page.getByRole("region", { name: "Get notified about new poems" })).toBeVisible();
+  await scan(page, "notifications offer after installing, phone");
   await context.close();
 });

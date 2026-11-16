@@ -89,6 +89,12 @@ export type PoemMutationResult =
       firstPublish: boolean;
       /** This save put this poem on the board for the first time (the editor goes back to their list). */
       publishedNow: boolean;
+      /**
+       * This save claimed the poem's one announcement (Phase 18): it first went
+       * on the board as a public poem by an author with a pen name. The action
+       * sends it in after(); src/server/push.ts.
+       */
+      announce: boolean;
     }
   | { ok: false; errors: PoemErrors };
 
@@ -243,6 +249,22 @@ async function lockPasswordMode(tx: Tx, editorId: string) {
   return row?.mode ?? "per_poem";
 }
 
+/**
+ * A poem is announced to notification subscribers at most once, ever
+ * (docs/PLAN.md, Phase 18): this sets `notified_at` only if it's unset, the
+ * poem is published and public, and its author has a pen name. Never cleared,
+ * so unpublishing and republishing, or editing, can't announce it again.
+ */
+async function claimAnnouncement(tx: Tx, poemId: string): Promise<boolean> {
+  const r = await tx.execute(sql`
+    UPDATE poems SET notified_at = now()
+    FROM editors e
+    WHERE poems.id = ${poemId} AND e.id = poems.editor_id AND e.pen_name IS NOT NULL
+      AND poems.notified_at IS NULL AND poems.status = 'published' AND poems.visibility = 'public'
+  `);
+  return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
+}
+
 export async function createPoem(
   editorId: string,
   raw: unknown,
@@ -288,7 +310,9 @@ export async function createPoem(
           // Throwing rolls the whole save back; caught below as a form error.
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true, poem, firstPublish, publishedNow: data.status === "published" };
+        const announce =
+          data.status === "published" && data.visibility === "public" && (await claimAnnouncement(tx, poem.id));
+        return { ok: true, poem, firstPublish, publishedNow: data.status === "published", announce };
       }),
     ),
   );
@@ -397,7 +421,11 @@ export async function updatePoem(
           const full = await placePoem(tx, poemId, placed?.collectionId ?? null, data.collection);
           if (full) throw new CollectionFull(full);
         }
-        return { ok: true as const, poem, firstPublish, publishedNow: data.status === "published" && !current.publishedAt };
+        const publishedNow = data.status === "published" && !current.publishedAt;
+        // Only a first publish can announce, so a poem published private and
+        // later made public is never announced (Phase 18).
+        const announce = publishedNow && data.visibility === "public" && (await claimAnnouncement(tx, poemId));
+        return { ok: true as const, poem, firstPublish, publishedNow, announce };
       }),
     ),
   );

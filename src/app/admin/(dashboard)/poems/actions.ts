@@ -5,6 +5,8 @@ import { redirect, RedirectType } from "next/navigation";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { BOARD_TAG, poemTag } from "@/server/cache-tags";
 import { createPoem, deletePoem, updatePoem, type PoemErrors } from "@/server/poems";
+import { after } from "next/server";
+import { announcePoem } from "@/server/push";
 
 /**
  * Where an editor lands after a poem first goes on the board: their list, with
@@ -51,6 +53,19 @@ function invalidate(poemId: string) {
   updateTag(poemTag(poemId));
 }
 
+/**
+ * A poem's one announcement (Phase 18), claimed by the save transaction:
+ * sent after the response, so the editor's save never waits on push services.
+ */
+function announceLater(poemId: string, announce: boolean) {
+  if (!announce) return;
+  after(() =>
+    announcePoem(poemId).catch((e: unknown) => {
+      console.error("[push] announcing a poem failed", e);
+    }),
+  );
+}
+
 export async function createPoemAction(
   _prev: PoemFormState,
   formData: FormData,
@@ -60,6 +75,7 @@ export async function createPoemAction(
   const res = await createPoem(editor.id, readForm(formData));
   if (!res.ok) return { errors: res.errors };
   invalidate(res.poem.id);
+  announceLater(res.poem.id, res.announce);
   if (res.publishedNow) toListAfterPublish(res.poem.id, res.firstPublish);
   // A draft: keep writing, on its own edit page (replacing the blank form in history).
   redirect(`/admin/poems/${res.poem.id}?created=1`, RedirectType.replace);
@@ -80,6 +96,7 @@ export async function updatePoemAction(
     return { errors: res.errors };
   }
   invalidate(poemId);
+  announceLater(poemId, res.announce);
   // A draft going on the board for the first time: done, back to the list.
   if (res.publishedNow) toListAfterPublish(poemId, res.firstPublish);
   refresh(); // re-render server parts of the page (e.g. heading)

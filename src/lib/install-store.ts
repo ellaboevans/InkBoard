@@ -61,6 +61,8 @@ export type InstallSnapshot = {
   /** Briefly ring the toolbar button after the card folded into it. */
   pulse: boolean;
   slots: Partial<Record<SlotKind, HTMLElement>>;
+  /** Running as the installed app, or installed from this browser (`appinstalled`): the notifications offer (Phase 18). */
+  installed: boolean;
 };
 
 const SERVER: InstallSnapshot = {
@@ -72,6 +74,7 @@ const SERVER: InstallSnapshot = {
   folding: false,
   pulse: false,
   slots: {},
+  installed: false,
 };
 
 let snapshot = SERVER;
@@ -125,7 +128,8 @@ function emit() {
   const r = readerReady(memory, now);
   if (!card && typeof r === "object") recheck = setTimeout(emit, r.at - now + 50);
 
-  snapshot = { ready: true, platform, method, card, wide, folding, pulse, slots: { ...slots } };
+  const installed = runningInstalled || Boolean(memory.installed);
+  snapshot = { ready: true, platform, method, card, wide, folding, pulse, slots: { ...slots }, installed };
   listeners.forEach((l) => l());
 }
 

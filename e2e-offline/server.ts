@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import webpush from "web-push";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { OFFLINE_BASE_URL, OFFLINE_DATABASE_URL, OFFLINE_DIST_DIR, OFFLINE_PORT, SERVER_PID_FILE } from "./constants";
 
@@ -8,6 +9,8 @@ import { OFFLINE_BASE_URL, OFFLINE_DATABASE_URL, OFFLINE_DIST_DIR, OFFLINE_PORT,
  * your own .next or the dev E2E's .next-e2e. Each build gets its own
  * INKBOARD_BUILD_ID, so a rebuild is a new worker (the "new deploy" test).
  */
+// Notifications (Phase 18): one throwaway VAPID pair per run (build and start must agree).
+const vapid = webpush.generateVAPIDKeys();
 const env = (buildId: string) => ({
   ...process.env,
   NODE_ENV: "production" as const,
@@ -20,6 +23,9 @@ const env = (buildId: string) => ({
   AUTH_SECRET: "offline-e2e-secret-offline-e2e-secret-0123456789",
   EDITOR_ALLOWLIST: "",
   E2E_OTP_OUTBOX: "",
+  VAPID_PUBLIC_KEY: vapid.publicKey,
+  VAPID_PRIVATE_KEY: vapid.privateKey,
+  VAPID_SUBJECT: "mailto:e2e@inkboard.app",
 });
 
 export function runFixtures() {

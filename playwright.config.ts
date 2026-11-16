@@ -1,11 +1,14 @@
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
+import webpush from "web-push";
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 export const E2E_BASE_URL = `http://localhost:${PORT}`;
 export const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql://localhost:5432/poemhub_e2e";
 export const OTP_OUTBOX = path.resolve("test-results/otp-outbox.jsonl");
+// Notifications (Phase 18): a throwaway VAPID key pair per run, never in git.
+const vapid = webpush.generateVAPIDKeys();
 
 export default defineConfig({
   testDir: "./e2e",
@@ -43,6 +46,10 @@ export default defineConfig({
       E2E_OTP_OUTBOX: OTP_OUTBOX,
       RESEND_API_KEY: "",
       EDITOR_ALLOWLIST: "",
+      VAPID_PUBLIC_KEY: vapid.publicKey,
+      VAPID_PRIVATE_KEY: vapid.privateKey,
+      // localhost can't be the subject (Apple rejects it); nothing is sent to a push service in E2E.
+      VAPID_SUBJECT: "mailto:e2e@inkboard.app",
     },
   },
 });

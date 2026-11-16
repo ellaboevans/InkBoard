@@ -53,7 +53,12 @@ const buildId =
   Date.now().toString(36);
 
 const nextConfig: NextConfig = {
-  env: { INKBOARD_BUILD_ID: buildId },
+  env: {
+    INKBOARD_BUILD_ID: buildId,
+    // Public by design (it's the push `applicationServerKey`); the private key
+    // never leaves the server (src/env.ts). Empty = notifications are off.
+    INKBOARD_VAPID_PUBLIC_KEY: process.env.VAPID_PUBLIC_KEY ?? "",
+  },
   experimental: {
     // Failed soft navigations, prefetches and Server Actions wait for the
     // connection instead of throwing; `useOffline()` drives the offline indicator.

@@ -126,3 +126,53 @@ describe("the worker source", () => {
     expect(() => new Function(serviceWorkerSource("x"))).not.toThrow();
   });
 });
+
+describe("notifications about new poems (Phase 18)", () => {
+  const id = "01859f03-6106-449e-be49-6097a0618d11";
+
+  it("shows the title, 'New poem by …', the app icon and badge, a tag per poem and the poem's URL", () => {
+    expect(R.notificationFor({ title: "Night Market", author: "Ama Owusu", url: "/p/ama-owusu/night-market", tag: `poem:${id}` }))
+      .toStrictEqual({
+        title: "Night Market",
+        options: {
+          body: "New poem by Ama Owusu",
+          icon: "/icons/192.png",
+          badge: "/icons/badge-96.png",
+          tag: `poem:${id}`,
+          data: { url: "/p/ama-owusu/night-market" },
+        },
+      });
+  });
+
+  it("always shows something (no silent pushes), even for a broken payload", () => {
+    for (const bad of [null, undefined, "text", 42, {}, { title: "   " }]) {
+      const n = R.notificationFor(bad);
+      expect(n.title).toBe("A new poem on InkBoard");
+      expect(n.options.data.url).toBe("/");
+      expect(n.options.tag).toBe("inkboard");
+    }
+  });
+
+  it("only ever links to one of our own poem pages", () => {
+    for (const url of ["https://evil.example/p/a/b", "//evil.example/p/a/b", "/admin", "/p/a", "javascript:alert(1)", "/p/a/b/c"]) {
+      expect(R.notificationFor({ title: "x", author: "y", url, tag: `poem:${id}` }).options.data.url).toBe("/");
+      expect(R.clickUrl({ url }, "https://inkboard.app")).toBe("https://inkboard.app/");
+    }
+    expect(R.clickUrl({ url: "/p/ada/ode" }, "https://inkboard.app")).toBe("https://inkboard.app/p/ada/ode");
+    expect(R.clickUrl(null, "https://inkboard.app")).toBe("https://inkboard.app/");
+  });
+
+  it("caps long titles and ignores unknown tags", () => {
+    const n = R.notificationFor({ title: "x".repeat(500), author: "a".repeat(500), url: "/p/a/b", tag: "<script>" });
+    expect(n.title).toHaveLength(200);
+    expect(n.options.body).toBe(`New poem by ${"a".repeat(100)}`);
+    expect(n.options.tag).toBe("inkboard");
+  });
+
+  it("the worker handles push, notificationclick and pushsubscriptionchange, with the public key baked in", () => {
+    const src = serviceWorkerSource("b", "BPUBLICKEY");
+    for (const e of ['"push"', '"notificationclick"', '"pushsubscriptionchange"']) expect(src).toContain(`addEventListener(${e}`);
+    expect(src).toContain('var PUSH_KEY = "BPUBLICKEY"');
+    expect(serviceWorkerSource("b")).toContain('var PUSH_KEY = ""');
+  });
+});

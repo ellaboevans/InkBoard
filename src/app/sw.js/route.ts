@@ -10,7 +10,7 @@ import { serviceWorkerSource } from "@/lib/offline/worker";
  */
 export async function GET() {
   await connection();
-  return new Response(serviceWorkerSource(process.env.INKBOARD_BUILD_ID ?? "dev"), {
+  return new Response(serviceWorkerSource(process.env.INKBOARD_BUILD_ID ?? "dev", process.env.INKBOARD_VAPID_PUBLIC_KEY ?? ""), {
     headers: {
       "Content-Type": "text/javascript; charset=utf-8",
       "Cache-Control": "no-cache, no-store, must-revalidate",

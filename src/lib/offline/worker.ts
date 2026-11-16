@@ -12,12 +12,13 @@ import { OFFLINE_RULES_JS, PAGES_CACHE_PREFIX, SAVE_MESSAGE, SAVED_INDEX_KEY, ST
  * deletes every older cache. So a page saved by an old build, whose chunks may
  * be gone, is never served; a page that can't be refreshed is dropped.
  */
-export function serviceWorkerSource(buildId: string): string {
+export function serviceWorkerSource(buildId: string, pushPublicKey = ""): string {
   return `/* InkBoard offline reading (docs/PLAN.md, Phase 15 round 2). Build ${buildId}. */
 "use strict";
 ${OFFLINE_RULES_JS}
 var R = InkboardOffline;
 var BUILD = ${JSON.stringify(buildId)};
+var PUSH_KEY = ${JSON.stringify(pushPublicKey)}; // VAPID public key (public by design), for pushsubscriptionchange
 var STATIC = ${JSON.stringify(STATIC_CACHE_PREFIX)} + BUILD;
 var PAGES = ${JSON.stringify(PAGES_CACHE_PREFIX)} + BUILD;
 var INDEX = ${JSON.stringify(SAVED_INDEX_KEY)};
@@ -187,6 +188,65 @@ self.addEventListener("message", function (event) {
   if (data.type !== ${JSON.stringify(SAVE_MESSAGE)} || typeof data.path !== "string") return;
   if (!R.readerKind(new URL(data.path, "http://x").pathname)) return;
   event.waitUntil(saveCopy(data.path));
+});
+
+// ---- notifications about new poems (Phase 18) ----------------------------------
+// Show it (always: no silent pushes), and save the announced poem for offline
+// reading through the same storage rules as a visit (saveCopy keeps only pages
+// marked "save"; private poems are never announced anyway).
+self.addEventListener("push", function (event) {
+  var data = null;
+  try { data = event.data ? event.data.json() : null; } catch (e) {}
+  var n = R.notificationFor(data);
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(n.title, n.options),
+    n.options.data.url === "/" ? null : saveCopy(n.options.data.url).catch(function () {}),
+  ]));
+});
+
+// A tap: an InkBoard window already on the poem is focused; else an open
+// InkBoard window is focused and navigated to it; else a new one opens.
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close();
+  var url = R.clickUrl(event.notification.data, self.location.origin);
+  event.waitUntil((async function () {
+    var wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (var i = 0; i < wins.length; i++) {
+      if (wins[i].url === url) return wins[i].focus().catch(function () {});
+    }
+    for (var j = 0; j < wins.length; j++) {
+      if (new URL(wins[j].url).origin !== self.location.origin || !("navigate" in wins[j])) continue;
+      // Navigate first: focusing needs the tap's user activation, navigating
+      // doesn't, so a refused focus never stops the poem from opening.
+      try {
+        var moved = await wins[j].navigate(url);
+        if (!moved) continue;
+        try { await moved.focus(); } catch (e) {}
+        return moved;
+      } catch (e) {}
+    }
+    return self.clients.openWindow(url);
+  })());
+});
+
+// The push service replaced this device's subscription (Firefox; Chrome after
+// permission is granted again): subscribe again with the same key and tell
+// the server, dropping the old address. iOS never fires it; the page's
+// re-check on open and the server's 404/410 cleanup cover that.
+self.addEventListener("pushsubscriptionchange", function (event) {
+  event.waitUntil((async function () {
+    var old = event.oldSubscription;
+    // Firefox passes neither subscription: fall back to our own public key.
+    var key = (old && old.options && old.options.applicationServerKey) || PUSH_KEY || null;
+    var sub = event.newSubscription;
+    if (!sub && key) sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    if (!sub) return;
+    var headers = { "content-type": "application/json" };
+    await fetch("/api/push/subscription", { method: "POST", headers: headers, body: JSON.stringify(sub.toJSON()) });
+    if (old && old.endpoint !== sub.endpoint) {
+      await fetch("/api/push/subscription", { method: "DELETE", headers: headers, body: JSON.stringify({ endpoint: old.endpoint }) });
+    }
+  })());
 });
 
 // ---- lifecycle -------------------------------------------------------------------

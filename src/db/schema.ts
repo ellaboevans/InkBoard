@@ -343,6 +343,13 @@ export const poems = pgTable(
     status: poemStatus("status").notNull().default("draft"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     /**
+     * When the poem was announced to notification subscribers (docs/PLAN.md,
+     * Phase 18): set once, in the save that first publishes it as a public
+     * poem, and never cleared, so a poem is announced at most once ever.
+     * Poems published before Phase 18 were back-filled with published_at.
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    /**
      * At most one collection (the same editor's; src/server/collections.ts),
      * with a 1-based position that stays contiguous over all its poems,
      * drafts included. Both are set and cleared together by the app.
@@ -400,6 +407,55 @@ export const retiredSlugs = pgTable("retired_slugs", {
   slug: text("slug").primaryKey(),
   retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Push subscriptions for new-poem notifications (docs/PLAN.md, Phase 18), one
+ * per device/browser. No link to any person or account: only what the push
+ * service needs to reach the device (src/server/push.ts). The endpoint is a
+ * capability URL on an allowlisted push service.
+ */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Last 2xx from the push service; the cleanup cron drops rows unused for 90 days. */
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_key").on(t.endpoint)],
+);
+
+/**
+ * One row per notification claimed for a device: what the limits count (one
+ * per author per device in 12 hours, three per device in 24 hours). Claimed
+ * under the subscription row's lock before sending (src/server/push.ts);
+ * pruned after two days by the cleanup cron.
+ */
+export const pushDeliveries = pgTable(
+  "push_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    poemId: uuid("poem_id")
+      .notNull()
+      .references(() => poems.id, { onDelete: "cascade" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("push_deliveries_subscription_sent_idx").on(t.subscriptionId, t.sentAt),
+    index("push_deliveries_editor_idx").on(t.editorId),
+    index("push_deliveries_poem_idx").on(t.poemId),
+  ],
+);
 
 /** Fixed-window rate limit counters (see src/server/rate-limit.ts). */
 export const rateLimits = pgTable("rate_limits", {

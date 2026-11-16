@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InkBoard · Share a poem as an image</title>
+<!--
+  Design review page (docs). Self-contained: inline CSS, system fonts, no
+  scripts, no external requests. The PNGs in designs/ and flow/ are real
+  renders from the throwaway prototype (see docs/research/share-image.md):
+  designs/ from render-designs.mjs, flow/ from flow-shots.mjs.
+  The viewer and chat frames are simplified and unbranded on purpose: grey
+  shapes where an app's own UI sits, labelled, no logos or brand colours.
+-->
+<style>
+:root {
+  color-scheme: light;
+  --paper: #fdfaf4;
+  --canvas: #f5efe6;
+  --ink: #261d17;
+  --muted: #61564d;
+  --primary: #852e2c;
+  --border: #e4dbcd;
+  --card: #fffdf9;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 32px 16px 96px; }
+h1, h2, h3, h4 { font-family: var(--serif); font-weight: 400; line-height: 1.2; }
+h1 { font-size: clamp(30px, 6vw, 44px); margin: 8px 0 12px; }
+h2 { font-size: clamp(24px, 4.5vw, 32px); margin: 64px 0 8px; padding-top: 24px; border-top: 1px solid var(--border); }
+h3 { font-size: 22px; margin: 36px 0 8px; }
+h4 { font-size: 18px; margin: 28px 0 10px; }
+p, li { max-width: 72ch; }
+a { color: var(--primary); }
+.eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .02em; }
+.lede { font-size: 17px; color: var(--muted); }
+.note { color: var(--muted); font-size: 14px; }
+.meta { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 20px 0 0; font-size: 14px; }
+.panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; margin: 20px 0; }
+.panel h3 { margin-top: 0; }
+.panel ol, .panel ul { padding-left: 20px; margin: 8px 0 0; }
+.panel li + li { margin-top: 6px; }
+.rec { border-color: var(--primary); border-width: 2px; }
+.badge { display: inline-block; font-size: 12px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--muted); background: var(--paper); vertical-align: middle; }
+.badge.yes { color: var(--paper); background: var(--primary); border-color: var(--primary); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.cols .panel { margin: 0; }
+
+/* Designs */
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.grid3 > div { min-width: 0; }
+.dhead { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; position: sticky; top: 0; background: var(--paper); padding: 8px 0; z-index: 2; border-bottom: 1px solid var(--border); }
+.dhead div { font-family: var(--serif); font-size: 18px; }
+img.card { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); background: #fff; }
+@media (min-width: 900px) { .narrow-grid { max-width: 760px; } }
+
+/* Viewer frames (unbranded) */
+.ctxrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 24px; align-items: start; }
+figure { margin: 0; }
+.phone { position: relative; width: 100%; max-width: 270px; aspect-ratio: 9 / 16; border-radius: 26px; overflow: hidden; border: 7px solid #3a322c; background: #111; margin: 0 auto; }
+.phone > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ov-top { position: absolute; left: 0; right: 0; top: 0; height: 13%; background: linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,0)); padding: 6px 8px; }
+.bars { display: flex; gap: 3px; }
+.bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,.85); }
+.bars i + i { background: rgba(255,255,255,.4); }
+.who { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.who b { width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,.8); }
+.who span { width: 64px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.85); }
+.who em { width: 28px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.55); }
+.ov-bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 20.8%; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.55)); display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 10px; }
+.caption-line { height: 8px; width: 80%; border-radius: 4px; background: rgba(255,255,255,.8); margin: 0 auto; }
+.reply { height: 26px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.85); }
+.safe { position: absolute; left: 8.9%; right: 8.9%; top: 13.5%; bottom: 20.8%; border: 1.5px dashed rgba(133,46,44,.85); border-radius: 6px; pointer-events: none; }
+.ctx figcaption { display: grid; gap: 4px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.tag::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: #6b625b; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); margin: 8px 0 16px; }
+.legend .dash::before { content: ""; display: inline-block; width: 16px; height: 10px; border: 1.5px dashed rgba(133,46,44,.85); margin-right: 6px; vertical-align: -1px; }
+
+/* Chat (unbranded) */
+.chatrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 24px; align-items: start; }
+.chat { background: #ece7df; border-radius: 18px; padding: 18px 14px; max-width: 300px; margin: 0 auto; }
+.bubble { margin-left: auto; width: 78%; background: #fff; border-radius: 12px; padding: 4px; box-shadow: 0 1px 1px rgba(0,0,0,.08); }
+.bubble img { display: block; width: 100%; border-radius: 9px; background: #ddd; }
+.bubble.crop img, .bubble.four5 img { aspect-ratio: 4 / 5; object-fit: cover; }
+.bubble.fit img { aspect-ratio: 4 / 5; object-fit: contain; background: #222; }
+.bubble p { margin: 6px 4px 2px; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.chatfig figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; max-width: 300px; margin-inline: auto; }
+
+/* Flow */
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 20px; align-items: start; }
+.flow.wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+.flow img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--border); }
+.flow figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.flow figcaption b { color: var(--ink); }
+
+/* Tables */
+.tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--card); }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+td.n, th.n { white-space: nowrap; }
+th { font-weight: 600; background: var(--canvas); }
+tr:last-child td { border-bottom: 0; }
+pre { background: var(--canvas); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow-x: auto; font-size: 12.5px; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.pair img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 10px; display: block; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="eyebrow">InkBoard · research, designs and a prototype · 16 November 2026</p>
+  <h1>Share a poem as an image</h1>
+  <p class="lede">A “Share as image” button makes a portrait picture of a poem (its lines, title, author and InkBoard’s address) for a WhatsApp Status or a chat, and later Instagram Stories. Every picture on this page is a real render from a throwaway prototype, from fictional demo poems.</p>
+  <nav class="toc" aria-label="On this page">
+    <a href="#recommendation">Recommendation</a><a href="#choices">Your choices</a><a href="#designs">Designs</a><a href="#context">In a viewer and a chat</a><a href="#flow">The flow</a><a href="#evidence">Evidence</a><a href="#research">Research in short</a>
+  </nav>
+
+  <section id="recommendation" aria-labelledby="rec-h">
+    <div class="panel rec">
+      <h3 id="rec-h">Recommendation</h3>
+      <ul>
+        <li><b>Make the picture on the server, as a PNG,</b> the way InkBoard already makes link previews: about 30–60 ms and 90–180 KB per picture, the same for everyone, cached per poem and refreshed when it’s edited.</li>
+        <li><b>The “Page” design</b> for the first version: calm, the most readable at Status size, the cheapest to make. “Ink” could follow as a dark option.</li>
+        <li><b>Two sizes:</b> 9:16 for Status and Stories, and 4:5 for chats, where a tall picture is shrunk or cropped.</li>
+        <li><b>The poem’s address printed on the picture,</b> and the link sent as text with it. Whether a link in a Status caption can be tapped isn’t documented, and reports disagree; the printed address always works.</li>
+        <li><b>Ready before the tap:</b> the picture is made when the share sheet opens, so the Share button can hand it to the phone at once (phones allow 5 seconds after a tap; on slow 3G, making it took 3.6 s).</li>
+        <li><b>Public poems only.</b> Private poems get no picture, so their text can never appear on one.</li>
+        <li><b>One fix first, in what’s live today:</b> link previews of poems with Ewe tone marks on ɛ and ɔ put the accent beside the letter. The same font-order fix used here solves it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="choices" aria-labelledby="choices-h">
+    <h2 id="choices-h">Your choices</h2>
+    <p class="note">Each has a recommendation; the plan below assumes it unless you choose otherwise.</p>
+    <div class="cols">
+      <div class="panel"><h3>1. Design</h3><p>Page, Board or Ink, or Page with Ink as a dark option. <span class="badge yes">Page</span></p><p class="note">Board is the most “InkBoard”, but its card leaves less room for the poem and takes about ten times longer to make.</p></div>
+      <div class="panel"><h3>2. Which lines</h3><p>The whole poem when it fits, else from the start to a stanza break with “Read the whole poem on InkBoard”. Readers choosing lines (like song lyrics): in the first version, or later? <span class="badge yes">Later (phase 2)</span></p></div>
+      <div class="panel"><h3>3. The address on the picture</h3><p>The full address (today’s: <i>tryinkboard.elabo.me/p/abla-dzifa/instructions-for-the-house-sitter</i>), or a short link like <i>tryinkboard.elabo.me/s/k3x9q</i>, easier to type from a Status. <span class="badge yes">Short link, phase 3</span></p></div>
+      <div class="panel"><h3>4. Link as text with the picture</h3><p>Send “Title” by Author, on InkBoard: link with the picture (a caption on Android), or the picture alone. iPhones may drop one of the two: to be tested. <span class="badge yes">With the link</span></p></div>
+      <div class="panel"><h3>5. Private poems</h3><p>No picture, or a title-only “password protected” card. <span class="badge yes">No picture</span></p><p class="note">A teaser invites people to ask for the password in public; the link’s preview already shows only the title.</p></div>
+      <div class="panel"><h3>6. Where writers find it</h3><p>Besides the poem page and the board’s overlay: after publishing (“Poem published”), a poem’s row menu on the dashboard, the welcome checklist’s share step. <span class="badge yes">All three, phase 2</span></p></div>
+      <div class="panel"><h3>7. QR code on the picture</h3><p>Some Android phones can scan a code on their own screen; many people won’t know how. It takes room. <span class="badge yes">Not now</span></p></div>
+      <div class="panel"><h3>8. Chat size (4:5)</h3><p>In the first version, or the second? <span class="badge yes">Phase 2</span></p></div>
+    </div>
+
+    <h3>Plan</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Phase</th><th>What</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>Fix tone marks in today’s link previews</td><td>½ day</td></tr>
+        <tr><td>1</td><td>Share as image for public poems: Page design, 9:16, cached; poem page and overlay; preview sheet with Share, Download, Copy link, WhatsApp link; tests</td><td>2–3 days</td></tr>
+        <tr><td>2</td><td>4:5 chat size, choosing lines, writers’ entry points, bold type</td><td>2 days</td></tr>
+        <tr><td>3</td><td>Short links on the picture (with a visit count), Instagram Stories check, a second design</td><td>1–2 days</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="designs" aria-labelledby="designs-h">
+    <h2 id="designs-h">The designs</h2>
+    <p>Three directions, all paper and ink. Everything important stays inside the area WhatsApp and Instagram leave clear (see the next section). Each picture links to the full 1080×1920 PNG; under it, its size and how long the server took to make it.</p>
+    <ul>
+      <li><b>Page:</b> a page from a book of poems. Title, a short red rule, the poem; the writer and InkBoard’s address at the foot.</li>
+      <li><b>Board:</b> the poem as a card on InkBoard’s dotted board, like the cards on the site.</li>
+      <li><b>Ink:</b> dark ink with paper-coloured, centred lines. Striking among photos, best for short poems.</li>
+    </ul>
+    <p class="note">The Ewe lines are the demo proverbs with tone marks added to test the rendering; they aren’t checked Ewe. The long English poem and its title are written for the test.</p>
+    <div class="dhead" aria-hidden="true"><div>Page</div><div>Board</div><div>Ink</div></div>
+    <h4>Ewe, with tone marks (ɛ́ ɔ̀ ƒ ɣ ʋ ŋ)</h4><div class="grid3"><div><a href="designs/nunya-page-story.png"><img class="card" src="designs/nunya-page-story.png" alt="Ewe, with tone marks (ɛ́ ɔ̀ ƒ ɣ ʋ ŋ), Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">115 KB · 49 ms</p></div><div><a href="designs/nunya-board-story.png"><img class="card" src="designs/nunya-board-story.png" alt="Ewe, with tone marks (ɛ́ ɔ̀ ƒ ɣ ʋ ŋ), Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">121 KB · 487 ms</p></div><div><a href="designs/nunya-ink-story.png"><img class="card" src="designs/nunya-ink-story.png" alt="Ewe, with tone marks (ɛ́ ɔ̀ ƒ ɣ ʋ ŋ), Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">114 KB · 41 ms</p></div></div>
+<h4>Ewe, a short proverb</h4><div class="grid3"><div><a href="designs/ati-deka-page-story.png"><img class="card" src="designs/ati-deka-page-story.png" alt="Ewe, a short proverb, Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">94 KB · 39 ms</p></div><div><a href="designs/ati-deka-board-story.png"><img class="card" src="designs/ati-deka-board-story.png" alt="Ewe, a short proverb, Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">100 KB · 478 ms</p></div><div><a href="designs/ati-deka-ink-story.png"><img class="card" src="designs/ati-deka-ink-story.png" alt="Ewe, a short proverb, Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">94 KB · 34 ms</p></div></div>
+<h4>Twi</h4><div class="grid3"><div><a href="designs/sankofa-page-story.png"><img class="card" src="designs/sankofa-page-story.png" alt="Twi, Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">105 KB · 36 ms</p></div><div><a href="designs/sankofa-board-story.png"><img class="card" src="designs/sankofa-board-story.png" alt="Twi, Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">111 KB · 451 ms</p></div><div><a href="designs/sankofa-ink-story.png"><img class="card" src="designs/sankofa-ink-story.png" alt="Twi, Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">105 KB · 36 ms</p></div></div>
+<h4>Ga</h4><div class="grid3"><div><a href="designs/oyiwala-page-story.png"><img class="card" src="designs/oyiwala-page-story.png" alt="Ga, Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">131 KB · 38 ms</p></div><div><a href="designs/oyiwala-board-story.png"><img class="card" src="designs/oyiwala-board-story.png" alt="Ga, Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">130 KB · 503 ms</p></div><div><a href="designs/oyiwala-ink-story.png"><img class="card" src="designs/oyiwala-ink-story.png" alt="Ga, Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">131 KB · 38 ms</p></div></div>
+<h4>English, short</h4><div class="grid3"><div><a href="designs/harmattan-page-story.png"><img class="card" src="designs/harmattan-page-story.png" alt="English, short, Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">99 KB · 32 ms</p></div><div><a href="designs/harmattan-board-story.png"><img class="card" src="designs/harmattan-board-story.png" alt="English, short, Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">106 KB · 491 ms</p></div><div><a href="designs/harmattan-ink-story.png"><img class="card" src="designs/harmattan-ink-story.png" alt="English, short, Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">99 KB · 32 ms</p></div></div>
+<h4>English, long poem, long title</h4><div class="grid3"><div><a href="designs/instructions-page-story.png"><img class="card" src="designs/instructions-page-story.png" alt="English, long poem, long title, Page design" loading="lazy" width="1080" height="1920"></a><p class="meta">182 KB · 56 ms</p></div><div><a href="designs/instructions-board-story.png"><img class="card" src="designs/instructions-board-story.png" alt="English, long poem, long title, Board design" loading="lazy" width="1080" height="1920"></a><p class="meta">160 KB · 489 ms</p></div><div><a href="designs/instructions-ink-story.png"><img class="card" src="designs/instructions-ink-story.png" alt="English, long poem, long title, Ink design" loading="lazy" width="1080" height="1920"></a><p class="meta">180 KB · 55 ms</p></div></div>
+
+    <h3>4:5 for chats</h3>
+    <p>1080×1350. Fills a chat bubble; the Status version is shrunk or cropped there (next section).</p>
+    <div class="grid3"><div><a href="designs/nunya-page-portrait.png"><img class="card" src="designs/nunya-page-portrait.png" alt="nunya, Page, 4:5" loading="lazy" width="1080" height="1350"></a><p class="meta">Nunya · Page · 105 KB</p></div><div><a href="designs/harmattan-page-portrait.png"><img class="card" src="designs/harmattan-page-portrait.png" alt="harmattan, Page, 4:5" loading="lazy" width="1080" height="1350"></a><p class="meta">Harmattan · Page · 88 KB</p></div><div><a href="designs/instructions-page-portrait.png"><img class="card" src="designs/instructions-page-portrait.png" alt="instructions, Page, 4:5" loading="lazy" width="1080" height="1350"></a><p class="meta">Instructions · Page · 169 KB</p></div><div><a href="designs/harmattan-board-portrait.png"><img class="card" src="designs/harmattan-board-portrait.png" alt="Harmattan, Board, 4:5" loading="lazy" width="1080" height="1350"></a><p class="meta">Harmattan · Board · 94 KB</p></div><div><a href="designs/harmattan-ink-portrait.png"><img class="card" src="designs/harmattan-ink-portrait.png" alt="Harmattan, Ink, 4:5" loading="lazy" width="1080" height="1350"></a><p class="meta">Harmattan · Ink · 88 KB</p></div></div>
+
+    <h3>Lines a reader picks</h3>
+    <p>Lines 5–7 of the long poem, headed “Lines from” and the title.</p>
+    <div class="grid3"><div><a href="designs/instructions-page-picked.png"><img class="card" src="designs/instructions-page-picked.png" alt="Chosen lines 5 to 7, Page" loading="lazy" width="1080" height="1920"></a><p class="meta">Page</p></div><div><a href="designs/instructions-board-picked.png"><img class="card" src="designs/instructions-board-picked.png" alt="Chosen lines 5 to 7, Board" loading="lazy" width="1080" height="1920"></a><p class="meta">Board</p></div><div><a href="designs/instructions-ink-picked.png"><img class="card" src="designs/instructions-ink-picked.png" alt="Chosen lines 5 to 7, Ink" loading="lazy" width="1080" height="1920"></a><p class="meta">Ink</p></div></div>
+  </section>
+
+  <section id="context" aria-labelledby="ctx-h">
+    <h2 id="ctx-h">In a viewer and a chat</h2>
+    <p>Simplified, unbranded frames: grey shapes where an app’s own controls sit. The sizes are the cautious end of what guides report; WhatsApp and Instagram don’t publish them for ordinary posts.</p>
+    <div class="legend"><span class="tag">An app’s own controls</span><span class="dash">Kept clear for the poem (top 260 px, bottom 400 px, 96 px at the sides)</span></div>
+    <h3>Full screen in a Status viewer</h3>
+    <div class="ctxrow"><figure class="ctx"><div class="phone status">
+  <img src="designs/nunya-page-story.png" alt="Nùnyá, Page design, in a Status viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="caption-line"></div><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name, time (≈ top 250 px)</span><span class="tag bottom">Reply bar and caption (≈ bottom 400 px)</span></figcaption></figure><figure class="ctx"><div class="phone status">
+  <img src="designs/nunya-board-story.png" alt="Nùnyá, Board design, in a Status viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="caption-line"></div><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name, time (≈ top 250 px)</span><span class="tag bottom">Reply bar and caption (≈ bottom 400 px)</span></figcaption></figure><figure class="ctx"><div class="phone status">
+  <img src="designs/nunya-ink-story.png" alt="Nùnyá, Ink design, in a Status viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="caption-line"></div><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name, time (≈ top 250 px)</span><span class="tag bottom">Reply bar and caption (≈ bottom 400 px)</span></figcaption></figure></div>
+    <h3>Full screen in a Story viewer</h3>
+    <div class="ctxrow"><figure class="ctx"><div class="phone story">
+  <img src="designs/instructions-page-story.png" alt="Long poem, Page design, in a Story viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name (top 14%)</span><span class="tag bottom">Message bar (bottom 20%, ads say up to 35%)</span></figcaption></figure><figure class="ctx"><div class="phone story">
+  <img src="designs/oyiwala-ink-story.png" alt="Ga poem, Ink design, in a Story viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name (top 14%)</span><span class="tag bottom">Message bar (bottom 20%, ads say up to 35%)</span></figcaption></figure><figure class="ctx"><div class="phone story">
+  <img src="designs/sankofa-board-story.png" alt="Twi poem, Board design, in a Story viewer" loading="lazy">
+  <div class="ov-top" aria-hidden="true"><div class="bars"><i></i><i></i><i></i></div><div class="who"><b></b><span></span><em></em></div></div>
+  <div class="ov-bottom" aria-hidden="true"><div class="reply"></div></div>
+  <div class="safe" aria-hidden="true"></div>
+</div><figcaption><span class="tag top">Progress bars, name (top 14%)</span><span class="tag bottom">Message bar (bottom 20%, ads say up to 35%)</span></figcaption></figure></div>
+    <h3>Sent to a chat</h3>
+    <p class="note">How WhatsApp shows a tall picture in a chat isn’t documented: guides say it’s shrunk or cropped toward 4:5 or square. Both cases, and the 4:5 version, with the link sent as text underneath.</p>
+    <div class="chatrow"><figure class="chatfig"><div class="chat"><div class="bubble crop"><img src="designs/nunya-page-story.png" alt="" loading="lazy"><p>“Nùnyá” by Selorm Agbɔ, on InkBoard: tryinkboard.elabo.me/p/selorm-agbo/nunya</p></div></div><figcaption>9:16 sent to a chat, <b>if the bubble crops</b> to about 4:5 (assumed: WhatsApp doesn't document it). Only the empty top and bottom margins go (the safe area keeps the text in the middle), but the type is smaller than in the 4:5 version.</figcaption></figure><figure class="chatfig"><div class="chat"><div class="bubble fit"><img src="designs/nunya-page-story.png" alt="" loading="lazy"><p>“Nùnyá” by Selorm Agbɔ, on InkBoard: tryinkboard.elabo.me/p/selorm-agbo/nunya</p></div></div><figcaption>9:16 sent to a chat, <b>if the bubble shows it all</b>, scaled down. Everything is there, but small.</figcaption></figure><figure class="chatfig"><div class="chat"><div class="bubble four5"><img src="designs/nunya-page-portrait.png" alt="" loading="lazy"><p>“Nùnyá” by Selorm Agbɔ, on InkBoard: tryinkboard.elabo.me/p/selorm-agbo/nunya</p></div></div><figcaption>The <b>4:5 chat version</b> fills the bubble either way. Recommended for chats.</figcaption></figure></div>
+  </section>
+
+  <section id="flow" aria-labelledby="flow-h">
+    <h2 id="flow-h">The flow</h2>
+    <p>Screenshots of the prototype (its sheet has extra “prototype options” for testing on phones; the real one would be shorter).</p>
+    <div class="flow">
+      <figure><img src="flow/1-poem-page-375.png" alt="Poem page on a phone with a Share as image button under the byline" loading="lazy"><figcaption><b>1. Poem page, phone.</b> “Share as image” under the byline, public poems only.</figcaption></figure>
+      <figure><img src="flow/2-sheet-375.png" alt="Share sheet with a preview of the picture and design choices" loading="lazy"><figcaption><b>2. The sheet.</b> Opening it makes the picture; the preview is the exact file that will be shared.</figcaption></figure>
+      <figure><img src="flow/3-choose-lines-375.png" alt="Choosing lines 5 to 6, and the Share button" loading="lazy"><figcaption><b>3. Choosing lines, then Share.</b> Share hands the file to the phone’s share sheet (WhatsApp, Status, chats).</figcaption></figure>
+      <figure><img src="flow/4-overlay-375.png" alt="The board's poem overlay on a phone with the same button" loading="lazy"><figcaption><b>4. Overlay, phone.</b> The same button when a poem is opened from the board.</figcaption></figure>
+    </div>
+    <div class="flow wide" style="margin-top:20px">
+      <figure><img src="flow/5-overlay-1280.png" alt="The board's poem overlay on a desktop with the button" loading="lazy"><figcaption><b>5. Overlay, desktop.</b></figcaption></figure>
+      <figure><img src="flow/7-desktop-fallback-1280.png" alt="On a desktop without file sharing: Download image, Copy link, Send link on WhatsApp" loading="lazy"><figcaption><b>6. Desktop with no share sheet</b> (and Firefox, and in-app browsers): Download image, Copy link, and “Send link on WhatsApp”, whose preview is the existing link card.</figcaption></figure>
+    </div>
+    <div class="panel">
+      <h3>Also recommended for writers (phase 2)</h3>
+      <ul>
+        <li><b>Right after publishing:</b> “Poem published” on the dashboard gets a “Share as image” action, the moment a writer most wants to tell people.</li>
+        <li><b>A poem’s row menu</b> on the dashboard (next to View, Edit, Pin).</li>
+        <li><b>The welcome checklist’s share step</b> (today: share the author page’s link) offers the picture of their first poem too.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="evidence" aria-labelledby="ev-h">
+    <h2 id="ev-h">Evidence from the prototype</h2>
+    <h3>The shared file</h3>
+    <p>Playwright, with the phone’s share sheet stubbed to capture what <code>navigator.share()</code> receives:</p>
+<pre>{"name":"inkboard-nunya.png","type":"image/png","size":117745,"width":1080,"height":1920,
+ "text":"“Nùnyá” by Selorm Agbɔ, on InkBoard: https://tryinkboard.elabo.me/p/selorm-agbo/nunya",
+ "active":true,"msAfterClick":0}
+
+chat size + JPEG + chosen lines + no text:
+{"name":"inkboard-instructions-for-the-house-sitter.jpg","type":"image/jpeg","size":118506,
+ "width":1080,"height":1350,"text":null,"active":true,"msAfterClick":0}</pre>
+    <p class="note"><code>active</code>: the tap’s user activation was still live at the call; <code>msAfterClick</code>: nothing waited before it. Also checked: the overlay shares the same way; a desktop with no share sheet gets Download (file <i>inkboard-harmattan.png</i>), Copy link and the WhatsApp link; a private poem has no button and its picture is refused (403).</p>
+    <h3>How long the file takes to be ready</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Network (emulated)</th><th>Tap to ready</th></tr></thead>
+      <tbody><tr><td>This computer (localhost)</td><td>0.06–0.12 s</td></tr><tr><td>3G (1.5 Mbps, 150 ms)</td><td>0.8 s</td></tr><tr><td>Slow 3G (400 kbps, 400 ms)</td><td>3.6 s</td></tr></tbody>
+    </table></div>
+    <p class="note">Phones allow 5 seconds after a tap. Making the file inside the Share tap would fail on slow connections; making it when the sheet opens doesn’t.</p>
+    <h3>Sizes and render times</h3>
+    <p class="note">Production build on a Mac, one request at a time, 30 pictures. JPEG sizes are what a phone’s browser makes from the PNG; “WhatsApp-like” is a re-encode at 1600 px and quality 0.7, the figures guides report for WhatsApp chats.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Design</th><th>Size</th><th>Pictures</th><th>Server render</th><th>PNG KB</th><th>JPEG 0.9 KB</th><th>JPEG 0.8 KB</th><th>WhatsApp-like KB</th></tr></thead>
+      <tbody>
+<tr><td>Page</td><td>9:16</td><td>6</td><td>32–56 ms</td><td>94–182</td><td>58–171</td><td>48–135</td><td>31–84</td></tr>
+<tr><td>Page</td><td>4:5</td><td>3</td><td>28–53 ms</td><td>88–169</td><td>69–169</td><td>56–132</td><td>48–113</td></tr>
+<tr><td>Board</td><td>9:16</td><td>6</td><td>451–503 ms</td><td>100–160</td><td>63–139</td><td>50–108</td><td>32–68</td></tr>
+<tr><td>Board</td><td>4:5</td><td>3</td><td>376–393 ms</td><td>94–148</td><td>75–136</td><td>58–105</td><td>49–88</td></tr>
+<tr><td>Ink</td><td>9:16</td><td>6</td><td>32–55 ms</td><td>94–180</td><td>56–166</td><td>45–130</td><td>31–82</td></tr>
+<tr><td>Ink</td><td>4:5</td><td>3</td><td>29–52 ms</td><td>88–168</td><td>66–165</td><td>53–129</td><td>46–109</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">PNG wins: the flat paper colours keep it small, JPEG is hardly smaller for text and softer, and WhatsApp re-encodes either way. Board is slow because of its dotted background and shadow (not profiled).</p>
+    <h3>Tone marks</h3>
+    <p>The server’s text engine places marks only by the font’s defaults. When ɛ comes from one font and its accent from another, the accent lands beside it (top). Setting Ghanaian text in Gentium Book Plus first fixes it (bottom), and the prototype does that. The browser (right) gets it right either way.</p>
+    <div class="pair">
+      <figure><img src="designs/text-satori.png" alt="Server rendering: misplaced accents with Newsreader first, correct with Gentium first" loading="lazy"><figcaption class="note">Server (Satori 0.29): (a) today’s font order, (b) a span per letter, (c) Gentium first.</figcaption></figure>
+      <figure><img src="designs/text-canvas.png" alt="Browser canvas rendering: correct accents in both font orders" loading="lazy"><figcaption class="note">Browser canvas (desktop Chrome), both orders.</figcaption></figure>
+    </div>
+    <figure style="margin-top:16px;max-width:560px"><img src="designs/whatsapp-like-compare.png" alt="The same Ewe lines before and after a WhatsApp-like re-encode" loading="lazy" style="width:100%;border:1px solid var(--border);border-radius:10px"><figcaption class="note">The Ewe lines as made (top) and after a WhatsApp-like re-encode (bottom): softer, still legible.</figcaption></figure>
+  </section>
+
+  <section id="research" aria-labelledby="res-h">
+    <h2 id="res-h">Research in short</h2>
+    <p>Full version with sources and dates: <a href="../../research/share-image.md">docs/research/share-image.md</a>.</p>
+    <ul>
+      <li><b>Status:</b> WhatsApp documents only a minimum (720×1280); 1080×1920 is the convention. Status pictures are compressed and HD doesn’t apply to Status. Its controls cover roughly the top 250 px and bottom 250–400 px (guides disagree).</li>
+      <li><b>Stories:</b> Instagram recommends 9:16; only ad safe zones are published (top 14%, bottom 20% or 35% depending on the source). From the web, there’s no direct way into Stories: the share sheet or the gallery.</li>
+      <li><b>Chats:</b> tall pictures are shrunk or cropped; 4:5 or square fill the bubble (guides; undocumented).</li>
+      <li><b>Sharing files from the web:</b> Chrome, Samsung Internet and Opera on Android, Safari from iOS 15, Chrome/Edge on Windows, ChromeOS and Mac. Not Firefox, and not in-app browsers built on Android WebView. PNG and JPEG are allowed. One tap allows one share, within 5 seconds.</li>
+      <li><b>Text with the file:</b> Android sends it with the picture; whether WhatsApp keeps it as a caption, and what iPhone WhatsApp does with both, isn’t documented (reports disagree). Test on phones.</li>
+      <li><b>Back to the poem:</b> a link in a text Status gets a preview; a link in a picture’s caption may not be tappable (unclear). Print the address; consider a short link.</li>
+      <li><b>Rendering:</b> the server’s text engine (Satori 0.29) has no kerning or mark positioning, hence the Gentium-first rule; the browser’s canvas shapes text properly but needs hand-made line breaks, font loading and more code on every phone.</li>
+      <li><b>Not verified here:</b> anything on a real phone (the share sheet was stubbed), WhatsApp’s actual compression and overlays, Instagram’s share target. The research doc ends with how to test on an Android phone and an iPhone.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

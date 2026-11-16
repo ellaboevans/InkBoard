@@ -1,0 +1,602 @@
+[
+  {
+    "name": "ati-deka-page-story",
+    "first": {
+      "renderMs": 122,
+      "totalMs": 192,
+      "bytes": 96117
+    },
+    "repeat": {
+      "renderMs": 39,
+      "totalMs": 43,
+      "bytes": 96117
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 59709,
+    "jpeg80": 48665,
+    "whatsappLike": 32027
+  },
+  {
+    "name": "ati-deka-board-story",
+    "first": {
+      "renderMs": 492,
+      "totalMs": 497,
+      "bytes": 102695
+    },
+    "repeat": {
+      "renderMs": 478,
+      "totalMs": 482,
+      "bytes": 102695
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 64209,
+    "jpeg80": 50830,
+    "whatsappLike": 32901
+  },
+  {
+    "name": "ati-deka-ink-story",
+    "first": {
+      "renderMs": 35,
+      "totalMs": 38,
+      "bytes": 96063
+    },
+    "repeat": {
+      "renderMs": 34,
+      "totalMs": 37,
+      "bytes": 96063
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 56895,
+    "jpeg80": 46432,
+    "whatsappLike": 31518
+  },
+  {
+    "name": "nunya-page-story",
+    "first": {
+      "renderMs": 44,
+      "totalMs": 49,
+      "bytes": 117745
+    },
+    "repeat": {
+      "renderMs": 49,
+      "totalMs": 53,
+      "bytes": 117745
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 79774,
+    "jpeg80": 64837,
+    "whatsappLike": 42616
+  },
+  {
+    "name": "nunya-board-story",
+    "first": {
+      "renderMs": 485,
+      "totalMs": 490,
+      "bytes": 123564
+    },
+    "repeat": {
+      "renderMs": 487,
+      "totalMs": 490,
+      "bytes": 123564
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 88120,
+    "jpeg80": 69084,
+    "whatsappLike": 43332
+  },
+  {
+    "name": "nunya-ink-story",
+    "first": {
+      "renderMs": 41,
+      "totalMs": 43,
+      "bytes": 117107
+    },
+    "repeat": {
+      "renderMs": 41,
+      "totalMs": 43,
+      "bytes": 117107
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 79399,
+    "jpeg80": 64258,
+    "whatsappLike": 40760
+  },
+  {
+    "name": "sankofa-page-story",
+    "first": {
+      "renderMs": 36,
+      "totalMs": 43,
+      "bytes": 107257
+    },
+    "repeat": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107257
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 72058,
+    "jpeg80": 58411,
+    "whatsappLike": 38780
+  },
+  {
+    "name": "sankofa-board-story",
+    "first": {
+      "renderMs": 489,
+      "totalMs": 491,
+      "bytes": 113253
+    },
+    "repeat": {
+      "renderMs": 451,
+      "totalMs": 453,
+      "bytes": 113253
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 78139,
+    "jpeg80": 61662,
+    "whatsappLike": 38996
+  },
+  {
+    "name": "sankofa-ink-story",
+    "first": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107249
+    },
+    "repeat": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107249
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 72647,
+    "jpeg80": 58491,
+    "whatsappLike": 37182
+  },
+  {
+    "name": "oyiwala-page-story",
+    "first": {
+      "renderMs": 38,
+      "totalMs": 43,
+      "bytes": 133916
+    },
+    "repeat": {
+      "renderMs": 38,
+      "totalMs": 40,
+      "bytes": 133916
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 100183,
+    "jpeg80": 80338,
+    "whatsappLike": 51394
+  },
+  {
+    "name": "oyiwala-board-story",
+    "first": {
+      "renderMs": 506,
+      "totalMs": 508,
+      "bytes": 133258
+    },
+    "repeat": {
+      "renderMs": 503,
+      "totalMs": 505,
+      "bytes": 133258
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 95809,
+    "jpeg80": 75670,
+    "whatsappLike": 48326
+  },
+  {
+    "name": "oyiwala-ink-story",
+    "first": {
+      "renderMs": 38,
+      "totalMs": 40,
+      "bytes": 133903
+    },
+    "repeat": {
+      "renderMs": 38,
+      "totalMs": 40,
+      "bytes": 133903
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 96698,
+    "jpeg80": 77477,
+    "whatsappLike": 50089
+  },
+  {
+    "name": "harmattan-page-story",
+    "first": {
+      "renderMs": 33,
+      "totalMs": 39,
+      "bytes": 101642
+    },
+    "repeat": {
+      "renderMs": 32,
+      "totalMs": 34,
+      "bytes": 101642
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 69610,
+    "jpeg80": 56373,
+    "whatsappLike": 37588
+  },
+  {
+    "name": "harmattan-board-story",
+    "first": {
+      "renderMs": 487,
+      "totalMs": 489,
+      "bytes": 108537
+    },
+    "repeat": {
+      "renderMs": 491,
+      "totalMs": 493,
+      "bytes": 108537
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 75116,
+    "jpeg80": 59582,
+    "whatsappLike": 39605
+  },
+  {
+    "name": "harmattan-ink-story",
+    "first": {
+      "renderMs": 33,
+      "totalMs": 35,
+      "bytes": 101264
+    },
+    "repeat": {
+      "renderMs": 32,
+      "totalMs": 34,
+      "bytes": 101264
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 69511,
+    "jpeg80": 55948,
+    "whatsappLike": 35693
+  },
+  {
+    "name": "instructions-page-story",
+    "first": {
+      "renderMs": 57,
+      "totalMs": 60,
+      "bytes": 186305
+    },
+    "repeat": {
+      "renderMs": 56,
+      "totalMs": 57,
+      "bytes": 186305
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 174720,
+    "jpeg80": 138299,
+    "whatsappLike": 86047
+  },
+  {
+    "name": "instructions-board-story",
+    "first": {
+      "renderMs": 508,
+      "totalMs": 510,
+      "bytes": 163409
+    },
+    "repeat": {
+      "renderMs": 489,
+      "totalMs": 491,
+      "bytes": 163409
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 142028,
+    "jpeg80": 111000,
+    "whatsappLike": 69681
+  },
+  {
+    "name": "instructions-ink-story",
+    "first": {
+      "renderMs": 57,
+      "totalMs": 59,
+      "bytes": 184396
+    },
+    "repeat": {
+      "renderMs": 55,
+      "totalMs": 57,
+      "bytes": 184396
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 169514,
+    "jpeg80": 133427,
+    "whatsappLike": 83498
+  },
+  {
+    "name": "nunya-page-portrait",
+    "first": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107593
+    },
+    "repeat": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107593
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 81428,
+    "jpeg80": 64921,
+    "whatsappLike": 56021
+  },
+  {
+    "name": "nunya-board-portrait",
+    "first": {
+      "renderMs": 381,
+      "totalMs": 383,
+      "bytes": 112452
+    },
+    "repeat": {
+      "renderMs": 391,
+      "totalMs": 392,
+      "bytes": 112452
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 82645,
+    "jpeg80": 64577,
+    "whatsappLike": 54623
+  },
+  {
+    "name": "nunya-ink-portrait",
+    "first": {
+      "renderMs": 36,
+      "totalMs": 38,
+      "bytes": 107148
+    },
+    "repeat": {
+      "renderMs": 35,
+      "totalMs": 37,
+      "bytes": 107148
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 80851,
+    "jpeg80": 64043,
+    "whatsappLike": 55266
+  },
+  {
+    "name": "harmattan-page-portrait",
+    "first": {
+      "renderMs": 28,
+      "totalMs": 30,
+      "bytes": 90173
+    },
+    "repeat": {
+      "renderMs": 28,
+      "totalMs": 30,
+      "bytes": 90173
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 70980,
+    "jpeg80": 56883,
+    "whatsappLike": 49449
+  },
+  {
+    "name": "harmattan-board-portrait",
+    "first": {
+      "renderMs": 369,
+      "totalMs": 371,
+      "bytes": 96505
+    },
+    "repeat": {
+      "renderMs": 376,
+      "totalMs": 377,
+      "bytes": 96505
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 76388,
+    "jpeg80": 59748,
+    "whatsappLike": 50029
+  },
+  {
+    "name": "harmattan-ink-portrait",
+    "first": {
+      "renderMs": 33,
+      "totalMs": 35,
+      "bytes": 89784
+    },
+    "repeat": {
+      "renderMs": 29,
+      "totalMs": 31,
+      "bytes": 89784
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 67154,
+    "jpeg80": 53861,
+    "whatsappLike": 46830
+  },
+  {
+    "name": "instructions-page-portrait",
+    "first": {
+      "renderMs": 55,
+      "totalMs": 56,
+      "bytes": 173146
+    },
+    "repeat": {
+      "renderMs": 53,
+      "totalMs": 54,
+      "bytes": 173146
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 173254,
+    "jpeg80": 135331,
+    "whatsappLike": 115208
+  },
+  {
+    "name": "instructions-board-portrait",
+    "first": {
+      "renderMs": 373,
+      "totalMs": 375,
+      "bytes": 151863
+    },
+    "repeat": {
+      "renderMs": 393,
+      "totalMs": 395,
+      "bytes": 151863
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 138988,
+    "jpeg80": 107609,
+    "whatsappLike": 90466
+  },
+  {
+    "name": "instructions-ink-portrait",
+    "first": {
+      "renderMs": 54,
+      "totalMs": 56,
+      "bytes": 171874
+    },
+    "repeat": {
+      "renderMs": 52,
+      "totalMs": 54,
+      "bytes": 171874
+    },
+    "size": {
+      "width": 1080,
+      "height": 1350
+    },
+    "jpeg90": 169406,
+    "jpeg80": 131685,
+    "whatsappLike": 112079
+  },
+  {
+    "name": "instructions-page-picked",
+    "first": {
+      "renderMs": 43,
+      "totalMs": 45,
+      "bytes": 141731
+    },
+    "repeat": {
+      "renderMs": 43,
+      "totalMs": 45,
+      "bytes": 141731
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 124724,
+    "jpeg80": 99385,
+    "whatsappLike": 62859
+  },
+  {
+    "name": "instructions-board-picked",
+    "first": {
+      "renderMs": 502,
+      "totalMs": 503,
+      "bytes": 156292
+    },
+    "repeat": {
+      "renderMs": 498,
+      "totalMs": 500,
+      "bytes": 156292
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 134758,
+    "jpeg80": 105702,
+    "whatsappLike": 67127
+  },
+  {
+    "name": "instructions-ink-picked",
+    "first": {
+      "renderMs": 44,
+      "totalMs": 45,
+      "bytes": 140170
+    },
+    "repeat": {
+      "renderMs": 44,
+      "totalMs": 46,
+      "bytes": 140170
+    },
+    "size": {
+      "width": 1080,
+      "height": 1920
+    },
+    "jpeg90": 116996,
+    "jpeg80": 93246,
+    "whatsappLike": 61135
+  }
+]

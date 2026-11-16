@@ -20,6 +20,8 @@ const eslintConfig = defineConfig([
     ".next-preview/**",
     "test-results/**",
     "playwright-report/**",
+    // Video walkthrough recordings, renders and builds (video/README.md)
+    "video/.out/**",
   ]),
 ]);
 

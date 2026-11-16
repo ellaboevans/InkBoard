@@ -57,3 +57,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /.next-build/
+
+# video walkthroughs: recordings, renders, builds (see video/README.md)
+/video/.out/

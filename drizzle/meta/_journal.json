@@ -141,6 +141,13 @@
       "when": 1794821192118,
       "tag": "0019_push_follows",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794854979433,
+      "tag": "0020_welcome_checklist",
+      "breakpoints": true
     }
   ]
 }

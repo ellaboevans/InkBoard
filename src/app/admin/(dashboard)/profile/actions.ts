@@ -26,7 +26,8 @@ export async function saveProfileAction(
     penName: formData.get("penName"),
     bio: formData.get("bio"),
     tagline: formData.get("tagline"),
-    avatar: formData.get("avatar"),
+    // Absent until the editor picks one (profile-form.tsx): leave it as it is.
+    avatar: formData.has("avatar") ? formData.get("avatar") : undefined,
     links: formData.getAll("links"),
     pinnedPoemId: formData.get("pinnedPoemId"),
   });

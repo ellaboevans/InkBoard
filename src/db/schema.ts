@@ -73,6 +73,17 @@ export const editors = pgTable(
      * Opaque on purpose: authenticators may show or sync it, so never the email or id.
      */
     webauthnUserId: text("webauthn_user_id"),
+    /**
+     * The dashboard's welcome checklist (docs/PLAN.md, Phase 20). Every step is
+     * derived from real data; only these two are stored, on the editor so they
+     * hold on every device. `author_page_shared_at`: the first time the editor
+     * shared their author page from the checklist. `checklist_hidden_at`: the
+     * checklist is gone for good, either "Hide checklist" or the one render
+     * that found all six steps done and showed "You're all set" (claimed with a
+     * conditional UPDATE, so that message shows exactly once).
+     */
+    authorPageSharedAt: timestamp("author_page_shared_at", { withTimezone: true }),
+    checklistHiddenAt: timestamp("checklist_hidden_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

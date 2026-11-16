@@ -129,6 +129,7 @@ async function Profile() {
       <ProfileForm
         key={JSON.stringify(profile)}
         initial={{ ...profile, avatar }}
+        avatarChosen={profile.avatar !== null}
         slug={editor.slug}
         publishedPoems={published}
       />

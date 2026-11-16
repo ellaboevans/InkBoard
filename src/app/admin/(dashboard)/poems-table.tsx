@@ -102,14 +102,15 @@ export function PoemsTable({
   return (
     <div className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div role="group" aria-label="Filter poems" className="inline-flex w-fit rounded-lg bg-muted p-1">
+        {/* Wraps (and tightens below 360px) rather than widening the page on small phones. */}
+        <div role="group" aria-label="Filter poems" className="inline-flex w-fit max-w-full flex-wrap rounded-lg bg-muted p-1">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               type="button"
               aria-pressed={filter === f.value}
               onClick={() => setFilter(f.value)}
-              className="rounded-md px-3 py-1 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
+              className="rounded-md px-3 py-1 text-sm font-medium max-[359px]:px-2 text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-sm"
             >
               {f.label}
               <span className="ml-1.5 text-xs tabular-nums">{poems.filter(f.test).length}</span>

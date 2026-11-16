@@ -91,6 +91,8 @@ test("recovery codes: sign-in, dashboard notices and the profile section", async
   const id = unique();
   const email = `a11y-rec-${id}@example.com`;
   await signUpAs(page, email, `Recovery Poet ${id}`);
+  // The standalone prompt shows once the welcome checklist (which replaces it) is hidden (Phase 20).
+  await page.getByRole("region", { name: "Getting started" }).getByRole("button", { name: "Hide checklist" }).click();
   await expect(page.getByRole("region", { name: /^Set up recovery codes/ })).toBeVisible();
   await scan(page, "dashboard: recovery setup prompt");
 
@@ -752,4 +754,35 @@ test("following authors: the author page toggle and the popover's mode and follo
     await scan(page, `subscribe popover, all new poems, ${width}px`);
     await context.close();
   }
+});
+
+test("dashboard welcome checklist: fresh, part done (folded and open), all set", async ({ page }) => {
+  const id = unique();
+  const email = `a11y-checklist-${id}@example.com`;
+  await signUpAs(page, email, `Checklist A11y ${id}`);
+  const region = page.getByRole("region", { name: "Getting started" });
+  const where = `(SELECT id FROM editors WHERE email = '${email}')`;
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin");
+    await expect(region.getByText("1 of 6 done")).toBeVisible();
+    await scan(page, `checklist fresh at ${width}px`);
+  }
+  // Part done (set up directly: this test is about what's on screen).
+  await sql(`UPDATE editors SET avatar = 'a02', tagline = 'Short lines' WHERE email = '${email}'`);
+  await publish(page, `Checklist poem ${id}`, "a line");
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin");
+    await expect(region.getByText("4 of 6 done")).toBeVisible();
+    await scan(page, `checklist part done, folded at ${width}px`);
+    await region.getByRole("button", { name: "Show all steps" }).click();
+    await scan(page, `checklist part done, open at ${width}px`);
+  }
+  // All set: the one render that shows it.
+  await sql(`INSERT INTO recovery_codes (editor_id, code_hash) VALUES (${where}, 'a11y-${id}')`);
+  await sql(`UPDATE editors SET author_page_shared_at = now() WHERE email = '${email}'`);
+  await page.goto("/admin");
+  await expect(page.locator("[data-checklist-all-set]")).toBeVisible();
+  await scan(page, "checklist all set");
 });

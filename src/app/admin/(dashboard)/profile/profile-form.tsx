@@ -32,10 +32,18 @@ const padLinks = (links: string[]) =>
 
 export function ProfileForm({
   initial,
+  avatarChosen,
   slug,
   publishedPoems,
 }: {
   initial: { penName: string; tagline: string | null; bio: string | null; avatar: AvatarId; links: string[]; pinnedPoemId: string | null };
+  /**
+   * Whether the editor has ever picked an avatar (editors.avatar set). Until
+   * they do, the radios show the default derived from their id but post
+   * nothing, so saving a bio doesn't count as choosing an avatar (the
+   * dashboard checklist's "Pick an avatar", Phase 20).
+   */
+  avatarChosen: boolean;
   slug: string;
   publishedPoems: { id: string; title: string }[];
 }) {
@@ -62,6 +70,8 @@ export function ProfileForm({
   // which would wipe what the editor typed when validation fails.
   const [values, setValues] = useState<Values>(() => toValues(initial));
   const [saved, setSaved] = useState<Values>(() => toValues(initial));
+  // Any tap on an avatar is a choice, even of the default one.
+  const [picked, setPicked] = useState(false);
   const [seenState, setSeenState] = useState(state);
   if (seenState !== state) {
     setSeenState(state);
@@ -74,12 +84,13 @@ export function ProfileForm({
   }
 
   const set = <K extends keyof Values>(key: K, value: Values[K]) => setValues((v) => ({ ...v, [key]: value }));
-  const dirty = JSON.stringify(values) !== JSON.stringify(saved);
+  // Picking the default avatar for the first time is a change too.
+  const dirty = JSON.stringify(values) !== JSON.stringify(saved) || (picked && !avatarChosen);
   const errorFor = (field: NonNullable<ProfileState["field"]>) => (state.field === field ? state.error : undefined);
 
   return (
     <form action={action} className="grid gap-8 rounded-xl border bg-card p-6">
-      <FieldSet>
+      <FieldSet id="avatar" className="scroll-mt-20">
         <FieldLegend>Avatar</FieldLegend>
         <FieldDescription>Pick the face that goes with your pen name.</FieldDescription>
         <div className="grid grid-cols-6 gap-2 sm:grid-cols-9 lg:grid-cols-12">
@@ -87,10 +98,12 @@ export function ProfileForm({
             <label key={a.id} className="relative cursor-pointer">
               <input
                 type="radio"
-                name="avatar"
+                name={avatarChosen || picked ? "avatar" : undefined}
                 value={a.id}
                 checked={values.avatar === a.id}
                 onChange={() => set("avatar", a.id)}
+                // A click, not a change: choosing the face already shown (the default) counts too.
+                onClick={() => setPicked(true)}
                 className="peer sr-only"
               />
               {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG from our own route */}

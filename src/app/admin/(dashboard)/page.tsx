@@ -15,6 +15,11 @@ import { FlashToast } from "@/components/flash-toast";
 import { FirstPublishFlash } from "@/components/install/install-nudge";
 import { RecoveryNotice } from "./recovery-notice";
 import { PasskeyOffer } from "./passkey-offer";
+import { ChecklistAllSet, WelcomeChecklist } from "./welcome-checklist";
+import { getWelcomeChecklist } from "@/server/welcome-checklist";
+import { doneCount } from "@/lib/welcome-checklist";
+import { RECOVERY_CODES_LOW } from "@/lib/recovery-code-format";
+import { absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -28,14 +33,16 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const { editor, sessionId } = await requireOnboardedSession();
-  const [poems, stats, profile, recovery, offerPasskey, flash] = await Promise.all([
+  const [poems, stats, profile, recovery, offerPasskey, checklist, flash] = await Promise.all([
     listEditorPoems(editor.id),
     getEditorStats(editor.id),
     getProfile(editor.id),
     getRecoveryCodeStatus(editor.id),
     shouldOfferPasskey(editor.id, sessionId),
+    getWelcomeChecklist(editor.id),
     searchParams,
   ]);
+  const lowCodes = recovery.total > 0 && recovery.unused <= RECOVERY_CODES_LOW;
   const rows: DashboardPoem[] = poems.map((p) => ({
     id: p.id,
     title: p.title,
@@ -84,8 +91,23 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
         {poems.length > 0 && <NewPoemButton />}
       </div>
 
+      {/* Calm order, never a pile (Phase 20): the rare, session-bound passkey offer
+          first, then the checklist (folded whenever another notice is up, so it's
+          one line plus its progress), then the low-codes reminder. While the
+          checklist is up it replaces the recovery-code setup prompt. */}
       {offerPasskey && <PasskeyOffer />}
-      <RecoveryNotice status={recovery} />
+      {checklist?.kind === "steps" && (
+        <WelcomeChecklist
+          steps={checklist.steps}
+          authorUrl={absoluteUrl(`/a/${editor.slug}`)}
+          penName={editor.penName}
+          // Open only at the very start (no poem yet, so nothing to push down);
+          // folded to one line of progress once there are poems or another notice.
+          defaultOpen={poems.length === 0 && doneCount(checklist.steps) <= 2 && !offerPasskey && !lowCodes}
+        />
+      )}
+      {checklist?.kind === "all-set" && <ChecklistAllSet />}
+      <RecoveryNotice status={recovery} setupPrompt={checklist?.kind !== "steps"} />
 
       <StatCards stats={stats} />
 

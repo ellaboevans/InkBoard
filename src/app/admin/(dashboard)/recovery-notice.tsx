@@ -13,10 +13,14 @@ const PROFILE_SECTION = "/admin/profile#recovery-codes";
  * - no codes yet: a one-time setup prompt. "Not now" is stored on the
  *   editor (server-side), so it never comes back, on any device;
  * - 2 or fewer unused codes left: a reminder to make a new set, until they do.
+ * While the welcome checklist is shown (Phase 20) the setup prompt is left
+ * out (`setupPrompt={false}`): the checklist's step replaces it, and its
+ * "Not now" sets the same flag. The low-codes reminder always shows.
  */
-export function RecoveryNotice({ status }: { status: RecoveryCodeStatus }) {
+export function RecoveryNotice({ status, setupPrompt = true }: { status: RecoveryCodeStatus; setupPrompt?: boolean }) {
   if (status.total === 0) {
-    if (status.promptDismissed) return null;
+    // While the welcome checklist is up, its "Keep a way in" step is the setup prompt (Phase 20).
+    if (status.promptDismissed || !setupPrompt) return null;
     return (
       <Notice
         icon={<KeyRoundIcon className="size-5" aria-hidden />}

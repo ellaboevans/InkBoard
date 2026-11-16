@@ -191,6 +191,13 @@ test("the dashboard prompts once to set up codes; 'Not now' is remembered on eve
   const email = `prompt-${id}@example.com`;
   await signUpAs(page, email, `Prompted ${id}`);
   const prompt = page.getByRole("region", { name: "Set up recovery codes so you can sign in without your email" });
+  // A new writer gets the welcome checklist instead, whose step replaces this
+  // prompt (Phase 20); once the checklist is hidden, the prompt is back.
+  const checklist = page.getByRole("region", { name: "Getting started" });
+  await expect(checklist).toBeVisible();
+  await expect(prompt).toHaveCount(0);
+  await checklist.getByRole("button", { name: "Hide checklist" }).click();
+  await expect(checklist).toHaveCount(0);
   await expect(prompt).toBeVisible();
   await expect(prompt.getByRole("link", { name: "Set up recovery codes" })).toHaveAttribute(
     "href",
@@ -221,6 +228,7 @@ test("the dashboard prompts once to set up codes; 'Not now' is remembered on eve
 test("the setup prompt leads to the profile section, and goes away once codes exist", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `setup-${id}@example.com`, `Setter ${id}`);
+  // A new writer's prompt is the welcome checklist's step ("Set up recovery codes or a passkey", Phase 20).
   await page.getByRole("link", { name: "Set up recovery codes" }).click();
   await expect(page).toHaveURL(/\/admin\/profile#recovery-codes$/);
   await expect(page.getByRole("heading", { name: "Recovery codes" })).toBeInViewport();

@@ -183,8 +183,10 @@ export default function PrivacyPage() {
             <p>
               Your email address, to sign you in and to send you the emails listed below. It’s never shown to readers, and
               it’s not in feeds, share cards or your downloads. Your pen name, author address, tagline, bio, picture (from{" "}
-              {SITE_NAME}’s own set), links and pinned poem, which readers see on your author page. And when you joined
-              and last signed in. All of this stays until you delete your account.
+              {SITE_NAME}’s own set), links and pinned poem, which readers see on your author page. When you joined
+              and last signed in. And, for the getting-started checklist on your dashboard, whether you’ve hidden or
+              finished it and when you first shared your author page from it (not where or with whom). All of this
+              stays until you delete your account.
             </p>
           </Sub>
           <Sub heading="Your poems">

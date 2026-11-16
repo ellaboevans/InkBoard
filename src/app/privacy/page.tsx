@@ -7,7 +7,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { PRIVACY_FACTS as F, PRIVACY_UPDATED } from "@/lib/privacy-facts";
-import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_YOUTUBE_ID } from "@/lib/site";
+import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO } from "@/lib/site";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19), written from the code: the
@@ -325,15 +325,18 @@ export default function PrivacyPage() {
               Microsoft, depending on your browser) delivers notifications if you turn them on. It issues the delivery
               address and passes on each notification, which is encrypted so it can’t read it.
             </li>
-            {WALKTHROUGH_YOUTUBE_ID && (
+            {WALKTHROUGH_VIDEO && (
               <li>
-                <strong className="font-medium">YouTube</strong> plays the walkthrough video on the About page, from
-                youtube-nocookie.com, once you press play; nothing is loaded from YouTube before that. When it plays,
-                YouTube’s own privacy policy applies.
+                <strong className="font-medium">ImageKit</strong> hosts the walkthrough video on the About page and
+                streams it from ik.imagekit.io once you press play; nothing is loaded from ImageKit before that. Like
+                any website, it then receives your IP address, your browser and the video’s address.
               </li>
             )}
           </ul>
-          <p>Our fonts, images and scripts are served from {SITE_NAME} itself; no other service receives anything from your visit.</p>
+          <p>
+            Our fonts, images and scripts are served from {SITE_NAME} itself; no other service receives anything from your
+            visit{WALKTHROUGH_VIDEO ? ", unless you play the walkthrough video" : ""}.
+          </p>
         </Section>
 
         <Section id="choices" heading="What you can do">

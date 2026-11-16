@@ -1,23 +1,29 @@
 "use client";
 
 import { PlayIcon } from "lucide-react";
-import { useState } from "react";
-import { walkthroughEmbedUrl } from "@/lib/csp";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { WALKTHROUGH_MUSIC_CREDIT as MUSIC, type WalkthroughSource } from "@/lib/site";
 import cover1920 from "@/assets/about/walkthrough-cover-1920.webp";
 import cover960 from "@/assets/about/walkthrough-cover-960.webp";
 
 /*
- * The About page's walkthrough video (docs/PLAN.md, Phase 19). The id comes
- * from WALKTHROUGH_YOUTUBE_ID (src/lib/site.ts), passed in as a prop so tests
+ * The About page's walkthrough video (docs/PLAN.md, Phase 19). The source
+ * comes from WALKTHROUGH_VIDEO (src/lib/site.ts), passed in as a prop so tests
  * can render both states.
  *
- * - No id yet: our own cover image with "Video coming soon".
- * - An id: the same cover as a play button. Nothing is fetched from YouTube
- *   until the reader presses it (no iframe, no thumbnail, no preconnect);
- *   then the youtube-nocookie.com player replaces the cover and starts.
+ * - No video: our own cover image with "Video coming soon".
+ * - A video: the same cover as a play button. There is no <video> element
+ *   until the reader presses it, so nothing is fetched from ImageKit before
+ *   that. The press mounts the browser's own player (flushSync) and calls
+ *   play() in the same click handler, so it starts with sound everywhere
+ *   (ImageKit's iframe player autoplays muted, and loads video.js from two
+ *   CDNs). HLS first (adaptive, native on Safari, iOS and Android), then a
+ *   720p MP4 for the rest.
  *
  * The cover is a static import, so it's served from /_next/static/, which the
- * offline worker keeps with a saved copy of the page.
+ * offline worker keeps with a saved copy of the page. Offline, the video
+ * fails to load and says so.
  */
 
 export const COVER_ALT =
@@ -38,27 +44,56 @@ function Cover({ alt }: { alt: string }) {
   );
 }
 
-export function WalkthroughEmbed({ youtubeId, autoFocus = false }: { youtubeId: string; autoFocus?: boolean }) {
+/** The browser's own player, mounted once the reader presses play. */
+export function WalkthroughPlayer({
+  video,
+  videoRef,
+  onError,
+}: {
+  video: WalkthroughSource;
+  videoRef?: React.Ref<HTMLVideoElement>;
+  onError?: () => void;
+}) {
   return (
-    <iframe
-      // Pressing play removed the button that had focus: hand it to the player.
-      ref={autoFocus ? (el) => el?.focus() : undefined}
-      src={walkthroughEmbedUrl(youtubeId)}
-      title="InkBoard walkthrough video"
-      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-      allowFullScreen
-      // YouTube needs at least our origin to play an embed.
-      referrerPolicy="strict-origin-when-cross-origin"
-      className="size-full border-0"
-    />
+    <video
+      ref={videoRef}
+      controls
+      playsInline
+      preload="metadata"
+      poster={cover1920.src}
+      aria-label="InkBoard walkthrough video"
+      onError={onError}
+      className="size-full bg-black"
+    >
+      <source src={video.hls} type="application/vnd.apple.mpegurl" />
+      {/* The last source failing means none could play: an error fires here, not on the <video>. */}
+      <source src={video.mp4} type="video/mp4" onError={onError} />
+    </video>
   );
 }
 
-export function WalkthroughVideo({ youtubeId }: { youtubeId: string | null }) {
-  const [playing, setPlaying] = useState(false);
+function MusicCredit() {
+  return (
+    <>
+      Music: “{MUSIC.title}” by{" "}
+      <a href={MUSIC.artistUrl} className="underline underline-offset-2 hover:text-foreground" rel="noopener">
+        {MUSIC.artist}
+      </a>
+      , licensed under{" "}
+      <a href={MUSIC.licenceUrl} className="underline underline-offset-2 hover:text-foreground" rel="noopener license">
+        {MUSIC.licence}
+      </a>
+      .
+    </>
+  );
+}
+
+export function WalkthroughVideo({ video }: { video: WalkthroughSource | null }) {
+  const [state, setState] = useState<"ready" | "playing" | "error">("ready");
+  const player = useRef<HTMLVideoElement>(null);
   const frame = "relative aspect-video w-full overflow-hidden rounded-2xl border bg-muted shadow-sm";
 
-  if (!youtubeId) {
+  if (!video) {
     return (
       <figure className="grid gap-2" data-walkthrough="coming-soon">
         <div className={frame}>
@@ -74,32 +109,56 @@ export function WalkthroughVideo({ youtubeId }: { youtubeId: string | null }) {
     );
   }
 
+  const play = () => {
+    // Mount the player now, then start it while this click still counts as the reader's gesture.
+    flushSync(() => setState("playing"));
+    const el = player.current;
+    if (!el) return;
+    // The button that had focus is gone: hand focus to the player's controls.
+    el.focus();
+    // A refusal (rare) leaves the player's own controls to start it.
+    el.play().catch(() => {});
+  };
+
   return (
-    <figure className="grid gap-2" data-walkthrough={playing ? "playing" : "ready"}>
+    <figure className="grid gap-2" data-walkthrough={state}>
       <div className={frame}>
-        {playing ? (
-          <WalkthroughEmbed youtubeId={youtubeId} autoFocus />
-        ) : (
+        {/* After an error the button is back, so pressing play again is the retry. */}
+        {state !== "playing" ? (
           <button
             type="button"
-            onClick={() => setPlaying(true)}
+            onClick={play}
             className="group absolute inset-0 size-full cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             {/* The button is named by its visible text; the cover is decoration here. */}
             <Cover alt="" />
-            <span className="absolute inset-0 flex items-center justify-center">
-              <span className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-medium text-primary-foreground shadow-md transition-transform group-hover:scale-105">
-                <PlayIcon className="size-5 fill-current" aria-hidden />
+            {/* Bottom right, over the screenshot half of the cover, so it never hides the cover's title. */}
+            <span className="absolute inset-0 flex items-end justify-end p-3 sm:p-4">
+              <span className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-md transition-transform group-hover:scale-105 sm:px-5 sm:py-3 sm:text-base">
+                <PlayIcon className="size-4 fill-current sm:size-5" aria-hidden />
                 Play the walkthrough
               </span>
             </span>
           </button>
+        ) : (
+          <WalkthroughPlayer video={video} videoRef={player} onError={() => setState("error")} />
         )}
       </div>
-      <figcaption className="text-sm text-muted-foreground">
-        {playing
-          ? "Playing from YouTube (youtube-nocookie.com)."
-          : "Plays from YouTube (youtube-nocookie.com); nothing is loaded from YouTube until you press play."}
+      <figcaption className="grid gap-1 text-sm text-muted-foreground">
+        {state === "error" ? (
+          <p role="alert" className="text-destructive">
+            The video couldn’t load. Check your connection and press play to try again.
+          </p>
+        ) : (
+          <p>
+            {state === "ready"
+              ? "Six minutes, with narration. It streams from our video host, ImageKit, once you press play; nothing is loaded from it before that."
+              : "Streaming from our video host, ImageKit."}
+          </p>
+        )}
+        <p>
+          <MusicCredit />
+        </p>
       </figcaption>
     </figure>
   );

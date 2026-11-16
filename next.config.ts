@@ -1,15 +1,15 @@
 import type { NextConfig } from "next";
 import { buildCsp } from "./src/lib/csp";
-import { WALKTHROUGH_YOUTUBE_ID } from "./src/lib/site";
+import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO } from "./src/lib/site";
 
 const isDev = process.env.NODE_ENV === "development";
 
 /**
  * Content Security Policy without nonces (see src/lib/csp.ts): our own origin
- * only, plus youtube-nocookie.com frames once the About page's walkthrough
- * video has an id (WALKTHROUGH_YOUTUBE_ID).
+ * only, plus media from ImageKit while the About page has a walkthrough video
+ * (WALKTHROUGH_VIDEO).
  */
-const csp = buildCsp({ dev: isDev, youtubeId: WALKTHROUGH_YOUTUBE_ID });
+const csp = buildCsp({ dev: isDev, videoOrigin: WALKTHROUGH_VIDEO ? VIDEO_HOST_ORIGIN : null });
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },

@@ -16,14 +16,38 @@ export const SITE_OPERATOR = "Evans Elabo";
 /** Where privacy questions and requests go; shown only on our own pages, as a mailto link. */
 export const PRIVACY_CONTACT_EMAIL = "ellaboevans@gmail.com";
 
+/** Where the walkthrough video is hosted (ImageKit). The CSP's `media-src` allows this origin only. */
+export const VIDEO_HOST_ORIGIN = "https://ik.imagekit.io";
+
+/** The walkthrough's two encodings, both on VIDEO_HOST_ORIGIN. */
+export type WalkthroughSource = {
+  /** Adaptive HLS (240p–1080p), played natively by Safari, iOS and Android. */
+  hls: string;
+  /** A 720p MP4 for browsers without HLS (desktop Chrome, Firefox). */
+  mp4: string;
+};
+
 /**
- * The walkthrough video on the About page: a YouTube video id (11 characters,
- * from youtube.com/watch?v=<id>), or null until it's published. While null the
- * page shows our own cover with "Video coming soon" and the CSP allows no
- * frames at all; once set, next.config.ts allows frames from
- * youtube-nocookie.com, and the player loads only after the reader presses play.
+ * The walkthrough video on the About page, streamed from ImageKit, or null to
+ * show our cover with "Video coming soon". The page renders no <video> until
+ * the reader presses play, so nothing is fetched from ImageKit before that
+ * (`WalkthroughVideo`); once set, next.config.ts adds `media-src` for
+ * VIDEO_HOST_ORIGIN. `updatedAt` is ImageKit's cache key: bump it with the
+ * file's new value after replacing the video in ImageKit.
  */
-export const WALKTHROUGH_YOUTUBE_ID: string | null = null;
+export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
+  hls: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4/ik-master.m3u8?updatedAt=1794859127104&tr=sr-240_360_480_720_1080`,
+  mp4: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4?updatedAt=1794859127104&tr=w-1280`,
+};
+
+/** The walkthrough's music, whose licence (CC BY 4.0) requires this credit wherever the video is shown. */
+export const WALKTHROUGH_MUSIC_CREDIT = {
+  title: "Inspired",
+  artist: "Kevin MacLeod",
+  artistUrl: "https://incompetech.com",
+  licence: "CC BY 4.0",
+  licenceUrl: "https://creativecommons.org/licenses/by/4.0/",
+} as const;
 
 /** Hex versions of the "paper & ink" tokens in globals.css (ImageResponse can't read oklch/CSS vars). */
 export const BRAND = {

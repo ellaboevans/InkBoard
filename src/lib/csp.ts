@@ -7,25 +7,15 @@
  * down: only our own origin, no framing of us, no plugins, forms only post to
  * us. `'unsafe-eval'` is dev-only (React Refresh).
  *
- * The one third-party origin is the walkthrough video's player
- * (WALKTHROUGH_YOUTUBE_ID in src/lib/site.ts), and only when a video id is set:
- * then `frame-src` allows youtube-nocookie.com and nothing else. It has to be
- * site-wide, not just /about: a soft navigation to /about keeps the CSP of the
- * page the reader first loaded.
+ * The one third-party origin is the walkthrough video's host
+ * (WALKTHROUGH_VIDEO in src/lib/site.ts), and only when a video is set: then
+ * `media-src` allows ImageKit's origin and nothing else (no frames, no
+ * scripts: the browser's own player streams it). It has to be site-wide, not
+ * just /about: a soft navigation to /about keeps the CSP of the page the
+ * reader first loaded.
  */
 
-export const YOUTUBE_EMBED_ORIGIN = "https://www.youtube-nocookie.com";
-
-/** A YouTube video id as it appears in youtube.com/watch?v=<id>. */
-export const isYouTubeId = (id: string) => /^[A-Za-z0-9_-]{11}$/.test(id);
-
-/** The player URL, opened only after the reader presses play (so it may autoplay). */
-export function walkthroughEmbedUrl(id: string): string {
-  if (!isYouTubeId(id)) throw new Error(`Not a YouTube video id: ${JSON.stringify(id)}`);
-  return `${YOUTUBE_EMBED_ORIGIN}/embed/${id}?autoplay=1&rel=0`;
-}
-
-export function buildCsp({ dev, youtubeId }: { dev: boolean; youtubeId: string | null }): string {
+export function buildCsp({ dev, videoOrigin }: { dev: boolean; videoOrigin: string | null }): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
@@ -35,8 +25,8 @@ export function buildCsp({ dev, youtubeId }: { dev: boolean; youtubeId: string |
     // next/font self-hosts the Google fonts.
     "font-src 'self'",
     `connect-src 'self'${dev ? " ws: wss:" : ""}`,
-    // Without a video, frames fall back to default-src 'self' (and we embed none).
-    ...(youtubeId ? [`frame-src ${YOUTUBE_EMBED_ORIGIN}`] : []),
+    // Without a video, media falls back to default-src 'self'. We embed no frames.
+    ...(videoOrigin ? [`media-src 'self' ${videoOrigin}`] : []),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

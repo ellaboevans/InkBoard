@@ -7,7 +7,7 @@ import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_YOUTUBE_ID } from "@/lib/site";
+import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO } from "@/lib/site";
 
 /*
  * What InkBoard is, in one link the owner can send anyone (docs/PLAN.md,
@@ -82,7 +82,7 @@ export default function AboutPage() {
           </p>
         </div>
 
-        <WalkthroughVideo youtubeId={WALKTHROUGH_YOUTUBE_ID} />
+        <WalkthroughVideo video={WALKTHROUGH_VIDEO} />
 
         <Section id="why" heading="What it’s for">
           <Points

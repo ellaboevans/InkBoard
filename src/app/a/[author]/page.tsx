@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face";
 import { Button } from "@/components/ui/button";
+import { SiteLinks } from "@/components/site-links";
 import { avatarIdFor, avatarUrl } from "@/lib/avatars";
 import { CARD_H } from "@/lib/board-layout";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -74,6 +75,8 @@ export default function AuthorPublicPage({ params }: Props) {
         <Suspense>
           <AuthorJsonLd params={params} />
         </Suspense>
+        {/* Static, in the shell: what InkBoard is, for readers arriving from a shared link. */}
+        <SiteLinks className="mt-16 border-t pt-6" />
       </div>
     </main>
   );

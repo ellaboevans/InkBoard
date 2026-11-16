@@ -93,6 +93,8 @@ test("the switch turns notifications on and off: permission asked only on the ta
   await expect(dialog.getByText(/we don’t record what you read/)).toBeHidden();
   await dialog.getByRole("button", { name: "How notifications work" }).click();
   await expect(dialog.getByText(/is never sent for private poems/)).toBeVisible();
+  // Its last line leads to the Privacy page (Phase 19).
+  await expect(dialog.getByRole("link", { name: "how InkBoard handles your data" })).toHaveAttribute("href", "/privacy");
   expect((await pushRecord(page)).prompts).toBe(0);
 
   await sw.click();

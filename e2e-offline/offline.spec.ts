@@ -197,12 +197,57 @@ test("after a poem is unpublished, the next online visit removes it from the sav
   await expect(admin.locator("[data-sileo-toast]").filter({ hasText: "Draft saved" })).toBeVisible();
   await editor.close();
 
-  // The reader, online again: the page is gone, and so is the saved copy.
-  await page.goto(url(F.unpublish));
+  // The reader, online again: the page is gone (a real 404, Phase 19), and so is the saved copy.
+  expect((await page.goto(url(F.unpublish)))!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: /not found/i })).toBeVisible();
   await expect.poll(() => saved(page)).not.toContain(url(F.unpublish));
   await context.setOffline(true);
   await page.goto(url(F.unpublish));
   await offlinePage(page);
   await expect(page.locator("[data-saved-poems]").getByRole("link", { name: /Harbour Lights/ })).toHaveCount(0);
+});
+
+test("production: missing reader pages are real 404s; real ones and a private poem stay 200", async ({ page, request }) => {
+  // Under Cache Components the prerendered shell starts a 200, so these come
+  // from the proxy's rewrite to a static 404 page (src/app/missing, Phase 19).
+  for (const [path, heading] of [
+    ["/a/nobody-here", "Author not found"],
+    ["/p/offline-poet/no-such-poem", "Poem not found"],
+    ["/a/offline-poet/c/no-such-collection", "Collection not found"],
+  ] as const) {
+    const res = await page.goto(path);
+    expect(res!.status(), path).toBe(404);
+    expect(res!.headers()["cache-control"], path).toContain("no-store");
+    await expect(page.getByRole("heading", { name: heading }), path).toBeVisible();
+    await expect(page, path).toHaveURL(new RegExp(`${path}$`));
+    expect((await request.head(path)).status(), path).toBe(404);
+  }
+  for (const path of ["/", "/a/offline-poet", url(F.read), url(F.secret), "/about", "/privacy"]) {
+    expect((await request.get(path)).status(), path).toBe(200);
+  }
+  // The private poem's page: its unlock form, never its text.
+  await page.goto(url(F.secret));
+  await expect(page.getByRole("button", { name: "Unlock poem" })).toBeVisible();
+  expect(await page.content()).not.toContain(PRIVATE_LINE);
+});
+
+test("the About and Privacy pages are saved, and open offline", async ({ context, page }) => {
+  await withWorker(page);
+  await page.goto("/about");
+  await expect(page.getByText("Video coming soon")).toBeVisible();
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+  await expect.poll(() => saved(page)).toEqual(expect.arrayContaining(["/about", "/privacy"]));
+  // A missing page is never saved.
+  await page.goto("/a/nobody-here");
+  await context.setOffline(true);
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { level: 1, name: "About InkBoard" })).toBeVisible();
+  // The cover image comes from the static cache with the page.
+  const cover = page.getByRole("img", { name: /^How InkBoard works/ });
+  await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+  await indicator(page);
+  expect(await saved(page)).not.toContain("/a/nobody-here");
 });

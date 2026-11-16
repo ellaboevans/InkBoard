@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { env } from "@/env";
 import { generateToken } from "@/server/crypto";
-import { DEVICE_COOKIE, SESSION_COOKIE } from "./cookie";
+import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE, SESSION_COOKIE } from "./cookie";
 import { clientIpFromForwardedFor } from "./ip";
 import {
   createSession,
@@ -97,8 +97,6 @@ export async function startSession(editorId: string, options: SessionOptions = {
     options.publicDevice ? cookieOptions : { ...cookieOptions, expires: expiresAt },
   );
 }
-
-const DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60;
 
 /**
  * This browser's device id for new-device alerts (Server Actions only). Reads

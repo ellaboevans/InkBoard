@@ -8,7 +8,8 @@
  *
  * THE STORAGE RULE (what may be saved for offline reading):
  *   1. Only reader pages: the board (/), poem pages (/p/a/b), author pages
- *      (/a/a) and collection pages (/a/a/c/c). Never /admin, /sign-in, /api,
+ *      (/a/a), collection pages (/a/a/c/c), and the About and Privacy pages
+ *      (/about, /privacy; kind "page", Phase 19). Never /admin, /sign-in, /api,
  *      the feeds, /sw.js, anything that isn't a GET, any RSC request
  *      (navigations, prefetches, the overlay) or Server Action.
  *   2. The saved copy is never the response the reader got. The worker
@@ -29,6 +30,7 @@ var InkboardOffline = (function () {
   var POEM = /^\/p\/[^/]+\/[^/]+$/;
   var AUTHOR = /^\/a\/[^/]+$/;
   var COLLECTION = /^\/a\/[^/]+\/c\/[^/]+$/;
+  var PAGES = ["/about", "/privacy"];
   // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
   var STATIC_PREFIXES = ["/_next/static/", "/icons/", "/avatars/"];
   var STATIC_FILES = ["/icon.svg", "/apple-icon", "/favicon.ico", "/manifest.webmanifest", "/install-capture.js"];
@@ -39,6 +41,7 @@ var InkboardOffline = (function () {
     if (POEM.test(pathname)) return "poem";
     if (COLLECTION.test(pathname)) return "collection";
     if (AUTHOR.test(pathname)) return "author";
+    if (PAGES.indexOf(pathname) !== -1) return "page";
     return null;
   }
 

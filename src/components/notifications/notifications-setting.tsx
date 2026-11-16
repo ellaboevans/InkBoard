@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { BellIcon, BellRingIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import { useId, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -67,6 +68,13 @@ export function NotificationsSetting({
       </CollapsibleTrigger>
       <CollapsibleContent>
         <p className="text-sm text-muted-foreground">{NOTIFICATIONS_FULL}</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          More in{" "}
+          <Link href="/privacy" className="text-foreground underline underline-offset-4">
+            how InkBoard handles your data
+          </Link>
+          .
+        </p>
       </CollapsibleContent>
     </Collapsible>
   );

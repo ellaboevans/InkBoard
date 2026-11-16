@@ -12,6 +12,7 @@ import type {
   ReaderCollection,
   ReaderPoem,
 } from "@/lib/board-types";
+import type { ReaderPath } from "@/lib/reader-paths";
 
 /*
  * Public, reader-facing queries (R1, R8, R9). Uncached and framework-free so
@@ -120,6 +121,42 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
     });
   }
   return sections;
+}
+
+/**
+ * Does this reader page have anything to show? The proxy (src/proxy.ts) asks
+ * before a full page load, so a missing page answers with a real 404 instead
+ * of a streamed "not found" under a 200 (docs/PLAN.md, Phase 19). One small
+ * indexed query, with exactly the null cases of loadAuthorPage,
+ * loadReaderPoem and loadCollectionPage (a test compares them).
+ */
+export async function readerPathExists(path: ReaderPath): Promise<boolean> {
+  const db = getDb();
+  const author = and(eq(editors.slug, path.author), isNotNull(editors.penName));
+  if (path.kind === "author") {
+    const rows = await db.select({ one: sql`1` }).from(editors).where(author).limit(1);
+    return rows.length > 0;
+  }
+  if (path.kind === "poem") {
+    const rows = await db
+      .select({ one: sql`1` })
+      .from(poems)
+      .innerJoin(editors, eq(editors.id, poems.editorId))
+      .where(and(author, eq(poems.slug, path.poem), eq(poems.status, "published")))
+      .limit(1);
+    return rows.length > 0;
+  }
+  const rows = await db
+    .select({ one: sql`1` })
+    .from(collections)
+    .innerJoin(editors, eq(editors.id, collections.editorId))
+    .innerJoin(
+      poems,
+      and(eq(poems.collectionId, collections.id), eq(poems.editorId, collections.editorId), eq(poems.status, "published")),
+    )
+    .where(and(author, eq(collections.slug, path.collection)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** A published poem by author + poem slug, or null. */

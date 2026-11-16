@@ -142,7 +142,7 @@ test("unknown, empty and unpublished collections are not found", async ({ page }
   await createCollection(page, `Empty ${id}`, "", []);
   const { rows } = await sql(`SELECT e.slug AS author, c.slug FROM collections c JOIN editors e ON e.id = c.editor_id WHERE e.email = '${email}' ORDER BY c.created_at`);
   for (const path of [`/a/${rows[0].author}/c/${rows[0].slug}`, `/a/${rows[1].author}/c/${rows[1].slug}`, `/a/${rows[0].author}/c/nope`, `/a/nobody-${id}/c/${rows[0].slug}`]) {
-    await page.goto(path);
+    expect((await page.goto(path))!.status(), path).toBe(404);
     await expect(page.getByRole("heading", { name: "Collection not found" }), path).toBeVisible();
     const robots = await page.locator('meta[name="robots"]').evaluateAll((ms) => ms.map((m) => m.getAttribute("content")));
     expect(robots.some((r) => r?.includes("noindex")), path).toBe(true);

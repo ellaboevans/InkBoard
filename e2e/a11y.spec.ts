@@ -465,6 +465,28 @@ test("board, list view, search and reading", async ({ page }) => {
   await scan(page, "poem not found");
 });
 
+test("About and Privacy pages, phone and desktop; a missing poem in the overlay", async ({ page }) => {
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/about");
+    await expect(page.getByText("Video coming soon")).toBeVisible();
+    await scan(page, `about (video placeholder) at ${width}px`);
+    await page.goto("/privacy");
+    await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
+    await scan(page, `privacy at ${width}px`);
+  }
+  // The board with About beside Authors, and a poem gone since the board loaded (soft navigation into the overlay).
+  const id = unique();
+  await signUpAs(page, `a11y-about-${id}@example.com`, `About Poet ${id}`);
+  await publish(page, `About board ${id}`, "so the board isn't empty");
+  await page.goto("/");
+  await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+  await scan(page, "board with About");
+  await page.evaluate(() => (window as unknown as { next: { router: { push(href: string): void } } }).next.router.push("/p/nobody/nothing"));
+  await expect(page.getByRole("dialog", { name: "Poem not found" })).toBeVisible();
+  await scan(page, "overlay: poem not found");
+});
+
 test("install nudge: every card state", async ({ browser }) => {
   // Chromium's beforeinstallprompt, simulated; this load counts as a second visit.
   const prompt = () =>

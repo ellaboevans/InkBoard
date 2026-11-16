@@ -61,7 +61,8 @@ test("download your poems as Markdown and JSON, drafts and private poems include
   for (const s of [`### Ŋkɔ ${id}`, `### Locked ${id}`, `### Unfinished ${id}`, "only for friends", "half a line", "- Status: Draft"]) {
     expect(md.text).toContain(s);
   }
-  expect(md.text).toContain(`ɖeka\n  ${GHANAIAN}\n\nlast line`);
+  // Lines kept for Markdown viewers (Phase 19): a hard break, the indent as no-break spaces, the blank line.
+  expect(md.text).toContain(`ɖeka  \n\u00a0\u00a0${GHANAIAN}\n\nlast line`);
   expect(md.text).toContain("- Visibility: Private");
   expect(md.text).not.toContain("poem-pass-123");
   expect(md.text).not.toContain("scrypt$");
@@ -141,9 +142,10 @@ test("delete an account: step-up, pen name, then gone everywhere; the same email
   expect(await search.json()).toEqual({ authors: [], poems: [] });
   const poemSearch = await page.request.get(`/api/search?q=${encodeURIComponent(`Farewell ${id}`)}`);
   expect((await poemSearch.json()).poems).toEqual([]);
-  await page.goto(`/a/${slug}`);
+  // The old links are real 404s (Phase 19), and stay so.
+  expect((await page.goto(`/a/${slug}`))!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Author not found" })).toBeVisible();
-  await page.goto(`/p/${slug}/${poem}`);
+  expect((await page.goto(`/p/${slug}/${poem}`))!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
   expect((await page.request.get(`/a/${slug}/feed.xml`)).status()).toBe(404);
   expect(await (await page.request.get("/sitemap.xml")).text()).not.toContain(`/a/${slug}`);
@@ -156,7 +158,7 @@ test("delete an account: step-up, pen name, then gone everywhere; the same email
   const again = await sql(`SELECT slug FROM editors WHERE email = '${email}'`);
   expect(again.rows[0].slug).toBe(`${slug}-2`);
   await expect.poll(() => welcomesFor(email)).toHaveLength(2);
-  // The old address still shows nobody's poems.
-  await page.goto(`/a/${slug}`);
+  // The old address still shows nobody's poems, with a 404.
+  expect((await page.goto(`/a/${slug}`))!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Author not found" })).toBeVisible();
 });

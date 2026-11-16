@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 
 /** Same treatment as "Author not found" (an unknown, empty or unpublished collection). */
@@ -10,6 +11,7 @@ export default function CollectionNotFound() {
       <Button asChild>
         <Link href="/">Back to the board</Link>
       </Button>
+      <SiteLinks className="mt-8" />
     </main>
   );
 }

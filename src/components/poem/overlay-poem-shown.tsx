@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect } from "react";
+import { useId, useLayoutEffect } from "react";
 import { OVERLAY_LOADING_ID } from "@/lib/poem-overlay";
 
 /*
@@ -36,4 +36,21 @@ export function OverlayPoemLoading() {
     dialogOf(document.getElementById(OVERLAY_LOADING_ID))?.setAttribute("aria-labelledby", OVERLAY_LOADING_ID);
   }, []);
   return null;
+}
+
+/**
+ * "Poem not found" inside the overlay (@modal/(.)p/[author]/[poem]/not-found.tsx):
+ * names the dialog and takes focus like a poem's title. The id comes from
+ * useId, never a fixed string, so a hidden <Activity> copy can't answer for it.
+ */
+export function OverlayNotFoundTitle({ children }: { children: React.ReactNode }) {
+  const id = useId();
+  return (
+    <>
+      <h1 id={id} tabIndex={-1} className="font-serif text-3xl leading-tight outline-none">
+        {children}
+      </h1>
+      <OverlayPoemShown titleId={id} />
+    </>
+  );
 }

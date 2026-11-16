@@ -20,3 +20,6 @@ export const DEVICE_COOKIE =
   process.env.NODE_ENV === "production"
     ? "__Host-poemhub_device"
     : "poemhub_device";
+
+/** The device cookie's lifetime (two years), refreshed at every sign-in on that browser. */
+export const DEVICE_COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60;

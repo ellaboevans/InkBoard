@@ -1,31 +1,15 @@
 import type { NextConfig } from "next";
+import { buildCsp } from "./src/lib/csp";
+import { WALKTHROUGH_YOUTUBE_ID } from "./src/lib/site";
 
 const isDev = process.env.NODE_ENV === "development";
 
 /**
- * Content Security Policy without nonces. Nonces force every page to render
- * dynamically, which would disable the prerendered board (Partial
- * Prerendering). `'unsafe-inline'` scripts are needed for Next's inline RSC
- * payload; the risk is limited because no user-supplied HTML is ever
- * rendered (poems are plain text, escaped by React). Everything else is
- * locked down: no third-party origins at all, no framing, no plugins, forms
- * only post to us. `'unsafe-eval'` is dev-only (React Refresh).
+ * Content Security Policy without nonces (see src/lib/csp.ts): our own origin
+ * only, plus youtube-nocookie.com frames once the About page's walkthrough
+ * video has an id (WALKTHROUGH_YOUTUBE_ID).
  */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  // Sileo and Radix inject inline styles.
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
-  // next/font self-hosts the Google fonts.
-  "font-src 'self'",
-  `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(isDev ? [] : ["upgrade-insecure-requests"]),
-].join("; ");
+const csp = buildCsp({ dev: isDev, youtubeId: WALKTHROUGH_YOUTUBE_ID });
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },

@@ -19,6 +19,7 @@ import { sectionHue } from "@/lib/board-layout";
 import type { BoardSection } from "@/lib/board-types";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { SubscribeButton } from "@/components/feeds/subscribe-button";
+import { SiteLinks } from "@/components/site-links";
 import { BoardCanvas } from "./board-canvas";
 import { CollectionBadgeLine } from "./poem-card-face";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
@@ -166,6 +167,8 @@ function BoardList({
             </section>
           ))}
         </div>
+        {/* The list view's way to the About and Privacy pages (the canvas has About beside Authors). */}
+        <SiteLinks className="mt-16 border-t pt-6" />
       </div>
     </div>
   );
@@ -180,9 +183,14 @@ function EmptyBoard() {
         A living board of poems, catalogued by author.
       </p>
       <p className="text-sm text-muted-foreground">No poems have been published yet.</p>
-      <Button asChild variant="outline">
-        <Link href="/sign-in">Editor sign in</Link>
-      </Button>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button asChild variant="outline">
+          <Link href="/sign-in">Editor sign in</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/about">About InkBoard</Link>
+        </Button>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import {
   FeatherIcon,
+  InfoIcon,
   ListIcon,
   LogInIcon,
   MaximizeIcon,
@@ -747,18 +748,30 @@ function AuthorsPanel({
   return (
     // In the top overlay column; only the button and the list take pointer events.
     <div className="pointer-events-none w-64 max-w-full self-start">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => onOpenChange(!open)}
-        aria-expanded={open}
-        aria-controls="authors-list"
-        className="pointer-events-auto bg-background/85 backdrop-blur"
-      >
-        {open ? <XIcon /> : <UsersIcon />}
-        Authors
-        <span className="text-muted-foreground">{sections.length}</span>
-      </Button>
+      {/* About sits here, not in the toolbar: the toolbar has no room left on
+          phones (two rows at 320px), and this column is in the flow, so it
+          can't cover anything (docs/PLAN.md, Phase 19). */}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onOpenChange(!open)}
+          aria-expanded={open}
+          aria-controls="authors-list"
+          className="pointer-events-auto bg-background/85 backdrop-blur"
+        >
+          {open ? <XIcon /> : <UsersIcon />}
+          Authors
+          <span className="text-muted-foreground">{sections.length}</span>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="pointer-events-auto bg-background/85 backdrop-blur">
+          <Link href="/about">
+            <InfoIcon aria-hidden />
+            About
+            <span className="sr-only"> InkBoard</span>
+          </Link>
+        </Button>
+      </div>
       {open && (
         <nav
           id="authors-list"

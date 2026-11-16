@@ -3,7 +3,7 @@ import { absoluteUrl } from "@/lib/site";
 import { getBoardSections } from "@/server/board-cache";
 
 /**
- * The board, every author page, collection page (Phase 14) and every published poem (private poems too:
+ * The board, the About and Privacy pages (Phase 19), every author page, collection page (Phase 14) and every published poem (private poems too:
  * their page is public, only the text is locked). Same cached, BOARD_TAG data
  * as the board, so it follows publishes and unpublishes.
  */
@@ -11,6 +11,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sections = await getBoardSections();
   return [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
+    { url: absoluteUrl("/about"), changeFrequency: "monthly", priority: 0.5 },
+    { url: absoluteUrl("/privacy"), changeFrequency: "yearly", priority: 0.2 },
     ...sections.flatMap((s) => [
       { url: absoluteUrl(`/a/${s.slug}`), changeFrequency: "weekly" as const, priority: 0.7 },
       // Collections with at least one published poem (the board has published poems only).

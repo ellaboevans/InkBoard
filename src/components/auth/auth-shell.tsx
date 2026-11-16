@@ -1,5 +1,6 @@
 import { FeatherIcon } from "lucide-react";
 import Link from "next/link";
+import { SiteLinks } from "@/components/site-links";
 import { PoemBloom } from "./poem-bloom";
 
 /**
@@ -36,6 +37,8 @@ export function AuthShell({
             {children}
           </div>
         </div>
+        {/* What InkBoard is and what it stores, before anyone signs up (docs/PLAN.md, Phase 19). */}
+        <SiteLinks className="flex justify-center md:justify-start" />
       </div>
       <aside
         aria-hidden

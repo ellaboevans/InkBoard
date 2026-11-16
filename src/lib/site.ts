@@ -11,6 +11,20 @@ export const SITE_TAGLINE = "A living board of poems, catalogued by author.";
 export const SITE_DESCRIPTION =
   "InkBoard is a public board of poems, grouped by author. Wander the canvas, read new work, and follow the poets you like.";
 
+/** Who runs InkBoard (the About and Privacy pages). */
+export const SITE_OPERATOR = "Evans Elabo";
+/** Where privacy questions and requests go; shown only on our own pages, as a mailto link. */
+export const PRIVACY_CONTACT_EMAIL = "ellaboevans@gmail.com";
+
+/**
+ * The walkthrough video on the About page: a YouTube video id (11 characters,
+ * from youtube.com/watch?v=<id>), or null until it's published. While null the
+ * page shows our own cover with "Video coming soon" and the CSP allows no
+ * frames at all; once set, next.config.ts allows frames from
+ * youtube-nocookie.com, and the player loads only after the reader presses play.
+ */
+export const WALKTHROUGH_YOUTUBE_ID: string | null = null;
+
 /** Hex versions of the "paper & ink" tokens in globals.css (ImageResponse can't read oklch/CSS vars). */
 export const BRAND = {
   paper: "#fdfaf4",

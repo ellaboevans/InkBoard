@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { PoemReader, PoemReaderSkeleton } from "@/components/poem/poem-reader";
 import { Button } from "@/components/ui/button";
+import { SiteLinks } from "@/components/site-links";
 import { JsonLd } from "@/components/seo/json-ld";
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
@@ -111,6 +112,8 @@ export default function PoemPage({ params }: Props) {
         <Suspense>
           <PoemJsonLd params={params} />
         </Suspense>
+        {/* Static, in the shell: what InkBoard is, for readers arriving from a shared link. */}
+        <SiteLinks className="mt-16 border-t pt-6" />
       </div>
     </main>
   );

@@ -1,3 +1,4 @@
+import { parsePoemLine, type PoemNode } from "./poem-markdown";
 import { languageName } from "./poem-languages";
 
 /*
@@ -6,8 +7,10 @@ import { languageName } from "./poem-languages";
  * letters, IPA and Ewe tone marks included); the output is NFC-normalised as
  * a last step, which changes nothing for stored text and guards the rest.
  *
- * Markdown: one file to read in any text editor. JSON: the complete backup,
- * with a format version so a future import can read it.
+ * Markdown: one file to read in any text editor, which also renders properly
+ * in a Markdown viewer (see poemTextToMarkdown). JSON: the complete backup,
+ * with the text exactly as stored and a format version so a future import can
+ * read it.
  */
 
 export const EXPORT_FORMAT_VERSION = 1;
@@ -76,6 +79,91 @@ export function exportToJson(data: EditorExport): string {
   return `${JSON.stringify(data, null, 2)}\n`.normalize("NFC");
 }
 
+/*
+ * Poem text in the Markdown file (docs/PLAN.md, Phase 19). In Markdown a
+ * single newline doesn't break a line, leading spaces are dropped (or, four or
+ * more, start a code block), and lines like "- …", "# …", "1. …" or "---"
+ * become lists, headings and rules. So each poem is written so that it reads
+ * the same as plain text and renders the same as on InkBoard:
+ *
+ * - Lines inside a stanza end with two spaces (a CommonMark hard line break,
+ *   invisible as plain text). Blank lines stay blank, so stanzas are paragraphs.
+ * - Leading indentation becomes no-break spaces (U+00A0; a tab counts as four),
+ *   which look like spaces and which Markdown keeps.
+ * - The poem's own light Markdown (*italic*, **bold**) is written back as such;
+ *   everything else that Markdown or GitHub would read as syntax gets a
+ *   backslash, only where it would be read that way.
+ *
+ * The text is still the poem as written (letters, tone marks, NFC); only
+ * whitespace and those escapes differ. The JSON file keeps it exactly.
+ */
+const NBSP = "\u00a0";
+const ASCII_PUNCT = /[!-/:-@[-`{-~]/;
+const isEdgeOrSpace = (c: string | undefined) => c === undefined || /\s/.test(c);
+const isWordChar = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
+/** Backslash-escapes the characters of literal text that CommonMark (or GFM) would treat as syntax. */
+function escapeInline(text: string, atLineStart: boolean, atLineEnd: boolean): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const prev = i === 0 ? (atLineStart ? undefined : "x") : text[i - 1];
+    const next = i === text.length - 1 ? (atLineEnd ? undefined : "x") : text[i + 1];
+    const alone = isEdgeOrSpace(prev) && isEdgeOrSpace(next);
+    let escape = false;
+    if (c === "\\") escape = next === undefined || ASCII_PUNCT.test(next);
+    else if (c === "*" || c === "~") escape = !alone; // emphasis, GFM strikethrough
+    else if (c === "_") escape = !alone && !(isWordChar(prev) && isWordChar(next)); // intraword _ is never emphasis
+    else if (c === "`" || c === "[" || c === "|") escape = true; // code, links and images, GFM tables
+    else if (c === "<") escape = /[A-Za-z/!?]/.test(next ?? ""); // HTML and autolinks
+    else if (c === "&") escape = /^&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i.test(text.slice(i)); // entities
+    out += escape ? `\\${c}` : c;
+  }
+  return out;
+}
+
+/** A backslash for an unindented line that Markdown would read as a heading, quote, list, rule or setext underline. */
+function escapeBlockStart(line: string): string {
+  if (/^(#{1,6}(\s|$)|>|[-+*](\s|$)|[-=_*]{2,}\s*$|(-\s*){3,}$|(\*\s*){3,}$|(_\s*){3,}$|=+\s*$)/.test(line)) {
+    return `\\${line}`;
+  }
+  return line.replace(/^(\d{1,9})([.)])(?=\s|$)/, "$1\\$2");
+}
+
+function nodesToMarkdown(nodes: PoemNode[], nested = false): string {
+  return nodes
+    .map((n, i) => {
+      if (typeof n === "string") return escapeInline(n, !nested && i === 0, !nested && i === nodes.length - 1);
+      const mark = n.kind === "strong" ? "**" : "*";
+      return `${mark}${nodesToMarkdown(n.children, true)}${mark}`;
+    })
+    .join("");
+}
+
+/** Poem text (light Markdown, as stored) as Markdown that keeps every line, stanza and indent. */
+export function poemTextToMarkdown(text: string): string {
+  const lines = text
+    .replace(/\r\n?/g, "\n")
+    .replace(/^(?:[ \t]*\n)+/, "")
+    .replace(/\s+$/, "")
+    .split("\n")
+    .map((line) => {
+      if (line.trim() === "") return "";
+      const indent = /^[ \t]*/.exec(line)![0];
+      const rest = line.slice(indent.length).replace(/[ \t]+$/, "");
+      const body = nodesToMarkdown(parsePoemLine(rest));
+      // An indented line starts with no-break spaces, which no block syntax follows.
+      return indent ? indent.replace(/\t/g, "    ").replace(/ /g, NBSP) + body : escapeBlockStart(body);
+    });
+  // Every line that another line follows in the same stanza ends with a hard break.
+  return lines.map((l, i) => (l && lines[i + 1] ? `${l}  ` : l)).join("\n");
+}
+
+/** Plain text (a bio, a collection's intro) the same way: line breaks kept, nothing read as Markdown. */
+export function plainTextToMarkdown(text: string): string {
+  return poemTextToMarkdown(text.replace(/\*/g, "\\*"));
+}
+
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
 const count = (n: number, one: string, other = `${one}s`) => `${n} ${n === 1 ? one : other}`;
 
@@ -88,7 +176,7 @@ function poemSection(p: ExportedPoem): string {
     ...(p.collection ? [`- Collection: ${p.collection.title}, part ${p.collection.position}`] : []),
     `- Created ${day(p.createdAt)} · last edited ${day(p.updatedAt)}`,
   ];
-  return [`### ${p.title}`, "", ...meta, "", p.text.replace(/\s+$/, ""), ""].join("\n");
+  return [`### ${p.title}`, "", ...meta, "", poemTextToMarkdown(p.text), ""].join("\n");
 }
 
 /**
@@ -102,7 +190,7 @@ export function exportToMarkdown(data: EditorExport): string {
   const privates = data.poems.filter((p) => p.visibility === "private").length;
   const out: string[] = [`# ${profile.penName}`, ""];
   if (profile.tagline) out.push(`*${profile.tagline}*`, "");
-  if (profile.bio) out.push(profile.bio, "");
+  if (profile.bio) out.push(plainTextToMarkdown(profile.bio), "");
   if (profile.links.length) out.push("Links:", ...profile.links.map((l) => `- ${l}`), "");
   out.push(
     `Author page: ${new URL(`/a/${profile.slug}`, data.site).href}`,
@@ -113,7 +201,7 @@ export function exportToMarkdown(data: EditorExport): string {
   const byId = new Map(data.poems.map((p) => [p.id, p]));
   for (const c of data.collections) {
     out.push("---", "", `## ${c.title}`, "");
-    if (c.intro) out.push(c.intro, "");
+    if (c.intro) out.push(plainTextToMarkdown(c.intro), "");
     if (c.poemIds.length === 0) out.push("*No poems in this collection yet.*", "");
     for (const id of c.poemIds) {
       const poem = byId.get(id);
@@ -126,6 +214,6 @@ export function exportToMarkdown(data: EditorExport): string {
     for (const p of loose) out.push(poemSection(p));
   }
   if (data.poems.length === 0) out.push("---", "", "*No poems yet.*", "");
-  // No whitespace clean-up here: blank lines inside a poem are part of it.
+  // Poem text went through poemTextToMarkdown: its lines, blank lines and indents are all kept.
   return out.join("\n").normalize("NFC");
 }

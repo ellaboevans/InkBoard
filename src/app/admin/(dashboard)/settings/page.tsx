@@ -1,5 +1,6 @@
 import { BracesIcon, DownloadIcon, FileTextIcon } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { pluralCount } from "@/lib/plural";
@@ -29,7 +30,14 @@ export default function SettingsPage() {
           <h1 id="settings-heading" className="font-serif text-3xl">
             Settings
           </h1>
-          <p className="mt-1 text-muted-foreground">Private poems, your poems as files, and your account.</p>
+          <p className="mt-1 text-muted-foreground">
+            Private poems, your poems as files, and your account. What InkBoard stores about you, and for how long, is
+            on the{" "}
+            <Link href="/privacy" className="text-foreground underline underline-offset-4">
+              privacy page
+            </Link>
+            .
+          </p>
         </div>
         <Suspense fallback={<div className="h-72 animate-pulse rounded-xl bg-muted" />}>
           <Settings />

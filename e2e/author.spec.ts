@@ -69,6 +69,6 @@ test("an author's public page shows their profile and poems, pinned first", asyn
   await page.locator("article").getByRole("link", { name: pen, exact: true }).click();
   await expect(page).toHaveURL(/\/a\/public-poet-/);
 
-  await page.goto("/a/nobody-here");
+  expect((await page.goto("/a/nobody-here"))!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Author not found" })).toBeVisible();
 });

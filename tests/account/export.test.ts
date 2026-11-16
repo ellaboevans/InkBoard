@@ -1,3 +1,4 @@
+import { HtmlRenderer, Parser } from "commonmark";
 import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
@@ -7,6 +8,7 @@ import {
   exportFileName,
   exportToJson,
   exportToMarkdown,
+  poemTextToMarkdown,
   type EditorExport,
 } from "@/lib/export-format";
 import { generateRecoveryCodes } from "@/server/auth/recovery-codes";
@@ -219,12 +221,15 @@ describe("the files", () => {
     expect(md).toMatch(/- Created \d{4}-\d\d-\d\d · last edited \d{4}-\d\d-\d\d\n\nonly for friends\n/);
   });
 
-  it("keeps every poem's text exactly as written: line breaks, blank lines, indentation, Markdown", async () => {
+  it("keeps every poem's lines, blank lines, indentation and Markdown in a form that renders (Phase 19)", async () => {
     const a = await ada();
     const [stored] = await db.select({ body: poems.body }).from(poems).where(eq(poems.id, a.ewe));
+    expect(stored.body).toBe(`ɖeka\n  ${GHANAIAN}\n\n*ɛ́yae* **ɔ̀**`.normalize("NFC"));
     const md = exportToMarkdown(await exportOf(a.ed.id));
-    expect(md).toContain(`\n${stored.body}\n`);
-    expect(stored.body).toContain("\n\n*ɛ́yae* **ɔ̀**");
+    // A hard break after the first line, the indent as no-break spaces, the blank line, the emphasis as written.
+    expect(md).toContain(`\nɖeka  \n\u00a0\u00a0${poemTextToMarkdown(GHANAIAN)}\n\n*ɛ́yae* **ɔ̀**\n`.normalize("NFC"));
+    const html = new HtmlRenderer().render(new Parser().parse(md));
+    expect(html).toContain(`<p>ɖeka<br />\n\u00a0\u00a0${GHANAIAN}</p>\n<p><em>ɛ́yae</em> <strong>ɔ̀</strong></p>`.normalize("NFC"));
   });
 
   it("round-trips Ghanaian letters, IPA and Ewe tone marks byte for byte, in NFC", async () => {
@@ -232,8 +237,12 @@ describe("the files", () => {
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
     const md = exportToMarkdown(data);
-    for (const file of [json, md]) {
+    // The Markdown escapes "[" (Markdown would read it as a link), so check it as rendered.
+    const rendered = new HtmlRenderer().render(new Parser().parse(md));
+    for (const file of [json, rendered]) {
       expect(file).toContain(GHANAIAN);
+    }
+    for (const file of [json, md]) {
       expect(file.normalize("NFC")).toBe(file);
       // Encoded as UTF-8 and decoded again: identical.
       expect(new TextDecoder("utf-8", { fatal: true }).decode(new TextEncoder().encode(file))).toBe(file);

@@ -7,6 +7,7 @@ import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face"
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
+import { SiteLinks } from "@/components/site-links";
 import type { CollectionPage } from "@/lib/board-types";
 import { CARD_H } from "@/lib/board-layout";
 import { feedAlternates } from "@/lib/feed-links";
@@ -102,6 +103,8 @@ export default function CollectionPublicPage({ params }: Props) {
         <Suspense>
           <CollectionJsonLd params={params} />
         </Suspense>
+        {/* Static, in the shell: what InkBoard is, for readers arriving from a shared link. */}
+        <SiteLinks className="mt-16 border-t pt-6" />
       </div>
     </main>
   );

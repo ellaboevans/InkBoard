@@ -145,10 +145,11 @@ test("list view shows the same catalogue", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Poem board" })).toBeVisible();
 });
 
-test("unknown poems show not-found and are not indexed", async ({ page }) => {
-  // The page streams, so the status is already 200 when notFound() runs;
-  // Next marks the page noindex instead.
-  await page.goto("/p/nobody/nothing");
+test("unknown poems show not-found with a real 404, and are not indexed", async ({ page }) => {
+  // The page streams (its 200 would be sent before notFound() runs), so the
+  // proxy checks first on a full page load (docs/PLAN.md, Phase 19).
+  const res = await page.goto("/p/nobody/nothing");
+  expect(res!.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
   await expect(page.locator('meta[name="robots"][content="noindex"]').first()).toBeAttached();
 });

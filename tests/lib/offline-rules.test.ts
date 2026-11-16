@@ -21,6 +21,16 @@ describe("which request gets which strategy", () => {
     expect(R.readerKind("/a/odalys-moon/c/harmattan")).toBe("collection");
   });
 
+  it("the About and Privacy pages are reader pages too (kind \"page\"), and nothing under them is", () => {
+    for (const path of ["/about", "/privacy"]) {
+      expect(req(path), path).toBe("reader-page");
+      expect(R.readerKind(path), path).toBe("page");
+    }
+    for (const path of ["/about/x", "/privacy/x", "/aboutx", "/about/opengraph-image"]) {
+      expect(R.readerKind(path), path).toBeNull();
+    }
+  });
+
   it("hashed assets, fonts, icons and avatars are cache-first", () => {
     for (const path of [
       "/_next/static/chunks/abc123.js",

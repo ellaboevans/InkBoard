@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 
 export default function AuthorNotFound() {
@@ -9,6 +10,7 @@ export default function AuthorNotFound() {
       <Button asChild>
         <Link href="/">Back to the board</Link>
       </Button>
+      <SiteLinks className="mt-8" />
     </main>
   );
 }

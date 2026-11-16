@@ -18,6 +18,11 @@ import { FIXTURES_FILE, OFFLINE_BASE_URL, OFFLINE_DATABASE_URL } from "./constan
 type Poem = { id: string; slug: string };
 const F = JSON.parse(readFileSync(FIXTURES_FILE, "utf8")) as { read: Poem; unread: Poem; secret: Poem };
 const url = (p: Poem) => `/p/offline-poet/${p.slug}`;
+// Round 2: one notification per author (tag author:<editor id>).
+let TAG = "";
+test.beforeAll(async () => {
+  TAG = `author:${(await query("SELECT id FROM editors WHERE slug = 'offline-poet'")).rows[0].id}`;
+});
 
 async function query(text: string, values: unknown[] = []) {
   const client = new pg.Client({ connectionString: OFFLINE_DATABASE_URL });
@@ -53,6 +58,17 @@ async function deliver(context: BrowserContext, page: Page, data: unknown) {
   });
 }
 
+const shownFull = (page: Page) =>
+  page.evaluate(async () =>
+    (await (await navigator.serviceWorker.ready).getNotifications()).map((n) => ({
+      title: n.title,
+      body: n.body,
+      tag: n.tag,
+      data: n.data as unknown,
+      renotify: (n as Notification & { renotify?: boolean }).renotify,
+      silent: n.silent,
+    })),
+  );
 const shown = (page: Page) =>
   page.evaluate(async () =>
     (await (await navigator.serviceWorker.ready).getNotifications()).map((n) => ({
@@ -80,14 +96,14 @@ test("a push shows the poem's title, 'New poem by …', icon, badge and tag, and
   const poem = url(F.unread);
   expect(await inPagesCache(page, poem)).toBe(false);
 
-  await deliver(context, page, { title: "Salt", author: "Offline Poet", url: poem, tag: `poem:${F.unread.id}` });
+  await deliver(context, page, { title: "Salt", author: "Offline Poet", url: poem, tag: TAG, count: 1 });
   await expect.poll(() => shown(page)).toEqual([
     {
       title: "Salt",
       body: "New poem by Offline Poet",
       icon: `${OFFLINE_BASE_URL}/icons/192.png`,
       badge: `${OFFLINE_BASE_URL}/icons/badge-96.png`,
-      tag: `poem:${F.unread.id}`,
+      tag: TAG,
       data: { url: poem },
     },
   ]);
@@ -104,8 +120,8 @@ test("a push shows the poem's title, 'New poem by …', icon, badge and tag, and
   await expect(reader.getByRole("heading", { level: 1, name: "Salt" })).toBeVisible();
   await context.setOffline(false);
 
-  // A second push for the same poem replaces the first (one tag per poem).
-  await deliver(context, page, { title: "Salt", author: "Offline Poet", url: poem, tag: `poem:${F.unread.id}` });
+  // Another alert for the same author replaces it (one tag per author).
+  await deliver(context, page, { title: "Salt", author: "Offline Poet", url: poem, tag: TAG, count: 1 });
   await page.waitForTimeout(500);
   expect(await shown(page)).toHaveLength(1);
   await context.close();
@@ -127,7 +143,7 @@ test("a private poem's page is never saved by a push (the offline rules still ap
   const context = await browser.newContext({ permissions: ["notifications"] });
   const page = await context.newPage();
   await withWorker(page);
-  await deliver(context, page, { title: "Old Letters", author: "Offline Poet", url: url(F.secret), tag: `poem:${F.secret.id}` });
+  await deliver(context, page, { title: "Old Letters", author: "Offline Poet", url: url(F.secret), tag: TAG, count: 1 });
   await expect.poll(async () => (await shown(page)).length).toBe(1);
   await page.waitForTimeout(1500);
   expect(await inPagesCache(page, url(F.secret))).toBe(false);
@@ -138,7 +154,7 @@ test("a click takes an open InkBoard window to the poem", async ({ browser }) =>
   const context = await browser.newContext({ permissions: ["notifications"] });
   const page = await context.newPage();
   await withWorker(page);
-  await deliver(context, page, { title: "Low Tide Inventory", author: "Offline Poet", url: url(F.read), tag: `poem:${F.read.id}` });
+  await deliver(context, page, { title: "Low Tide Inventory", author: "Offline Poet", url: url(F.read), tag: TAG, count: 1 });
   await expect.poll(async () => (await shown(page)).length).toBe(1);
 
   const sw = context.serviceWorkers().find((w) => w.url().startsWith(OFFLINE_BASE_URL))!;
@@ -184,6 +200,97 @@ test("when the app opens with notifications on, a subscription the server lost i
   const later = await context.newPage();
   await later.goto("/");
   await expect.poll(async () => (await query("SELECT endpoint FROM push_subscriptions")).rows.map((r) => r.endpoint)).toEqual([endpoint]);
+  await context.close();
+  await query("DELETE FROM push_subscriptions");
+});
+
+test("a burst becomes one notification: a grouped update replaces it quietly, and a tap opens the author page", async ({ browser }) => {
+  const context = await browser.newContext({ permissions: ["notifications"] });
+  const page = await context.newPage();
+  await withWorker(page);
+  await deliver(context, page, { title: "Salt", author: "Offline Poet", url: url(F.unread), tag: TAG, count: 1 });
+  await expect.poll(() => shownFull(page)).toEqual([
+    { title: "Salt", body: "New poem by Offline Poet", tag: TAG, data: { url: url(F.unread) }, renotify: true, silent: false },
+  ]);
+  // The author's next poems in the window: the same notification, counted up.
+  await deliver(context, page, { title: "Harbour Lights", author: "Offline Poet", url: "/a/offline-poet", tag: TAG, count: 2 });
+  await deliver(context, page, { title: "Low Tide Inventory", author: "Offline Poet", url: "/a/offline-poet", tag: TAG, count: 3 });
+  await expect.poll(() => shownFull(page)).toEqual([
+    {
+      title: "3 new poems by Offline Poet",
+      body: "Latest: Low Tide Inventory",
+      tag: TAG,
+      data: { url: "/a/offline-poet" },
+      renotify: false,
+      silent: true,
+    },
+  ]);
+  // The author page is saved for offline reading, like an announced poem.
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        for (const n of await caches.keys()) if (n.startsWith("inkboard-pages-") && (await (await caches.open(n)).match("/a/offline-poet"))) return true;
+        return false;
+      }),
+    )
+    .toBe(true);
+
+  // A tap (synthetic: no user activation) takes the open window to the author page.
+  const sw = context.serviceWorkers().find((w) => w.url().startsWith(OFFLINE_BASE_URL))!;
+  const outcome = await sw.evaluate(async () => {
+    const g = self as unknown as {
+      registration: ServiceWorkerRegistration;
+      NotificationEvent: new (type: string, init: { notification: Notification }) => Event;
+    };
+    const [n] = await g.registration.getNotifications();
+    const ev = new g.NotificationEvent("notificationclick", { notification: n });
+    let done: Promise<unknown> = Promise.resolve();
+    (ev as unknown as { waitUntil(p: Promise<unknown>): void }).waitUntil = (p) => {
+      done = p;
+    };
+    self.dispatchEvent(ev);
+    const client = (await done) as { url?: string } | undefined;
+    return client?.url ?? null;
+  });
+  expect(outcome).toBe(`${OFFLINE_BASE_URL}/a/offline-poet`);
+  await expect(page).toHaveURL(`${OFFLINE_BASE_URL}/a/offline-poet`);
+  await expect(page.getByRole("heading", { level: 1, name: "Offline Poet" })).toBeVisible();
+  await context.close();
+});
+
+test("the follows this browser remembers survive a lost subscription (re-registered on open)", async ({ browser }) => {
+  await query("DELETE FROM push_subscriptions");
+  const context = await browser.newContext();
+  await fakePush(context, { permission: "granted", subscribed: true });
+  const page = await context.newPage();
+  await page.goto("/");
+  const endpoint = await page.evaluate(() => (window as unknown as { __pushEndpoint: () => string }).__pushEndpoint());
+  // The first open registers it (and writes the server's prefs to the browser's copy).
+  await expect.poll(async () => (await query("SELECT count(*)::int AS n FROM push_subscriptions")).rows[0].n).toBe(1);
+  await expect
+    .poll(() => page.evaluate(async () => Boolean(await (await caches.open("inkboard-push")).match("/__inkboard/push-prefs.json"))))
+    .toBe(true);
+  // What the browser remembers after following an author on this device.
+  await page.evaluate(async () => {
+    const cache = await caches.open("inkboard-push");
+    await cache.put("/__inkboard/push-prefs.json", new Response(JSON.stringify({ mode: "followed", follows: ["offline-poet"] })));
+  });
+  // The server loses it; the next open brings it back with the follows.
+  await query("DELETE FROM push_subscriptions");
+  const later = await context.newPage();
+  await later.goto("/");
+  await expect
+    .poll(async () =>
+      (
+        await query(
+          `SELECT s.mode, array_agg(e.slug) AS follows FROM push_subscriptions s
+           JOIN push_follows f ON f.subscription_id = s.id JOIN editors e ON e.id = f.editor_id
+           WHERE s.endpoint = $1 GROUP BY s.mode`,
+          [endpoint],
+        )
+      ).rows,
+    )
+    .toEqual([{ mode: "followed", follows: ["offline-poet"] }]);
   await context.close();
   await query("DELETE FROM push_subscriptions");
 });

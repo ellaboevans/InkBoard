@@ -680,3 +680,54 @@ test("notifications on this device: every state of the switch, and the after-ins
   await scan(page, "notifications offer after installing, phone");
   await context.close();
 });
+
+test("following authors: the author page toggle and the popover's mode and follow list", async ({ browser, page: writer }) => {
+  test.setTimeout(300_000);
+  const id = unique();
+  const pen = `Follow Poet ${id}`;
+  await signUpAs(writer, `a11y-follow-${id}@example.com`, pen);
+  await publish(writer, `Harmattan ${id}`, "dust on the louvres,\nthe radio humming");
+  const { slug } = (await sql(`SELECT slug FROM editors WHERE email = 'a11y-follow-${id}@example.com'`)).rows[0] as { slug: string };
+  const IPHONE =
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+  const follow = (page: Page) => page.getByRole("main").getByRole("button", { name: `Notify me about new poems by ${pen}` });
+
+  for (const width of [375, 1280]) {
+    const states: [string, FakePush, Record<string, unknown>?][] = [
+      ["not following", { permission: "default" }],
+      ["blocked", { permission: "denied" }],
+      ["iPhone, not installed", { permission: "default", unsupported: true }, { userAgent: IPHONE, isMobile: true, hasTouch: true }],
+    ];
+    for (const [name, push, extra] of states) {
+      const context = await browser.newContext({ viewport: { width, height: 800 }, ...extra });
+      await fakePush(context, push);
+      const page = await context.newPage();
+      await page.goto(`/a/${slug}`);
+      await expect(page.getByRole("heading", { level: 1, name: pen })).toBeVisible();
+      await expect(page.locator("[data-follow-author]")).toBeVisible();
+      await scan(page, `author page follow toggle, ${name}, ${width}px`);
+      await context.close();
+    }
+
+    // Following: the toggle on, then the popover with the mode and the list (and empty).
+    const context = await browser.newContext({ viewport: { width, height: 800 } });
+    await fakePush(context, { permission: "default" });
+    const page = await context.newPage();
+    await page.goto(`/a/${slug}`);
+    await follow(page).click();
+    await expect(follow(page)).toHaveAttribute("aria-pressed", "true");
+    await scan(page, `author page follow toggle, following, ${width}px`);
+    await openBoard(page);
+    await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Follow new poems" });
+    await expect(dialog.getByRole("list", { name: "Authors you follow" })).toBeVisible();
+    await scan(page, `subscribe popover, following one author, ${width}px`);
+    await dialog.getByRole("button", { name: `Unfollow ${pen}` }).click();
+    await expect(dialog.getByText("Until you follow someone, this device gets no notifications.")).toBeVisible();
+    await scan(page, `subscribe popover, followed mode with nobody followed, ${width}px`);
+    await dialog.getByRole("radio", { name: "All new poems" }).click();
+    await expect(dialog.getByRole("radio", { name: "All new poems" })).toBeChecked();
+    await scan(page, `subscribe popover, all new poems, ${width}px`);
+    await context.close();
+  }
+});

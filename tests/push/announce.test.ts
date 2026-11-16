@@ -72,6 +72,7 @@ async function publish(editorId: string, over: Partial<PoemInput> = {}) {
 const notifiedAt = async (id: string) =>
   (await db.select({ at: poems.notifiedAt }).from(poems).where(eq(poems.id, id)))[0].at;
 const sentTo = () => send.mock.calls.map((c) => (c[0] as { endpoint: string }).endpoint);
+const payloads = () => send.mock.calls.map((c) => JSON.parse(c[1] as string) as { title: string; url: string; count: number; tag: string });
 async function age(hours: number) {
   await db.execute(sql`UPDATE push_deliveries SET sent_at = sent_at - make_interval(hours => ${hours})`);
 }
@@ -125,7 +126,7 @@ describe("when a poem is announced: once, public only", () => {
 });
 
 describe("what is sent", () => {
-  it("one push per device, with exactly title, author, url and tag, and the delivery options", async () => {
+  it("one push per device, with exactly title, author, url, tag and count, and the delivery options", async () => {
     await subscribeDevices(2);
     const { poem } = await publish(ada, { title: "Ɔdɔ Song", body: "SECRET-BODY-LINE never leaves" });
     expect(await announcePoem(poem.id)).toMatchObject({ sent: 2, gone: 0, limited: 0 });
@@ -136,13 +137,14 @@ describe("what is sent", () => {
       title: "Ɔdɔ Song",
       author: "Ada",
       url: `/p/ada/${poem.slug}`,
-      tag: `poem:${poem.id}`,
+      tag: `author:${ada}`,
+      count: 1,
     });
     expect(payload).not.toContain("SECRET-BODY-LINE");
     expect(options).toMatchObject({
       TTL: 86400,
       urgency: "normal",
-      topic: poem.id.replace(/-/g, ""),
+      topic: ada.replace(/-/g, ""), // per author: an undelivered push is replaced by the newer one
       timeout: 10_000,
       vapidDetails: { subject: "mailto:owner@inkboard.app", publicKey: keys.publicKey, privateKey: keys.privateKey },
     });
@@ -167,18 +169,22 @@ describe("what is sent", () => {
 });
 
 describe("limits per device", () => {
-  it("one notification per author in 12 hours", async () => {
+  it("one alert per author in 12 hours; later poems quietly update it (round 2)", async () => {
     await subscribeDevices(1);
     const one = await publish(ada, { title: "One" });
     const two = await publish(ada, { title: "Two" });
-    expect(await announcePoem(one.poem.id)).toMatchObject({ sent: 1 });
-    expect(await announcePoem(two.poem.id)).toMatchObject({ sent: 0, limited: 1 });
+    expect(await announcePoem(one.poem.id)).toMatchObject({ sent: 1, updates: 0 });
+    expect(await announcePoem(two.poem.id)).toMatchObject({ sent: 1, updates: 1, limited: 0 });
+    expect(payloads().map((p) => [p.count, p.url])).toEqual([
+      [1, `/p/ada/${one.poem.slug}`],
+      [2, "/a/ada"],
+    ]);
     // Another author is still fine.
-    expect(await announcePoem((await publish(eve)).poem.id)).toMatchObject({ sent: 1 });
-    // After 12 hours, Ada again.
+    expect(await announcePoem((await publish(eve)).poem.id)).toMatchObject({ sent: 1, updates: 0 });
+    // After 12 hours, Ada starts a new window with a new alert.
     await age(12);
-    expect(await announcePoem((await publish(ada, { title: "Three" })).poem.id)).toMatchObject({ sent: 1 });
-    expect(send).toHaveBeenCalledTimes(3);
+    expect(await announcePoem((await publish(ada, { title: "Three" })).poem.id)).toMatchObject({ sent: 1, updates: 0 });
+    expect(payloads().at(-1)).toMatchObject({ count: 1, title: "Three" });
   });
 
   it("three notifications per device in 24 hours", async () => {
@@ -214,12 +220,17 @@ describe("limits per device", () => {
     expect(perDevice.rows.map((r) => r.n)).toEqual([3, 3, 3, 3, 3]);
   });
 
-  it("the same author's two poems at once: one notification per device", async () => {
+  it("the same author's two poems at once: one alert and one update per device, never two alerts", async () => {
     await subscribeDevices(3);
     const [a, b] = [await publish(ada, { title: "A" }), await publish(ada, { title: "B" })];
     const ids = (await db.select({ id: pushSubscriptions.id }).from(pushSubscriptions)).map((r) => r.id);
     const claims = await Promise.all([claimDeliveries(ada, a.poem.id, ids), claimDeliveries(ada, b.poem.id, ids)]);
-    expect(claims[0].length + claims[1].length).toBe(3);
+    expect(claims[0].length + claims[1].length).toBe(6);
+    expect([...claims[0], ...claims[1]].map((c) => c.count).sort()).toEqual([1, 1, 1, 2, 2, 2]);
+    const kinds = (await db.execute(sql`SELECT kind, count(*)::int AS n FROM push_deliveries GROUP BY kind ORDER BY kind`)) as unknown as {
+      rows: { kind: string; n: number }[];
+    };
+    expect(kinds.rows).toEqual([{ kind: "alert", n: 3 }, { kind: "update", n: 3 }]);
   });
 });
 
@@ -259,19 +270,23 @@ describe("what push services answer", () => {
 });
 
 describe("subscriptions", () => {
-  it("saving is an upsert on the endpoint; deleting removes the row", async () => {
-    expect(await saveSubscription({ endpoint: device(1), p256dh: P256DH, auth: AUTH })).toBe(true);
-    expect(await saveSubscription({ endpoint: device(1), p256dh: P256DH, auth: "AAAAAAAAAAAAAAAAAAAAAA" })).toBe(false);
-    expect((await db.select().from(pushSubscriptions))[0].auth).toBe("AAAAAAAAAAAAAAAAAAAAAA");
-    expect(await deleteSubscription(device(1))).toBe(true);
-    expect(await deleteSubscription(device(1))).toBe(false);
+  it("saving is an upsert by the owning browser only; deleting needs the auth secret", async () => {
+    expect(await saveSubscription({ endpoint: device(1), p256dh: P256DH, auth: AUTH })).toMatchObject({ ok: true, created: true });
+    expect(await saveSubscription({ endpoint: device(1), p256dh: P256DH, auth: AUTH })).toMatchObject({ ok: true, created: false });
+    // Someone who knows only the endpoint can't take it over with their own keys.
+    expect(await saveSubscription({ endpoint: device(1), p256dh: P256DH, auth: "AAAAAAAAAAAAAAAAAAAAAA" })).toEqual({ ok: false });
+    expect((await db.select().from(pushSubscriptions))[0].auth).toBe(AUTH);
+    expect(await deleteSubscription({ endpoint: device(1), auth: "AAAAAAAAAAAAAAAAAAAAAA" })).toBe(false);
+    expect(await db.select().from(pushSubscriptions)).toHaveLength(1);
+    expect(await deleteSubscription({ endpoint: device(1), auth: AUTH })).toBe(true);
+    expect(await deleteSubscription({ endpoint: device(1), auth: AUTH })).toBe(false);
   });
 
   it("deleting a subscription removes its delivery history", async () => {
     await subscribeDevices(1);
     await announcePoem((await publish(ada)).poem.id);
     expect(await db.select().from(pushDeliveries)).toHaveLength(1);
-    await deleteSubscription(device(1));
+    await deleteSubscription({ endpoint: device(1), auth: AUTH });
     expect(await db.select().from(pushDeliveries)).toHaveLength(0);
   });
 });

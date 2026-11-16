@@ -5,10 +5,13 @@ import {
   isAllowedPushEndpoint,
   isUsableVapidSubject,
   newPoemPayload,
-  parseEndpoint,
   parsePushSubscription,
   pushOutcome,
   pushTopic,
+  parseOwnerProof,
+  parsePrefs,
+  parsePrefsOp,
+  supportsQuietUpdates,
   resolveVapidSubject,
 } from "@/lib/push-rules";
 
@@ -77,11 +80,6 @@ describe("subscriptions: strict shape", () => {
     expect(parsePushSubscription(input)).toBeNull();
   });
 
-  it("unsubscribing takes just an allowlisted endpoint", () => {
-    expect(parseEndpoint({ endpoint: "https://fcm.googleapis.com/fcm/send/x" })).toBe("https://fcm.googleapis.com/fcm/send/x");
-    expect(parseEndpoint({ endpoint: "https://example.org/x" })).toBeNull();
-    expect(parseEndpoint({})).toBeNull();
-  });
 });
 
 describe("the VAPID subject: a real https URL or mailto", () => {
@@ -159,28 +157,63 @@ describe("env: VAPID settings", () => {
 });
 
 describe("the payload", () => {
-  it("has exactly title, author, url and tag: never poem text", () => {
-    const p = newPoemPayload({
-      poemId: "01859f03-6106-449e-be49-6097a0618d11",
-      title: "Night Market",
-      penName: "Ama Owusu",
-      authorSlug: "ama-owusu",
-      poemSlug: "night-market",
-    });
+  const editorId = "7a1d9f03-6106-449e-be49-6097a0618d11";
+  const base = { editorId, title: "Night Market", penName: "Ama Sɛwaa", authorSlug: "ama-sewaa", poemSlug: "night-market" };
+
+  it("one poem: exactly title, author, url, tag and count; never poem text", () => {
+    const p = newPoemPayload({ ...base, count: 1 });
     expect(p).toStrictEqual({
       title: "Night Market",
-      author: "Ama Owusu",
-      url: "/p/ama-owusu/night-market",
-      tag: "poem:01859f03-6106-449e-be49-6097a0618d11",
+      author: "Ama Sɛwaa",
+      url: "/p/ama-sewaa/night-market",
+      tag: `author:${editorId}`,
+      count: 1,
     });
-    expect(Object.keys(JSON.parse(JSON.stringify(p))).sort()).toEqual(["author", "tag", "title", "url"]);
+    expect(Object.keys(JSON.parse(JSON.stringify(p))).sort()).toEqual(["author", "count", "tag", "title", "url"]);
   });
 
-  it("uses a Topic of at most 32 URL-safe characters", () => {
-    const t = pushTopic("01859f03-6106-449e-be49-6097a0618d11");
-    expect(t).toBe("01859f036106449ebe496097a0618d11");
+  it("a group: the same fields, the count, and the author page as the link", () => {
+    expect(newPoemPayload({ ...base, count: 3 })).toStrictEqual({
+      title: "Night Market",
+      author: "Ama Sɛwaa",
+      url: "/a/ama-sewaa",
+      tag: `author:${editorId}`,
+      count: 3,
+    });
+  });
+
+  it("uses a per-author Topic of at most 32 URL-safe characters", () => {
+    const t = pushTopic(editorId);
+    expect(t).toBe("7a1d9f036106449ebe496097a0618d11");
     expect(t.length).toBeLessThanOrEqual(32);
     expect(t).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+
+  it("quiet updates go everywhere but Apple's push service (no tag replacement there)", () => {
+    expect(supportsQuietUpdates("https://fcm.googleapis.com/fcm/send/x")).toBe(true);
+    expect(supportsQuietUpdates("https://updates.push.services.mozilla.com/wpush/v2/x")).toBe(true);
+    expect(supportsQuietUpdates("https://wns2-par02p.notify.windows.com/w/?token=x")).toBe(true);
+    expect(supportsQuietUpdates("https://web.push.apple.com/x")).toBe(false);
+    expect(supportsQuietUpdates("https://api.push.apple.com/x")).toBe(false);
+  });
+
+  it("preferences, ownership proofs and operations are checked strictly", () => {
+    expect(parsePrefs({ mode: "followed", follows: ["ada", "ada", "eve"] })).toEqual({ mode: "followed", follows: ["ada", "eve"] });
+    expect(parsePrefs({ mode: "some", follows: [] })).toBeNull();
+    expect(parsePrefs({ mode: "all", follows: ["Bad Slug"] })).toBeNull();
+    expect(parsePrefs({ mode: "all", follows: Array.from({ length: 101 }, (_, i) => `a${i}`) })).toBeNull();
+    expect(parseOwnerProof({ endpoint: "https://fcm.googleapis.com/fcm/send/x", auth: AUTH })).toEqual({
+      endpoint: "https://fcm.googleapis.com/fcm/send/x",
+      auth: AUTH,
+    });
+    expect(parseOwnerProof({ endpoint: "https://fcm.googleapis.com/fcm/send/x" })).toBeNull(); // the endpoint alone
+    expect(parseOwnerProof({ endpoint: "https://fcm.googleapis.com/fcm/send/x", auth: "short" })).toBeNull();
+    expect(parseOwnerProof({ endpoint: "https://evil.example.com/x", auth: AUTH })).toBeNull();
+    expect(parsePrefsOp({ op: "follow", author: "ama-sewaa" })).toEqual({ op: "follow", author: "ama-sewaa" });
+    expect(parsePrefsOp({ op: "mode", mode: "followed" })).toEqual({ op: "mode", mode: "followed" });
+    expect(parsePrefsOp({ op: "mode", mode: "none" })).toBeNull();
+    expect(parsePrefsOp({ op: "follow", author: "../x" })).toBeNull();
+    expect(parsePrefsOp({ op: "drop" })).toBeNull();
   });
 
   it("classifies push service answers", () => {

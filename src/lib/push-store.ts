@@ -2,6 +2,8 @@
 
 import { detectPlatform, INSTALLED_DISPLAY_MODES, isRunningInstalled } from "./install-nudge";
 import { notify } from "./notify";
+import { PUSH_PREFS_CACHE, PUSH_PREFS_KEY } from "./push-prefs-cache";
+import type { PushMode, PushPrefs } from "./push-rules";
 
 /*
  * Client-only store behind "Notifications on this device" (docs/PLAN.md,
@@ -33,12 +35,17 @@ export type PushSnapshot = {
   permission: NotificationPermission | "unsupported";
   /** The after-install offer was answered (turned on or "Not now"): never again. */
   offerDone: boolean;
+  /** When on: this device's mode and followed authors, as the server has them (null until read). */
+  prefs: DevicePrefs | null;
 };
 
-const SERVER: PushSnapshot = { status: "unavailable", busy: false, permission: "unsupported", offerDone: true };
+export type DevicePrefs = { mode: PushMode; follows: { slug: string; penName: string }[] };
+
+const SERVER: PushSnapshot = { status: "unavailable", busy: false, permission: "unsupported", offerDone: true, prefs: null };
 const OFFER_KEY = "inkboard-push-offer";
 const SYNC_KEY = "inkboard-push-sync";
 const API = "/api/push/subscription";
+const PREFS_API = "/api/push/preferences";
 
 let snapshot = SERVER;
 const listeners = new Set<() => void>();
@@ -114,7 +121,58 @@ async function refresh() {
   const permission = Notification.permission;
   if (permission === "denied") return set({ status: "blocked", permission });
   const sub = permission === "granted" ? await currentSubscription() : null;
-  set({ status: sub ? "on" : "off", permission });
+  set({ status: sub ? "on" : "off", permission, ...(sub ? {} : { prefs: null }) });
+  if (sub && !snapshot.prefs) void loadPrefs(sub);
+}
+
+// ---- preferences (Phase 18 round 2) -----------------------------------------
+// The server's copy is the truth; the browser keeps its own in Cache Storage
+// (readable by the worker too), so follows survive a lost subscription or a
+// pushsubscriptionchange. Every request proves ownership with the
+// subscription's endpoint and auth secret.
+
+function proof(sub: PushSubscription) {
+  const json = sub.toJSON();
+  return { endpoint: sub.endpoint, auth: json.keys?.auth ?? "" };
+}
+
+async function remember(prefs: DevicePrefs | null) {
+  set({ prefs });
+  try {
+    const cache = await caches.open(PUSH_PREFS_CACHE);
+    if (!prefs) return void (await cache.delete(PUSH_PREFS_KEY));
+    const copy: PushPrefs = { mode: prefs.mode, follows: prefs.follows.map((f) => f.slug) };
+    await cache.put(PUSH_PREFS_KEY, new Response(JSON.stringify(copy), { headers: { "content-type": "application/json" } }));
+  } catch {
+    // No Cache Storage here: the server's copy still holds.
+  }
+}
+
+async function rememberedPrefs(): Promise<PushPrefs | null> {
+  try {
+    const res = await (await caches.open(PUSH_PREFS_CACHE)).match(PUSH_PREFS_KEY);
+    return res ? ((await res.json()) as PushPrefs) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function prefsRequest(sub: PushSubscription, body: Record<string, unknown>): Promise<DevicePrefs | null> {
+  try {
+    const res = await fetch(PREFS_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...proof(sub), ...body }),
+    });
+    return res.ok ? ((await res.json()) as DevicePrefs) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadPrefs(sub: PushSubscription) {
+  const prefs = await prefsRequest(sub, { op: "get" });
+  if (prefs) await remember(prefs);
 }
 
 function start() {
@@ -166,42 +224,58 @@ async function subscribeHere(reg: ServiceWorkerRegistration): Promise<PushSubscr
   return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey()) });
 }
 
-async function post(sub: PushSubscription): Promise<boolean> {
+/** Register (or re-register) this browser's subscription; the server's prefs come back. */
+async function post(sub: PushSubscription, prefs?: PushPrefs | null): Promise<DevicePrefs | null> {
   try {
     const res = await fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sub.toJSON()),
+      body: JSON.stringify({ ...sub.toJSON(), ...(prefs ? { prefs } : {}) }),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    return ((await res.json()) as { prefs: DevicePrefs }).prefs;
   } catch {
-    return false;
+    return null;
   }
 }
 
 // ---- Actions (event handlers only) ------------------------------------------
 
-/** The switch was turned on: ask permission (this tap only), subscribe, tell the server. */
-export async function turnOn() {
-  if (snapshot.busy) return;
+/**
+ * The switch was turned on, or an author followed while off: ask permission
+ * (this tap only), subscribe, tell the server. `prefs` start the device in a
+ * mode (following an author starts it in "Only authors I follow").
+ */
+export async function turnOn(prefs?: PushPrefs) {
+  if (snapshot.busy) return false;
   set({ busy: true });
   try {
     const permission =
       Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
     if (permission !== "granted") {
       // Dismissed: still off, nothing to say. Blocked: the switch explains how to undo it.
-      return set({ status: permission === "denied" ? "blocked" : "off", permission });
+      set({ status: permission === "denied" ? "blocked" : "off", permission });
+      return false;
     }
     const sub = await subscribeHere(await readyRegistration());
-    if (!(await post(sub))) {
+    let saved = await post(sub, prefs ?? { mode: "all", follows: [] });
+    if (!saved) {
       await sub.unsubscribe().catch(() => {});
       throw new Error("server refused");
     }
+    // The row already existed (it keeps its own prefs): apply what this tap asked for.
+    if (prefs && (saved.mode !== prefs.mode || prefs.follows.some((f) => !saved!.follows.some((x) => x.slug === f)))) {
+      saved = (await prefsRequest(sub, { op: "mode", mode: prefs.mode })) ?? saved;
+      for (const author of prefs.follows) saved = (await prefsRequest(sub, { op: "follow", author })) ?? saved;
+    }
     write("session", SYNC_KEY, sub.endpoint);
     set({ status: "on", permission });
+    await remember(saved);
+    return true;
   } catch {
     notify.error("Couldn't turn on notifications", "Check your connection and try again.");
     await refresh();
+    return false;
   } finally {
     set({ busy: false });
   }
@@ -217,7 +291,7 @@ export async function turnOff() {
       const deleted = await fetch(API, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: sub.endpoint }),
+        body: JSON.stringify(proof(sub)),
       })
         .then((r) => r.ok)
         .catch(() => false);
@@ -227,6 +301,7 @@ export async function turnOff() {
       if (!deleted) notify.error("Turned off on this device", "We couldn't reach InkBoard just now; the address will be deleted the next time we try it.");
     }
     set({ status: "off" });
+    await remember(null);
   } catch {
     notify.error("Couldn't turn off notifications", "Try again, or turn them off in your browser's settings.");
     await refresh();
@@ -260,6 +335,47 @@ export async function syncOnOpen() {
   } else if (read("session", SYNC_KEY) === sub.endpoint) {
     return;
   }
-  if (await post(sub)) write("session", SYNC_KEY, sub.endpoint);
+  // The follows this browser remembers come along: a row the server lost is
+  // re-created with them (an existing row keeps its own).
+  const prefs = await post(sub, await rememberedPrefs());
+  if (prefs) {
+    write("session", SYNC_KEY, sub.endpoint);
+    await remember(prefs);
+  }
   if (started) void refresh();
+}
+
+async function change(body: Record<string, unknown>, failure: string) {
+  if (snapshot.busy) return;
+  const sub = await currentSubscription();
+  if (!sub) return void (await refresh());
+  set({ busy: true });
+  try {
+    const prefs = await prefsRequest(sub, body);
+    if (!prefs) throw new Error("refused");
+    await remember(prefs);
+  } catch {
+    notify.error(failure, "Check your connection and try again.");
+  } finally {
+    set({ busy: false });
+  }
+}
+
+/** "All new poems" / "Only authors I follow". */
+export function setMode(mode: PushMode) {
+  return change({ op: "mode", mode }, "Couldn't change notifications");
+}
+
+/**
+ * Follow an author on this device. With notifications off, this tap turns
+ * them on in "Only authors I follow" (and is the permission request).
+ */
+export async function follow(author: string) {
+  if (snapshot.status === "off") return void (await turnOn({ mode: "followed", follows: [author] }));
+  if (snapshot.status !== "on") return;
+  await change({ op: "follow", author }, "Couldn't follow this author");
+}
+
+export function unfollow(author: string) {
+  return change({ op: "unfollow", author }, "Couldn't unfollow this author");
 }

@@ -56,6 +56,7 @@ async function warmUp() {
     ["/icons/maskable-512.png"],
     ["/icons/badge-96.png"],
     ["/api/push/subscription"],
+    ["/api/push/preferences"],
     ["/api/search?q=warm"],
     ["/p/warm-up/warm-up"],
     ["/p/warm-up/warm-up", { RSC: "1", "Next-Url": "/" }],

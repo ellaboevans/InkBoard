@@ -9,6 +9,7 @@ import { avatarIdFor, avatarUrl } from "@/lib/avatars";
 import { CARD_H } from "@/lib/board-layout";
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
+import { FollowAuthorToggle } from "@/components/notifications/notifications-setting";
 import { feedAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
@@ -120,9 +121,11 @@ async function Author({ params }: Pick<Props, "params">) {
             {privateCount > 0 && <> · {privateCount} password protected</>}
             {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
           </p>
-          <p>
+          <div className="grid justify-items-start gap-2">
             <AuthorFeedLink slug={a.slug} penName={a.penName} />
-          </p>
+            {/* Phase 18 round 2: renders nothing where notifications aren't possible. */}
+            <FollowAuthorToggle slug={a.slug} penName={a.penName} />
+          </div>
           {a.bio && <p className="max-w-2xl leading-relaxed whitespace-pre-line">{a.bio}</p>}
           {a.links.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label={`${a.penName}'s links`}>

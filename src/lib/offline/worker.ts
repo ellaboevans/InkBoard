@@ -1,3 +1,4 @@
+import { PUSH_PREFS_CACHE, PUSH_PREFS_KEY } from "@/lib/push-prefs-cache";
 import { OFFLINE_RULES_JS, PAGES_CACHE_PREFIX, SAVE_MESSAGE, SAVED_INDEX_KEY, STATIC_CACHE_PREFIX } from "./rules";
 
 /**
@@ -18,6 +19,8 @@ export function serviceWorkerSource(buildId: string, pushPublicKey = ""): string
 ${OFFLINE_RULES_JS}
 var R = InkboardOffline;
 var BUILD = ${JSON.stringify(buildId)};
+var PUSH_PREFS_CACHE = ${JSON.stringify(PUSH_PREFS_CACHE)};
+var PUSH_PREFS_KEY = ${JSON.stringify(PUSH_PREFS_KEY)};
 var PUSH_KEY = ${JSON.stringify(pushPublicKey)}; // VAPID public key (public by design), for pushsubscriptionchange
 var STATIC = ${JSON.stringify(STATIC_CACHE_PREFIX)} + BUILD;
 var PAGES = ${JSON.stringify(PAGES_CACHE_PREFIX)} + BUILD;
@@ -191,9 +194,10 @@ self.addEventListener("message", function (event) {
 });
 
 // ---- notifications about new poems (Phase 18) ----------------------------------
-// Show it (always: no silent pushes), and save the announced poem for offline
-// reading through the same storage rules as a visit (saveCopy keeps only pages
-// marked "save"; private poems are never announced anyway).
+// Show it (always: no silent pushes; a quiet "3 new poems" update still shows a
+// notification), and save the announced poem (or, for a group, the author
+// page) for offline reading through the same storage rules as a visit
+// (saveCopy keeps only pages marked "save"; private poems are never announced).
 self.addEventListener("push", function (event) {
   var data = null;
   try { data = event.data ? event.data.json() : null; } catch (e) {}
@@ -241,10 +245,21 @@ self.addEventListener("pushsubscriptionchange", function (event) {
     var sub = event.newSubscription;
     if (!sub && key) sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
     if (!sub) return;
+    // The mode and follows this browser last had (Phase 18 round 2), so the
+    // new address keeps them; written by the page (src/lib/push-store.ts).
+    var prefs = null;
+    try {
+      var saved = await (await caches.open(PUSH_PREFS_CACHE)).match(PUSH_PREFS_KEY);
+      if (saved) prefs = await saved.json();
+    } catch (e) {}
     var headers = { "content-type": "application/json" };
-    await fetch("/api/push/subscription", { method: "POST", headers: headers, body: JSON.stringify(sub.toJSON()) });
-    if (old && old.endpoint !== sub.endpoint) {
-      await fetch("/api/push/subscription", { method: "DELETE", headers: headers, body: JSON.stringify({ endpoint: old.endpoint }) });
+    var body = sub.toJSON();
+    if (prefs) body.prefs = prefs;
+    await fetch("/api/push/subscription", { method: "POST", headers: headers, body: JSON.stringify(body) });
+    var oldJson = old && old.toJSON ? old.toJSON() : null;
+    if (oldJson && oldJson.keys && oldJson.keys.auth && old.endpoint !== sub.endpoint) {
+      // Deleting needs the old address's own secret (only this browser has it).
+      await fetch("/api/push/subscription", { method: "DELETE", headers: headers, body: JSON.stringify({ endpoint: old.endpoint, auth: oldJson.keys.auth }) });
     }
   })());
 });

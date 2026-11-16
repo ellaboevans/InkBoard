@@ -76,6 +76,17 @@ Phones need HTTPS, so use a preview deployment (with the VAPID variables set for
 6. Repeat steps 7–8 from Android.
 7. Settings → Notifications → InkBoard → off: the switch in the app then shows "blocked", with instructions.
 
+### Following authors and grouped notifications (round 2)
+
+On each phone:
+1. **Follow an author.** With notifications off, open an author's page and tap "Notify me about new poems by …". The permission prompt appears, then the button shows as on. Subscribe should now show "Only authors I follow" with that author listed.
+2. **Mode filtering.** Publish a poem by **another** author: nothing arrives. Publish one by the followed author: it arrives.
+3. **Grouping.** Publish a second and a third poem by the followed author, minutes apart.
+   - **Android/Chrome:** the first notification should change to "2 new poems by …", then "3 new poems by …", in place, **without a new sound or vibration**. Tapping it opens the author's page.
+   - **iPhone/iPad and Safari on a Mac:** only the first poem arrives; the later ones are not announced. That's on purpose: Safari doesn't replace notifications, so each update would arrive as another buzzing notification.
+4. **Unfollow.** Unfollow from the popover, publish again: nothing arrives. Switch to "All new poems": everything arrives again.
+5. **Re-registration.** Note whether a follow survives reinstalling the app or clearing site data. It shouldn't survive clearing site data (that removes the subscription itself), but it should survive the browser silently renewing the subscription.
+
 ### What to report back
 
 For each device: model, OS and browser version, installed or not, whether the notification arrived (locked and unlocked), what it looked like (a screenshot), and what tapping did.

@@ -425,8 +425,39 @@ export const pushSubscriptions = pgTable(
     /** Last 2xx from the push service; the cleanup cron drops rows unused for 90 days. */
     lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
     lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    /**
+     * Phase 18 round 2: "all" new poems, or only poems by the authors this
+     * device follows (push_follows). Changed only by the browser that owns
+     * the subscription (it proves it with the auth secret).
+     */
+    mode: text("mode").notNull().default("all"),
   },
-  (t) => [uniqueIndex("push_subscriptions_endpoint_key").on(t.endpoint)],
+  (t) => [
+    uniqueIndex("push_subscriptions_endpoint_key").on(t.endpoint),
+    check("push_subscriptions_mode_check", sql`${t.mode} IN ('all', 'followed')`),
+  ],
+);
+
+/**
+ * Authors a device follows (Phase 18 round 2). Goes with the subscription and
+ * with the author (both cascade). Only author ids: nothing about the reader.
+ */
+export const pushFollows = pgTable(
+  "push_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("push_follows_subscription_editor_key").on(t.subscriptionId, t.editorId),
+    index("push_follows_editor_idx").on(t.editorId),
+  ],
 );
 
 /**
@@ -449,8 +480,16 @@ export const pushDeliveries = pgTable(
       .notNull()
       .references(() => poems.id, { onDelete: "cascade" }),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * "alert": the first notification for this author in the 12-hour window
+     * (counts toward the device's 3 a day). "update": a later poem in the same
+     * window, which quietly replaces that notification ("3 new poems by …";
+     * capped separately, Phase 18 round 2).
+     */
+    kind: text("kind").notNull().default("alert"),
   },
   (t) => [
+    check("push_deliveries_kind_check", sql`${t.kind} IN ('alert', 'update')`),
     index("push_deliveries_subscription_sent_idx").on(t.subscriptionId, t.sentAt),
     index("push_deliveries_editor_idx").on(t.editorId),
     index("push_deliveries_poem_idx").on(t.poemId),

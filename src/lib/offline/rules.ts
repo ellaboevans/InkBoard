@@ -141,33 +141,47 @@ var InkboardOffline = (function () {
   }
 
   // ---- notifications about new poems (Phase 18) -------------------------------
-  // A push is { title, author, url, tag } (src/lib/push-rules.ts). Every push
-  // must show a notification (iOS revokes subscriptions that get silent ones),
-  // so anything malformed still shows a plain one that opens the board.
+  // A push is { title, author, url, tag, count } (src/lib/push-rules.ts). Every
+  // push must show a notification (iOS revokes subscriptions that get silent
+  // ones), so anything malformed still shows a plain one that opens the board.
+  // One notification per author (tag author:<id>): count 1 is a new alert
+  // (renotify: buzz even if it replaces an old one); count ≥ 2 quietly updates
+  // it ("3 new poems by …", renotify false and silent, opening the author page).
   function str(v, max) {
     return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
   }
+  function pushTarget(url) {
+    return typeof url === "string" && (POEM.test(url) || AUTHOR.test(url)) ? url : "/";
+  }
   function notificationFor(data) {
     var d = data && typeof data === "object" ? data : {};
-    var url = typeof d.url === "string" && POEM.test(d.url) ? d.url : "/";
     var title = str(d.title, 200);
     var author = str(d.author, 100);
-    var tag = typeof d.tag === "string" && /^poem:[0-9a-f-]{36}$/.test(d.tag) ? d.tag : "inkboard";
+    var tag = typeof d.tag === "string" && /^author:[0-9a-f-]{36}$/.test(d.tag) ? d.tag : "inkboard";
+    var count = typeof d.count === "number" && d.count >= 2 && d.count <= 99 ? Math.floor(d.count) : 1;
+    var url = pushTarget(d.url);
+    var grouped = count >= 2 && author && AUTHOR.test(url);
+    var options = {
+      body: grouped
+        ? (title ? "Latest: " + title : "Tap to read them.")
+        : (author ? "New poem by " + author : "Tap to read it."),
+      icon: "/icons/192.png",
+      badge: "/icons/badge-96.png",
+      tag: tag,
+      data: { url: url },
+    };
+    if (tag !== "inkboard") {
+      options.renotify = !grouped;
+      if (grouped) options.silent = true;
+    }
     return {
-      title: title || "A new poem on InkBoard",
-      options: {
-        body: author ? "New poem by " + author : "Tap to read it.",
-        icon: "/icons/192.png",
-        badge: "/icons/badge-96.png",
-        tag: tag,
-        data: { url: url },
-      },
+      title: grouped ? count + " new poems by " + author : (title || "A new poem on InkBoard"),
+      options: options,
     };
   }
-  /** Where a tap goes: our own poem path (or the board), absolute on this origin. */
+  /** Where a tap goes: our own poem or author page (or the board), absolute on this origin. */
   function clickUrl(data, origin) {
-    var url = data && typeof data.url === "string" && POEM.test(data.url) ? data.url : "/";
-    return origin + url;
+    return origin + pushTarget(data && data.url);
   }
 
   return {
@@ -197,7 +211,15 @@ export type OfflineRules = {
   CAPS: { poem: number; other: number };
   notificationFor(data: unknown): {
     title: string;
-    options: { body: string; icon: string; badge: string; tag: string; data: { url: string } };
+    options: {
+      body: string;
+      icon: string;
+      badge: string;
+      tag: string;
+      data: { url: string };
+      renotify?: boolean;
+      silent?: boolean;
+    };
   };
   clickUrl(data: unknown, origin: string): string;
 };

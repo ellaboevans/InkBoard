@@ -83,6 +83,23 @@ Alternatives if we ever needed an Edge/WebCrypto runtime [25]: `@pushforge/build
 - With the prototype's "save on push", the poem opens **even offline**, because the push handler stores the poem page under the offline rules before the reader taps (§6).
 
 
+### 2.6 Replacing a notification quietly: grouped updates (Phase 18 round 2)
+
+Round 2 turns an author's burst into one notification per device: the first poem alerts, and later ones in the 12-hour window *replace* it ("3 new poems by …") without buzzing again. That relies on `tag` replacement and on the replacement staying quiet. Platforms differ:
+
+| Platform | Replaces by `tag`? | Quiet replacement | What InkBoard does |
+| --- | --- | --- | --- |
+| Chrome / Edge, Android and desktop | Yes (Chrome 20+, Android 42+) [1] | `renotify` defaults to false, so a replacement doesn't alert; `silent` (Chrome 43+) also suppresses sound and vibration [1][42] | Updates with `renotify: false, silent: true`. **Verified here** with a real push through FCM (desktop Chrome): the second poem replaced the first under the same tag. |
+| Firefox, desktop and Android | Yes (Firefox 26+) [1] | `renotify` isn't supported (so it never re-alerts on purpose); `silent` from Firefox 132 [1] | Same updates. A new alert after the window may replace an old notification without sound in Firefox (no `renotify`). |
+| Safari on macOS | **No:** "the property can be set, but has no effect" [1]; WebKit bug 258922 "Push notifications with same tag do not replace each other" is open (NEW, read 2026-11-16) [43] | `silent` from 16.6 [1] | **No updates**: Apple endpoints get the first alert only, as in round 1 (later poems in the window aren't announced). Otherwise every update would be another notification in Notification Center. |
+| iOS / iPadOS Home Screen apps | **No** (same WebKit behaviour) [1][43] | No `silent` on iOS [1] | **No updates**, as above. Each one would stack and buzz again. |
+
+The WHATWG Notifications standard (Living Standard, updated 2026-11-12) [42] says a replacement alerts the user only "if … notification's renotify preference is true", and that platforms are "strongly encouraged to support native replacement". So `renotify: false` is the quiet default where replacement is supported.
+
+The *alert* that opens a new window uses `renotify: true`: in Chrome it buzzes even if yesterday's notification for that author is still there.
+
+The server tells Apple devices apart by their endpoint host (`*.push.apple.com`, `supportsQuietUpdates`). Until WebKit fixes 258922, that's the safest choice: no stacking and no extra buzz, at the cost of later poems going unannounced on Apple devices.
+
 ## 3. How it fits this codebase
 
 ### 3.1 Service worker: `push` and `notificationclick` next to the offline rules
@@ -400,7 +417,7 @@ A third-party SDK (OneSignal, Firebase JS) *would* need CSP changes (§8).
 
 ## 9. Recommendation and phased plan
 
-> **Status (Nov 2026):** Phase A is built as Phase 18 in `docs/PLAN.md`, with the owner's decisions (private poems never, one per author per device in 12 h, three per device in 24 h). Setup and device testing: `docs/NOTIFICATIONS.md`.
+> **Status (Nov 2026):** Phase A is built as Phase 18, and following authors plus grouped bursts as its round 2 (§2.6) in `docs/PLAN.md`, with the owner's decisions (private poems never, one per author per device in 12 h, three per device in 24 h). Setup and device testing: `docs/NOTIFICATIONS.md`.
 
 **Build it ourselves on standard Web Push with `web-push`, in our existing worker, with no third party.** Start with "all new poems", per device, and design the table for author follows from day one.
 
@@ -472,3 +489,5 @@ All accessed 2026-11-16. Dates are publication or last-updated dates. "Undated" 
 39. WebKit Bugzilla: 259212 (resolved Sep 2023), 252544 (fixed Aug 2024), 279456 (open, Oct 2024). https://bugs.webkit.org/
 40. Chromium source, `components/push_messaging/push_messaging_constants.cc` (FCM endpoint prefixes, forced-notification tag), `main`. https://source.chromium.org/
 41. Own measurements in this repo (§6): run log and probe output, 2026-11-16.
+42. WHATWG, Notifications API, Living Standard, last updated 2026-11-12 ("show steps": replacement, renotify and silent preferences). https://notifications.spec.whatwg.org/
+43. WebKit Bugzilla 258922, "Push notifications with same tag do not replace each other", status NEW (read 2026-11-16). https://bugs.webkit.org/show_bug.cgi?id=258922

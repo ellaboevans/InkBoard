@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import webpush from "web-push";
 import { getDb } from "@/db";
+import { safeEqual, sha256 } from "@/server/crypto";
 import { env } from "@/env";
 import {
   DEVICE_DAILY_LIMIT,
@@ -12,6 +13,12 @@ import {
   pushOutcome,
   pushTopic,
   resolveVapidSubject,
+  MAX_FOLLOWS,
+  UPDATES_PER_WINDOW,
+  type OwnerProof,
+  type PrefsOp,
+  type PushMode,
+  type PushPrefs,
   type PushSubscriptionInput,
 } from "@/lib/push-rules";
 import { siteUrl } from "@/lib/site";
@@ -47,21 +54,107 @@ export function pushConfig(): PushConfig | null {
   return { publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY, subject };
 }
 
-/** Store (or refresh the keys of) a device's subscription. Returns true if it was new. */
-export async function saveSubscription(sub: PushSubscriptionInput): Promise<boolean> {
-  const r = (await getDb().execute(sql`
-    INSERT INTO push_subscriptions (endpoint, p256dh, auth)
-    VALUES (${sub.endpoint}, ${sub.p256dh}, ${sub.auth})
-    ON CONFLICT (endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
-    RETURNING (xmax = 0) AS inserted
-  `)) as unknown as { rows: { inserted: boolean }[] };
-  return r.rows[0]?.inserted ?? false;
+export type SaveResult =
+  | { ok: true; created: boolean; prefs: StoredPrefs }
+  /** The endpoint is stored with a different auth secret: not this browser's to change. */
+  | { ok: false };
+
+export type StoredPrefs = { mode: PushMode; follows: { slug: string; penName: string }[] };
+
+/**
+ * Store a device's subscription, or re-register it. An existing row is only
+ * touched when the auth secret matches (the browser that owns it), so knowing
+ * an endpoint can't be used to take a subscription over. `prefs` (mode and
+ * followed author slugs) are applied only when the row is new: a lost
+ * subscription comes back with the follows the browser remembers.
+ */
+export async function saveSubscription(sub: PushSubscriptionInput, prefs?: PushPrefs | null): Promise<SaveResult> {
+  return getDb().transaction(async (tx) => {
+    const r = (await tx.execute(sql`
+      INSERT INTO push_subscriptions (endpoint, p256dh, auth, mode)
+      VALUES (${sub.endpoint}, ${sub.p256dh}, ${sub.auth}, ${prefs?.mode ?? "all"})
+      ON CONFLICT (endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh
+        WHERE push_subscriptions.auth = EXCLUDED.auth
+      RETURNING id, (xmax = 0) AS inserted
+    `)) as unknown as { rows: { id: string; inserted: boolean }[] };
+    const row = r.rows[0];
+    if (!row) return { ok: false as const };
+    if (row.inserted && prefs?.follows.length) await addFollows(tx, row.id, prefs.follows);
+    return { ok: true as const, created: row.inserted, prefs: await readPrefs(tx, row.id) };
+  });
 }
 
-/** Forget a device ("turn off"). Returns true if there was something to delete. */
-export async function deleteSubscription(endpoint: string): Promise<boolean> {
-  const r = await getDb().execute(sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`);
-  return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+async function addFollows(tx: Tx, subscriptionId: string, slugs: string[]) {
+  if (!slugs.length) return;
+  const list = sql.join(slugs.map((x) => sql`${x}`), sql`, `);
+  await tx.execute(sql`
+    INSERT INTO push_follows (subscription_id, editor_id)
+    SELECT ${subscriptionId}, e.id FROM editors e
+    WHERE e.slug IN (${list}) AND e.pen_name IS NOT NULL
+      AND (SELECT count(*) FROM push_follows f WHERE f.subscription_id = ${subscriptionId}) < ${MAX_FOLLOWS}
+    ON CONFLICT (subscription_id, editor_id) DO NOTHING
+  `);
+}
+
+async function readPrefs(tx: Tx | ReturnType<typeof getDb>, subscriptionId: string): Promise<StoredPrefs> {
+  const r = (await tx.execute(sql`
+    SELECT s.mode, e.slug, e.pen_name
+    FROM push_subscriptions s
+    LEFT JOIN push_follows f ON f.subscription_id = s.id
+    LEFT JOIN editors e ON e.id = f.editor_id AND e.pen_name IS NOT NULL
+    WHERE s.id = ${subscriptionId}
+    ORDER BY lower(e.pen_name)
+  `)) as unknown as { rows: { mode: PushMode; slug: string | null; pen_name: string | null }[] };
+  return {
+    mode: r.rows[0]?.mode ?? "all",
+    follows: r.rows.filter((x) => x.slug && x.pen_name).map((x) => ({ slug: x.slug!, penName: x.pen_name! })),
+  };
+}
+
+/**
+ * The subscription this browser owns, by endpoint *and* auth secret, locked
+ * for the change. Null for an unknown endpoint and for a wrong secret alike,
+ * so the answer never tells one from the other.
+ */
+async function ownedSubscription(tx: Tx, proof: OwnerProof): Promise<string | null> {
+  const r = (await tx.execute(sql`
+    SELECT id, auth FROM push_subscriptions WHERE endpoint = ${proof.endpoint} FOR UPDATE
+  `)) as unknown as { rows: { id: string; auth: string }[] };
+  const row = r.rows[0];
+  // Compare even when there's no row, against a stand-in of the same length.
+  const stored = row?.auth ?? "AAAAAAAAAAAAAAAAAAAAAA";
+  return safeEqual(sha256(stored), sha256(proof.auth)) && row ? row.id : null;
+}
+
+/** Read or change a device's mode and follows. Null: not this browser's (or no such) subscription. */
+export async function changePrefs(proof: OwnerProof, change: PrefsOp): Promise<StoredPrefs | null> {
+  return getDb().transaction(async (tx) => {
+    const id = await ownedSubscription(tx, proof);
+    if (!id) return null;
+    if (change.op === "mode") {
+      await tx.execute(sql`UPDATE push_subscriptions SET mode = ${change.mode} WHERE id = ${id}`);
+    } else if (change.op === "follow") {
+      await addFollows(tx, id, [change.author]);
+    } else if (change.op === "unfollow") {
+      await tx.execute(sql`
+        DELETE FROM push_follows f USING editors e
+        WHERE f.subscription_id = ${id} AND f.editor_id = e.id AND e.slug = ${change.author}
+      `);
+    }
+    return readPrefs(tx, id);
+  });
+}
+
+/** Forget a device ("turn off"), proven by its auth secret. Returns true if there was something to delete. */
+export async function deleteSubscription(proof: OwnerProof): Promise<boolean> {
+  return getDb().transaction(async (tx) => {
+    const id = await ownedSubscription(tx, proof);
+    if (!id) return false;
+    await tx.execute(sql`DELETE FROM push_subscriptions WHERE id = ${id}`);
+    return true;
+  });
 }
 
 /** Subscriptions per claim transaction (rows locked together). */
@@ -84,11 +177,20 @@ export type AnnounceResult = {
   failed: number;
   /** Devices over a limit: not announced to them. */
   limited: number;
+  /** Of `sent`+`failed`+`gone`: quiet updates of an earlier notification ("n new poems by …"). */
+  updates: number;
   /** Devices not reached because the time budget ran out. */
   unreached: number;
 };
 
-type Claimed = { id: string; endpoint: string; p256dh: string; auth: string };
+type Claimed = {
+  id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  /** Poems by this author in this device's window, this one included: 1 = a new alert, ≥ 2 = a quiet update. */
+  count: number;
+};
 
 /**
  * Send the announcement for a poem whose save claimed it (`announce` in the
@@ -98,7 +200,7 @@ export async function announcePoem(
   poemId: string,
   opts: { budgetMs?: number; now?: () => number } = {},
 ): Promise<AnnounceResult> {
-  const result: AnnounceResult = { sent: 0, gone: 0, failed: 0, limited: 0, unreached: 0 };
+  const result: AnnounceResult = { sent: 0, gone: 0, failed: 0, limited: 0, updates: 0, unreached: 0 };
   const config = pushConfig();
   if (!config) return { ...result, skipped: "not-configured" };
   const db = getDb();
@@ -117,20 +219,22 @@ export async function announcePoem(
   ).rows[0];
   if (!poem) return { ...result, skipped: "not-announceable" };
 
-  const payload = JSON.stringify(
-    newPoemPayload({
-      poemId: poem.id,
-      title: poem.title,
-      penName: poem.pen_name,
-      authorSlug: poem.author_slug,
-      poemSlug: poem.slug,
-    }),
-  );
+  const payloadFor = (count: number) =>
+    JSON.stringify(
+      newPoemPayload({
+        editorId: poem.editor_id,
+        title: poem.title,
+        penName: poem.pen_name,
+        authorSlug: poem.author_slug,
+        poemSlug: poem.slug,
+        count,
+      }),
+    );
   const options: webpush.RequestOptions = {
     vapidDetails: config,
     TTL: PUSH_TTL_SECONDS,
     urgency: "normal",
-    topic: pushTopic(poem.id),
+    topic: pushTopic(poem.editor_id),
     timeout: SEND_TIMEOUT_MS,
   };
 
@@ -141,37 +245,56 @@ export async function announcePoem(
   for (;;) {
     const page = (
       (await db.execute(sql`
-        SELECT id FROM push_subscriptions WHERE id > ${after} ORDER BY id LIMIT ${CLAIM_BATCH}
+        SELECT s.id FROM push_subscriptions s
+        WHERE s.id > ${after}
+          -- "All new poems", or this author is followed (Phase 18 round 2).
+          AND (s.mode = 'all' OR EXISTS (
+            SELECT 1 FROM push_follows f WHERE f.subscription_id = s.id AND f.editor_id = ${poem.editor_id}
+          ))
+        ORDER BY s.id LIMIT ${CLAIM_BATCH}
       `)) as unknown as { rows: { id: string }[] }
     ).rows.map((r) => r.id);
     if (page.length === 0) break;
     after = page[page.length - 1];
     if (now() - started > budget) {
-      result.unreached += page.length + (await countAfter(after));
+      result.unreached += page.length + (await countAfter(after, poem.editor_id));
       console.error(`[push] poem ${poemId}: time budget spent, ${result.unreached} device(s) not reached`);
       break;
     }
     const claimed = await claimDeliveries(poem.editor_id, poem.id, page);
     result.limited += page.length - claimed.length;
-    await sendAll(claimed, payload, options, result);
+    result.updates += claimed.filter((c) => c.count > 1).length;
+    await sendAll(claimed, payloadFor, options, result);
   }
   return result;
 }
 
-async function countAfter(id: string): Promise<number> {
-  const r = (await getDb().execute(
-    sql`SELECT count(*)::int AS n FROM push_subscriptions WHERE id > ${id}`,
-  )) as unknown as { rows: { n: number }[] };
+async function countAfter(id: string, editorId: string): Promise<number> {
+  const r = (await getDb().execute(sql`
+    SELECT count(*)::int AS n FROM push_subscriptions s
+    WHERE s.id > ${id} AND (s.mode = 'all' OR EXISTS (
+      SELECT 1 FROM push_follows f WHERE f.subscription_id = s.id AND f.editor_id = ${editorId}
+    ))
+  `)) as unknown as { rows: { n: number }[] };
   return r.rows[0].n;
 }
 
 /**
  * Take a slot on each of these devices for this author's poem, if the limits
  * allow, in one transaction: lock the subscription rows first (id order, so
- * concurrent announcements can't deadlock), then count and insert in a
+ * concurrent announcements can't deadlock), then decide and insert in a
  * second statement. Under READ COMMITTED that statement takes a fresh
  * snapshot after the locks, so it sees deliveries a concurrent announcement
- * committed while we waited. Returns the devices to send to.
+ * committed while we waited.
+ *
+ * Per device (Phase 18 round 2):
+ * - no alert for this author in the last 12 hours: a new **alert**, if the
+ *   device has had fewer than 3 alerts in 24 hours;
+ * - otherwise a quiet **update** of that notification ("n new poems by …"),
+ *   if fewer than UPDATES_PER_WINDOW updates followed that alert, and the
+ *   device's push service replaces notifications (not Apple's);
+ * - else nothing.
+ * Returns the devices to send to, with the count to show.
  */
 export async function claimDeliveries(editorId: string, poemId: string, ids: string[]): Promise<Claimed[]> {
   if (ids.length === 0) return [];
@@ -182,32 +305,47 @@ export async function claimDeliveries(editorId: string, poemId: string, ids: str
   return getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM push_subscriptions WHERE id IN (${list}) ORDER BY id FOR UPDATE`);
     const r = (await tx.execute(sql`
-      WITH ok AS (
-        SELECT s.id FROM push_subscriptions s
-        WHERE s.id IN (${list})
-          AND NOT EXISTS (
-            SELECT 1 FROM push_deliveries d
-            WHERE d.subscription_id = s.id AND d.editor_id = ${editorId}
-              AND d.sent_at > now() - make_interval(hours => ${PER_AUTHOR_WINDOW_HOURS})
-          )
-          AND (
-            SELECT count(*) FROM push_deliveries d
-            WHERE d.subscription_id = s.id
-              AND d.sent_at > now() - make_interval(hours => ${DEVICE_WINDOW_HOURS})
-          ) < ${DEVICE_DAILY_LIMIT}
+      WITH state AS (
+        SELECT s.id, s.endpoint, s.p256dh, s.auth,
+          (SELECT max(d.sent_at) FROM push_deliveries d
+            WHERE d.subscription_id = s.id AND d.editor_id = ${editorId} AND d.kind = 'alert'
+              AND d.sent_at > now() - make_interval(hours => ${PER_AUTHOR_WINDOW_HOURS})) AS alert_at,
+          (SELECT count(*) FROM push_deliveries d
+            WHERE d.subscription_id = s.id AND d.kind = 'alert'
+              AND d.sent_at > now() - make_interval(hours => ${DEVICE_WINDOW_HOURS})) AS alerts_today
+        FROM push_subscriptions s WHERE s.id IN (${list})
+      ), decided AS (
+        SELECT st.*,
+          (SELECT count(*) FROM push_deliveries d
+            WHERE d.subscription_id = st.id AND d.editor_id = ${editorId} AND d.kind = 'update'
+              AND d.sent_at >= st.alert_at) AS updates
+        FROM state st
+      ), ok AS (
+        SELECT id, endpoint, p256dh, auth,
+          CASE WHEN alert_at IS NULL THEN 'alert' ELSE 'update' END AS kind,
+          CASE WHEN alert_at IS NULL THEN 1 ELSE updates + 2 END AS count
+        FROM decided
+        WHERE (alert_at IS NULL AND alerts_today < ${DEVICE_DAILY_LIMIT})
+           OR (alert_at IS NOT NULL AND updates < ${UPDATES_PER_WINDOW}
+               AND split_part(split_part(endpoint, '://', 2), '/', 1) NOT LIKE '%push.apple.com')
       ), ins AS (
-        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id)
-        SELECT id, ${editorId}, ${poemId} FROM ok
+        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, kind)
+        SELECT id, ${editorId}, ${poemId}, kind FROM ok
         RETURNING subscription_id
       )
-      SELECT s.id, s.endpoint, s.p256dh, s.auth
-      FROM push_subscriptions s JOIN ins ON ins.subscription_id = s.id
+      SELECT ok.id, ok.endpoint, ok.p256dh, ok.auth, ok.count::int AS count
+      FROM ok JOIN ins ON ins.subscription_id = ok.id
     `)) as unknown as { rows: Claimed[] };
     return r.rows;
   });
 }
 
-async function sendAll(subs: Claimed[], payload: string, options: webpush.RequestOptions, result: AnnounceResult) {
+async function sendAll(
+  subs: Claimed[],
+  payloadFor: (count: number) => string,
+  options: webpush.RequestOptions,
+  result: AnnounceResult,
+) {
   const sent: string[] = [];
   const gone: string[] = [];
   const tried: string[] = [];
@@ -219,7 +357,7 @@ async function sendAll(subs: Claimed[], payload: string, options: webpush.Reques
       try {
         const res = await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          payload,
+          payloadFor(s.count),
           options,
         );
         status = res.statusCode;

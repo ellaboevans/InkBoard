@@ -16,8 +16,12 @@ export const UNUSED_SUBSCRIPTION_DAYS = 90;
 /** The push service keeps an undelivered notification for a day: old news after that. */
 export const PUSH_TTL_SECONDS = 24 * 60 * 60;
 
-/** Largest request body the subscribe/unsubscribe routes read. A real subscription is ~350 bytes. */
-export const MAX_SUBSCRIPTION_BODY_BYTES = 2048;
+/**
+ * Largest request body the notification routes read. A subscription is ~350
+ * bytes; with the browser's remembered follows (≤ MAX_FOLLOWS slugs) it stays
+ * well under this.
+ */
+export const MAX_SUBSCRIPTION_BODY_BYTES = 8192;
 export const MAX_ENDPOINT_LENGTH = 1024;
 
 /**
@@ -74,13 +78,6 @@ export function parsePushSubscription(input: unknown): PushSubscriptionInput | n
   return { endpoint: s.endpoint, p256dh: p256dh.replace(/=+$/, ""), auth: auth.replace(/=+$/, "") };
 }
 
-/** For unsubscribing: just the endpoint, same rules. */
-export function parseEndpoint(input: unknown): string | null {
-  if (!input || typeof input !== "object") return null;
-  const e = (input as Record<string, unknown>).endpoint;
-  return typeof e === "string" && isAllowedPushEndpoint(e) ? e : null;
-}
-
 const RESERVED_TLDS = [".invalid", ".test", ".example", ".localhost", ".local"];
 function isPlaceholderHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, "");
@@ -127,39 +124,109 @@ export function isVapidKeyPair(publicKey: string, privateKey: string): boolean {
 }
 
 export type NewPoemPayload = {
-  /** The poem's title, as shown on the board. */
+  /** The (latest) poem's title, as shown on the board. */
   title: string;
-  /** The author's pen name ("New poem by …"). */
+  /** The author's pen name ("New poem by …", "3 new poems by …"). */
   author: string;
-  /** The poem's path on this site, /p/<author>/<poem>. */
+  /** One poem: its path, /p/<author>/<poem>. A group (count ≥ 2): the author page, /a/<author>. */
   url: string;
-  /** One notification per poem: a second push for it replaces the first. */
+  /** One notification per author: a later poem in the window replaces it. */
   tag: string;
+  /** Poems by this author in the current 12-hour window on this device, this one included. */
+  count: number;
 };
 
 /**
  * The whole payload of a new-poem notification. Only public facts: the title
- * and pen name (both on the board) and the link. Never poem text; private
- * poems are never announced at all. A test pins these exact fields.
+ * and pen name (both on the board), the link and the count. Never poem text;
+ * private poems are never announced at all. A test pins these exact fields.
  */
 export function newPoemPayload(p: {
-  poemId: string;
+  editorId: string;
   title: string;
   penName: string;
   authorSlug: string;
   poemSlug: string;
+  count: number;
 }): NewPoemPayload {
+  const author = encodeURIComponent(p.authorSlug);
   return {
     title: p.title,
     author: p.penName,
-    url: `/p/${encodeURIComponent(p.authorSlug)}/${encodeURIComponent(p.poemSlug)}`,
-    tag: `poem:${p.poemId}`,
+    url: p.count > 1 ? `/a/${author}` : `/p/${author}/${encodeURIComponent(p.poemSlug)}`,
+    tag: `author:${p.editorId}`,
+    count: p.count,
   };
 }
 
-/** RFC 8030 Topic (≤ 32 URL-safe characters): an undelivered push for the same poem is replaced. */
-export function pushTopic(poemId: string): string {
-  return poemId.replace(/-/g, "").slice(0, 32);
+/** RFC 8030 Topic (≤ 32 URL-safe characters), per author: an undelivered push is replaced by the newer one. */
+export function pushTopic(editorId: string): string {
+  return editorId.replace(/-/g, "").slice(0, 32);
+}
+
+/** Quiet updates ("3 new poems by …") per author per device, after the first alert in a window. */
+export const UPDATES_PER_WINDOW = 5;
+
+/**
+ * Apple's push service (Safari on macOS, iOS Home Screen apps) doesn't
+ * replace a notification with the same tag (WebKit bug 258922, open) and iOS
+ * can't silence one, so an "update" would arrive as another buzzing
+ * notification. Those devices get the first alert only (round 1 behaviour).
+ */
+export function supportsQuietUpdates(endpoint: string): boolean {
+  try {
+    const host = new URL(endpoint).hostname.toLowerCase();
+    return !(host === "push.apple.com" || host.endsWith(".push.apple.com"));
+  } catch {
+    return false;
+  }
+}
+
+export type PushMode = "all" | "followed";
+export const MAX_FOLLOWS = 100;
+const SLUG = /^[a-z0-9][a-z0-9-]{0,99}$/;
+
+/** A browser's preferences as it remembers them: re-applied if the server lost the subscription. */
+export type PushPrefs = { mode: PushMode; follows: string[] };
+
+export function parsePrefs(input: unknown): PushPrefs | null {
+  if (!input || typeof input !== "object") return null;
+  const p = input as Record<string, unknown>;
+  if (p.mode !== "all" && p.mode !== "followed") return null;
+  if (!Array.isArray(p.follows) || p.follows.length > MAX_FOLLOWS) return null;
+  if (!p.follows.every((f) => typeof f === "string" && SLUG.test(f))) return null;
+  return { mode: p.mode, follows: [...new Set(p.follows as string[])] };
+}
+
+/**
+ * Proof that the request comes from the browser that owns a subscription:
+ * its endpoint and its auth secret (which the browser keeps; the endpoint
+ * alone is not enough).
+ */
+export type OwnerProof = { endpoint: string; auth: string };
+export function parseOwnerProof(input: unknown): OwnerProof | null {
+  if (!input || typeof input !== "object") return null;
+  const s = input as Record<string, unknown>;
+  const auth = s.auth ?? (s.keys as Record<string, unknown> | undefined)?.auth;
+  if (typeof s.endpoint !== "string" || !isAllowedPushEndpoint(s.endpoint)) return null;
+  if (typeof auth !== "string" || auth.length > 30 || b64urlBytes(auth) !== 16) return null;
+  return { endpoint: s.endpoint, auth: auth.replace(/=+$/, "") };
+}
+
+export type PrefsOp =
+  | { op: "get" }
+  | { op: "mode"; mode: PushMode }
+  | { op: "follow"; author: string }
+  | { op: "unfollow"; author: string };
+export function parsePrefsOp(input: unknown): PrefsOp | null {
+  if (!input || typeof input !== "object") return null;
+  const o = input as Record<string, unknown>;
+  if (o.op === "get") return { op: "get" };
+  if (o.op === "mode" && (o.mode === "all" || o.mode === "followed")) return { op: "mode", mode: o.mode };
+  if ((o.op === "follow" || o.op === "unfollow") && typeof o.author === "string" && SLUG.test(o.author)) {
+    return { op: o.op, author: o.author };
+  }
+  return null;
 }
 
 /** What a push service's status code means for the subscription. */

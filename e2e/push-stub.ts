@@ -30,7 +30,25 @@ export async function fakePush(context: BrowserContext, opts: FakePush) {
     ([opts, P256DH, AUTH]) => {
       if (location.protocol === "about:") return; // the blank first page has no storage
       const w = window as unknown as Record<string, unknown>;
-      const rec = { prompts: 0, subscribes: 0, unsubscribes: 0, permission: opts.permission };
+      // Permission and the subscription last across page loads of this
+      // browser context, like the real thing (counters are per page).
+      const KEY = "e2e-push-state";
+      const stored = JSON.parse(localStorage.getItem(KEY) ?? "null") as { permission: NotificationPermission; subscribed: boolean } | null;
+      const state = stored ?? { permission: opts.permission, subscribed: Boolean(opts.subscribed) };
+      const persist = () => localStorage.setItem(KEY, JSON.stringify(state));
+      persist();
+      const rec = {
+        prompts: 0,
+        subscribes: 0,
+        unsubscribes: 0,
+        get permission() {
+          return state.permission;
+        },
+        set permission(v: NotificationPermission) {
+          state.permission = v;
+          persist();
+        },
+      };
       w.__push = rec;
       if (opts.unsupported) {
         delete w.PushManager;
@@ -56,6 +74,8 @@ export async function fakePush(context: BrowserContext, opts: FakePush) {
           unsubscribe: async () => {
             rec.unsubscribes++;
             current = null;
+            state.subscribed = false;
+            persist();
             return true;
           },
         };
@@ -67,10 +87,12 @@ export async function fakePush(context: BrowserContext, opts: FakePush) {
           rec.subscribes++;
           const k = o.applicationServerKey;
           current = make(k instanceof Uint8Array ? (k.buffer as ArrayBuffer) : (k as BufferSource));
+          state.subscribed = true;
+          persist();
           return current;
         },
       };
-      if (opts.subscribed) current = make(null, true);
+      if (state.subscribed) current = make(null, true);
       const reg = { scope: `${location.origin}/`, pushManager } as unknown as ServiceWorkerRegistration;
       Object.defineProperty(navigator.serviceWorker, "ready", { configurable: true, get: () => Promise.resolve(reg) });
       navigator.serviceWorker.getRegistration = async () => reg;

@@ -128,45 +128,65 @@ describe("the worker source", () => {
 });
 
 describe("notifications about new poems (Phase 18)", () => {
-  const id = "01859f03-6106-449e-be49-6097a0618d11";
+  const ed = "7a1d9f03-6106-449e-be49-6097a0618d11";
+  const tag = `author:${ed}`;
 
-  it("shows the title, 'New poem by …', the app icon and badge, a tag per poem and the poem's URL", () => {
-    expect(R.notificationFor({ title: "Night Market", author: "Ama Owusu", url: "/p/ama-owusu/night-market", tag: `poem:${id}` }))
-      .toStrictEqual({
-        title: "Night Market",
-        options: {
-          body: "New poem by Ama Owusu",
-          icon: "/icons/192.png",
-          badge: "/icons/badge-96.png",
-          tag: `poem:${id}`,
-          data: { url: "/p/ama-owusu/night-market" },
-        },
-      });
+  it("one poem: the title, 'New poem by …', icon and badge, a tag per author, the poem's URL, and it buzzes", () => {
+    expect(R.notificationFor({ title: "Night Market", author: "Ama Owusu", url: "/p/ama-owusu/night-market", tag, count: 1 })).toStrictEqual({
+      title: "Night Market",
+      options: {
+        body: "New poem by Ama Owusu",
+        icon: "/icons/192.png",
+        badge: "/icons/badge-96.png",
+        tag,
+        data: { url: "/p/ama-owusu/night-market" },
+        renotify: true,
+      },
+    });
+  });
+
+  it("a group: 'n new poems by …', the latest title, the author page, and a quiet replacement (renotify false, silent)", () => {
+    expect(R.notificationFor({ title: "Third Light", author: "Ama Sɛwaa", url: "/a/ama-sewaa", tag, count: 3 })).toStrictEqual({
+      title: "3 new poems by Ama Sɛwaa",
+      options: {
+        body: "Latest: Third Light",
+        icon: "/icons/192.png",
+        badge: "/icons/badge-96.png",
+        tag,
+        data: { url: "/a/ama-sewaa" },
+        renotify: false,
+        silent: true,
+      },
+    });
   });
 
   it("always shows something (no silent pushes), even for a broken payload", () => {
-    for (const bad of [null, undefined, "text", 42, {}, { title: "   " }]) {
+    for (const bad of [null, undefined, "text", 42, {}, { title: "   " }, { count: "3" }]) {
       const n = R.notificationFor(bad);
       expect(n.title).toBe("A new poem on InkBoard");
       expect(n.options.data.url).toBe("/");
       expect(n.options.tag).toBe("inkboard");
+      expect(n.options).not.toHaveProperty("silent");
     }
   });
 
-  it("only ever links to one of our own poem pages", () => {
-    for (const url of ["https://evil.example/p/a/b", "//evil.example/p/a/b", "/admin", "/p/a", "javascript:alert(1)", "/p/a/b/c"]) {
-      expect(R.notificationFor({ title: "x", author: "y", url, tag: `poem:${id}` }).options.data.url).toBe("/");
+  it("only ever links to one of our own poem or author pages", () => {
+    for (const url of ["https://evil.example/p/a/b", "//evil.example/p/a/b", "/admin", "/p/a", "javascript:alert(1)", "/p/a/b/c", "/a/a/feed.xml"]) {
+      expect(R.notificationFor({ title: "x", author: "y", url, tag, count: 1 }).options.data.url).toBe("/");
       expect(R.clickUrl({ url }, "https://inkboard.app")).toBe("https://inkboard.app/");
     }
     expect(R.clickUrl({ url: "/p/ada/ode" }, "https://inkboard.app")).toBe("https://inkboard.app/p/ada/ode");
+    expect(R.clickUrl({ url: "/a/ada" }, "https://inkboard.app")).toBe("https://inkboard.app/a/ada");
     expect(R.clickUrl(null, "https://inkboard.app")).toBe("https://inkboard.app/");
   });
 
-  it("caps long titles and ignores unknown tags", () => {
-    const n = R.notificationFor({ title: "x".repeat(500), author: "a".repeat(500), url: "/p/a/b", tag: "<script>" });
+  it("caps long titles, ignores unknown tags and implausible counts", () => {
+    const n = R.notificationFor({ title: "x".repeat(500), author: "a".repeat(500), url: "/p/a/b", tag: "<script>", count: 1 });
     expect(n.title).toHaveLength(200);
     expect(n.options.body).toBe(`New poem by ${"a".repeat(100)}`);
     expect(n.options.tag).toBe("inkboard");
+    expect(R.notificationFor({ title: "t", author: "A", url: "/a/a", tag, count: 1000 }).title).toBe("t");
+    expect(R.notificationFor({ title: "t", author: "A", url: "/p/a/b", tag, count: 4 }).title).toBe("t"); // a group needs the author page
   });
 
   it("the worker handles push, notificationclick and pushsubscriptionchange, with the public key baked in", () => {
@@ -174,5 +194,8 @@ describe("notifications about new poems (Phase 18)", () => {
     for (const e of ['"push"', '"notificationclick"', '"pushsubscriptionchange"']) expect(src).toContain(`addEventListener(${e}`);
     expect(src).toContain('var PUSH_KEY = "BPUBLICKEY"');
     expect(serviceWorkerSource("b")).toContain('var PUSH_KEY = ""');
+    // Round 2: the follows the browser remembers travel with a replaced subscription.
+    expect(src).toContain('var PUSH_PREFS_CACHE = "inkboard-push"');
+    expect(src).toContain("body.prefs = prefs");
   });
 });

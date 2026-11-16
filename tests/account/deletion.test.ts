@@ -11,6 +11,7 @@ import {
   sessions,
   signInDevices,
   pushDeliveries,
+  pushFollows,
   pushSubscriptions,
   signInLocations,
   stepUpCodes,
@@ -78,6 +79,8 @@ async function populated(email: string, penName: string) {
     .values({ endpoint: `https://fcm.googleapis.com/fcm/send/${ed.id}`, p256dh: "k", auth: "a" })
     .returning({ id: pushSubscriptions.id });
   await db.insert(pushDeliveries).values({ subscriptionId: device.id, editorId: ed.id, poemId: one.id });
+  // A reader's device following them (Phase 18 round 2).
+  await db.insert(pushFollows).values({ subscriptionId: device.id, editorId: ed.id });
   // Not linked by foreign keys: a pending sign-in code and rate-limit counters naming them.
   await requestOtp({ email: ed.email });
   await rateLimit(`signin-alert:${ed.id}`, 5, 86400);
@@ -170,6 +173,7 @@ describe("deleting an account", () => {
         "poem_revisions",
         "poems",
         "push_deliveries",
+        "push_follows",
         "recovery_codes",
         "sessions",
         "sign_in_devices",

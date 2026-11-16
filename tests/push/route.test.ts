@@ -46,7 +46,7 @@ describe("POST/DELETE /api/push/subscription", () => {
     expect((await POST(req("POST", body()))).status).toBe(201);
     expect((await POST(req("POST", body()))).status).toBe(200);
     expect(await db.select().from(pushSubscriptions)).toHaveLength(1);
-    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT }))).status).toBe(200);
+    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT, auth: AUTH }))).status).toBe(200);
     expect(await db.select().from(pushSubscriptions)).toHaveLength(0);
   });
 
@@ -60,18 +60,27 @@ describe("POST/DELETE /api/push/subscription", () => {
     ]) {
       expect((await POST(req("POST", bad))).status).toBe(400);
     }
-    expect((await DELETE(req("DELETE", { endpoint: "https://attacker.example.net/x" }))).status).toBe(400);
+    expect((await DELETE(req("DELETE", { endpoint: "https://attacker.example.net/x", auth: AUTH }))).status).toBe(400);
     expect(await db.select().from(pushSubscriptions)).toHaveLength(0);
   });
 
+  it("an endpoint alone can't take over or delete a subscription", async () => {
+    expect((await POST(req("POST", body()))).status).toBe(201);
+    const other = { ...body(), keys: { p256dh: P256DH, auth: "AAAAAAAAAAAAAAAAAAAAAA" } };
+    expect((await POST(req("POST", other))).status).toBe(400);
+    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT }))).status).toBe(400); // no secret
+    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT, auth: "AAAAAAAAAAAAAAAAAAAAAA" }))).status).toBe(200); // same answer…
+    expect(await db.select().from(pushSubscriptions)).toHaveLength(1); // …but nothing deleted
+  });
+
   it("refuses large bodies", async () => {
-    const big = { ...body(), padding: "x".repeat(4000) };
+    const big = { ...body(), padding: "x".repeat(9000) };
     expect((await POST(req("POST", big))).status).toBe(400);
   });
 
   it("refuses other origins", async () => {
     expect((await POST(req("POST", body(), "https://evil.example.com"))).status).toBe(403);
-    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT }, "https://evil.example.com"))).status).toBe(403);
+    expect((await DELETE(req("DELETE", { endpoint: ENDPOINT, auth: AUTH }, "https://evil.example.com"))).status).toBe(403);
   });
 
   it("is rate-limited per IP bucket (IPv6 grouped by /64)", async () => {

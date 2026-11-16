@@ -16,18 +16,23 @@ const SHOTS = "test-results/notification-screens";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
+// The board's one author (round 2's follow tests use their page).
+let author = { slug: "", penName: "" };
+
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   // A poem on the board, so it isn't empty.
   const context = await browser.newContext();
   const page = await context.newPage();
   const id = unique();
   await sql("DELETE FROM rate_limits");
-  await signUpAs(page, `notify-board-${id}@example.com`, `Bell Poet ${id}`);
+  author = { slug: "", penName: `Bell Poet ${id}` };
+  await signUpAs(page, `notify-board-${id}@example.com`, author.penName);
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(`Lamplight ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("one bulb over the stall,\nmoths keeping the hours");
   await page.getByRole("button", { name: "Publish to board" }).click();
   await expectBackOnList(page);
+  author.slug = (await sql(`SELECT slug FROM editors WHERE email = 'notify-board-${id}@example.com'`)).rows[0].slug;
   await context.close();
 });
 
@@ -218,4 +223,132 @@ test("the installed app offers it once on a phone; turning it on there subscribe
   await expect(offer).toHaveCount(0);
   await context.close();
   await sql(`DELETE FROM push_subscriptions WHERE endpoint = '${endpoint}'`);
+});
+
+// ---- Phase 18 round 2: following authors ------------------------------------
+
+const followButton = (page: Page) =>
+  page.getByRole("main").getByRole("button", { name: `Notify me about new poems by ${author.penName}` });
+async function openAuthor(page: Page) {
+  await page.goto(`/a/${author.slug}`);
+  await expect(page.getByRole("heading", { level: 1, name: author.penName })).toBeVisible();
+}
+const deviceRow = async (endpoint: string | null) =>
+  (
+    await sql(
+      `SELECT s.mode, array_remove(array_agg(e.slug), NULL) AS follows FROM push_subscriptions s
+       LEFT JOIN push_follows f ON f.subscription_id = s.id LEFT JOIN editors e ON e.id = f.editor_id
+       WHERE s.endpoint = '${(endpoint ?? "").replace(/'/g, "''")}' GROUP BY s.mode`,
+    )
+  ).rows[0] as { mode: string; follows: string[] } | undefined;
+
+test("following an author from their page turns notifications on, only for authors I follow", async ({ browser }) => {
+  for (const width of [375, 1280]) {
+    const context = await browser.newContext({ viewport: { width, height: width < 640 ? 812 : 800 } });
+    await fakePush(context, { permission: "default" });
+    const page = await context.newPage();
+    await openAuthor(page);
+    const button = followButton(page);
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    expect((await pushRecord(page)).prompts).toBe(0); // never on load
+    await shot(page, `author-follow-off-${width}`);
+
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(await pushRecord(page)).toMatchObject({ prompts: 1, subscribes: 1 }); // the tap was the permission request
+    const endpoint = await endpointHere(page);
+    await expect.poll(() => deviceRow(endpoint)).toEqual({ mode: "followed", follows: [author.slug] });
+    await shot(page, `author-follow-on-${width}`);
+
+    // Unfollow from the same button.
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await expect.poll(() => deviceRow(endpoint)).toEqual({ mode: "followed", follows: [] });
+    await context.close();
+    await sql(`DELETE FROM push_subscriptions WHERE endpoint = '${endpoint}'`);
+  }
+});
+
+test("the Subscribe popover shows the mode and followed authors; Unfollow and switching modes reach the server", async ({ browser }) => {
+  for (const width of [1280, 375]) {
+    const context = await browser.newContext({ viewport: { width, height: width < 640 ? 812 : 800 } });
+    await fakePush(context, { permission: "default" });
+    const page = await context.newPage();
+    await openAuthor(page);
+    await followButton(page).click();
+    await expect(followButton(page)).toHaveAttribute("aria-pressed", "true");
+    const endpoint = await endpointHere(page);
+
+    await openBoard(page);
+    const dialog = await openPopover(page);
+    await expect(theSwitch(dialog)).toBeChecked();
+    const modes = dialog.getByRole("radiogroup", { name: "Notify me about" });
+    await expect(modes.getByRole("radio", { name: "Only authors I follow" })).toBeChecked();
+    const list = dialog.getByRole("list", { name: "Authors you follow" });
+    await expect(list.getByRole("listitem")).toHaveText([new RegExp(author.penName)]);
+    await shot(page, `popover-follows-${width}`);
+
+    // Switch to all new poems, and back.
+    await modes.getByRole("radio", { name: "All new poems" }).click();
+    await expect(modes.getByRole("radio", { name: "All new poems" })).toBeChecked();
+    await expect.poll(async () => (await deviceRow(endpoint))?.mode).toBe("all");
+    await modes.getByRole("radio", { name: "Only authors I follow" }).click();
+    await expect.poll(async () => (await deviceRow(endpoint))?.mode).toBe("followed");
+
+    // Unfollow from the list.
+    await list.getByRole("button", { name: `Unfollow ${author.penName}` }).click();
+    await expect(dialog.getByText("None yet. Follow an author from their page", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("Until you follow someone, this device gets no notifications.")).toBeVisible();
+    await expect.poll(async () => (await deviceRow(endpoint))?.follows).toEqual([]);
+    if (width === 1280) await shot(page, "popover-follows-empty-1280");
+    await page.keyboard.press("Escape");
+
+    // The author page agrees.
+    await openAuthor(page);
+    await expect(followButton(page)).toHaveAttribute("aria-pressed", "false");
+    await context.close();
+    await sql(`DELETE FROM push_subscriptions WHERE endpoint = '${endpoint}'`);
+  }
+});
+
+test("following while notifications are on for all new poems keeps 'all', and says so", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await fakePush(context, { permission: "default" });
+  const page = await context.newPage();
+  await openBoard(page);
+  const dialog = await openPopover(page);
+  await theSwitch(dialog).click();
+  await expect(dialog.getByRole("radio", { name: "All new poems" })).toBeChecked();
+  const endpoint = await endpointHere(page);
+  await page.keyboard.press("Escape");
+  await openAuthor(page);
+  await followButton(page).click();
+  await expect(followButton(page)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("main").getByText(/This device gets every new poem/)).toBeVisible();
+  await expect.poll(() => deviceRow(endpoint)).toEqual({ mode: "all", follows: [author.slug] });
+  expect((await pushRecord(page)).prompts).toBe(0); // already on: following asks nothing
+  await context.close();
+  await sql(`DELETE FROM push_subscriptions WHERE endpoint = '${endpoint}'`);
+});
+
+test("the author page on an iPhone outside the Home Screen explains first; blocked browsers can't follow", async ({ browser }) => {
+  for (const width of [375, 1280]) {
+    const ios = await browser.newContext({ userAgent: IPHONE, viewport: { width, height: width < 640 ? 812 : 800 }, isMobile: width < 640, hasTouch: true });
+    await fakePush(ios, { permission: "default", unsupported: true });
+    const page = await ios.newPage();
+    await openAuthor(page);
+    await expect(page.getByRole("main").getByText(/add InkBoard to your Home Screen first/)).toBeVisible();
+    await expect(followButton(page)).toHaveCount(0);
+    await shot(page, `author-ios-not-installed-${width}`);
+    await ios.close();
+  }
+  const blocked = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await fakePush(blocked, { permission: "denied" });
+  const page = await blocked.newPage();
+  await openAuthor(page);
+  await expect(followButton(page)).toHaveAttribute("aria-disabled", "true");
+  await followButton(page).click({ force: true }); // aria-disabled (keeps focus), so Playwright would wait
+  expect(await pushRecord(page)).toMatchObject({ prompts: 0, subscribes: 0 });
+  await expect(page.getByRole("main").getByText(/Notifications are blocked for InkBoard/)).toBeVisible();
+  await blocked.close();
 });

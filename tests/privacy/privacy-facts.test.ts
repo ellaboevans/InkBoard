@@ -14,6 +14,8 @@ import { CLEANUP_DAYS } from "@/server/maintenance";
 import { REVISIONS_KEPT } from "@/server/poem-history";
 import { UNLOCK_TTL_SECONDS } from "@/server/unlock";
 import { SHARE_VISIT_WINDOW_SECONDS } from "@/lib/share-image/visits";
+import { PHOTO_CACHE_SECONDS } from "@/lib/photo-limits";
+import { PHOTO_ORPHAN_GRACE_HOURS } from "@/server/profile-photos";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19) states how long things last.
@@ -38,6 +40,8 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   shareVisitRepeat: SHARE_VISIT_WINDOW_SECONDS,
   pushDeliveryCleanup: CLEANUP_DAYS.pushDeliveries * DAY,
   unusedSubscription: UNUSED_SUBSCRIPTION_DAYS * DAY,
+  photoCacheLife: PHOTO_CACHE_SECONDS,
+  photoOrphanCleanup: PHOTO_ORPHAN_GRACE_HOURS * 3600,
   revisionsKept: REVISIONS_KEPT,
   recoveryCodesPerSet: RECOVERY_CODES_PER_SET,
 };

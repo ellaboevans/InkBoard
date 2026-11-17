@@ -12,10 +12,12 @@ import { getProfile } from "@/server/auth/profile";
 import { getEditorStats } from "@/server/editor-stats";
 import { listEditorPoems } from "@/server/poems";
 import { avatarIdFor } from "@/lib/avatars";
-import { EditorAvatar } from "@/components/admin/editor-avatar";
+import { AuthorPicture } from "@/components/author/author-picture";
+import { authorPicture } from "@/lib/author-picture";
 import { StatCards } from "@/components/admin/stat-cards";
 import { describeUserAgent } from "@/lib/user-agent";
 import { ProfileForm } from "./profile-form";
+import { ProfilePhotoPanel } from "./profile-photo";
 import { RecoveryCodesPanel } from "./recovery-codes-panel";
 import { PasskeysPanel } from "./passkeys-panel";
 import { RevokeOtherSessionsButton, RevokeSessionButton } from "./session-buttons";
@@ -108,12 +110,13 @@ async function Profile() {
   ]);
   if (!profile) return null;
   const avatar = profile.avatar ?? avatarIdFor(editor);
+  const picture = authorPicture({ id: editor.id, avatar, photoKey: editor.photoKey });
   const published = poems.filter((p) => p.status === "published").map((p) => ({ id: p.id, title: p.title }));
   const pinned = published.find((p) => p.id === profile.pinnedPoemId);
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-4 rounded-xl border bg-card p-6 sm:flex-row sm:items-center">
-        <EditorAvatar editor={{ id: editor.id, avatar }} size={72} className="size-18" />
+        <AuthorPicture picture={picture} size={72} className="size-18" />
         <div className="grid min-w-0 gap-1">
           <p className="truncate font-serif text-2xl">{profile.penName}</p>
           {profile.tagline && <p className="text-muted-foreground">{profile.tagline}</p>}
@@ -125,6 +128,7 @@ async function Profile() {
           </p>
         </div>
       </div>
+      <ProfilePhotoPanel picture={picture} />
       <StatCards stats={stats} />
       <ProfileForm
         key={JSON.stringify(profile)}

@@ -1,9 +1,9 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import { E2E_BASE_URL, E2E_DATABASE_URL, OTP_OUTBOX } from "../playwright.config";
+import { E2E_BASE_URL, E2E_DATABASE_URL, E2E_PHOTO_DIR, OTP_OUTBOX } from "../playwright.config";
 
 export default async function globalSetup() {
   if (!/e2e|test/.test(new URL(E2E_DATABASE_URL).pathname)) {
@@ -17,6 +17,8 @@ export default async function globalSetup() {
   await pool.end();
   await mkdir(path.dirname(OTP_OUTBOX), { recursive: true });
   await writeFile(OTP_OUTBOX, "");
+  // Profile photos' files go with the rows they belonged to.
+  await rm(E2E_PHOTO_DIR, { recursive: true, force: true });
   await warmUp();
 }
 
@@ -48,6 +50,11 @@ async function warmUp() {
     ["/feed.xml"],
     ["/a/warm-up/feed.xml"],
     ["/avatars/a01"],
+    ["/photos/AAAAAAAAAAAAAAAAAAAAAA/96.webp"],
+    // POST-only, like the passkey options.
+    ["/api/owner/photo-takedown"],
+    ["/a/warm-up/opengraph-image"],
+    ["/p/warm-up/warm-up/opengraph-image"],
     ["/manifest.webmanifest"],
     ["/offline"],
     ["/about"],

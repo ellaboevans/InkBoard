@@ -24,6 +24,7 @@ export async function loadChecklistFacts(editorId: string): Promise<(ChecklistFa
     .select({
       penName: editors.penName,
       avatar: editors.avatar,
+      photoKey: editors.photoKey,
       tagline: editors.tagline,
       bio: editors.bio,
       sharedAt: editors.authorPageSharedAt,
@@ -42,7 +43,8 @@ export async function loadChecklistFacts(editorId: string): Promise<(ChecklistFa
   const filled = (s: string | null) => Boolean(s && s.trim());
   return {
     hasPenName: filled(row.penName),
-    hasAvatar: row.avatar !== null,
+    // A profile photo (Phase 22) is a picked face too.
+    hasAvatar: row.avatar !== null || row.photoKey !== null,
     hasAbout: filled(row.tagline) || filled(row.bio),
     hasPublished: Boolean(row.hasPublished),
     hasWayIn: Boolean(row.hasCodes) || Boolean(row.hasPasskey),

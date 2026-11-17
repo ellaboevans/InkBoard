@@ -60,3 +60,4 @@ next-env.d.ts
 
 # video walkthroughs: recordings, renders, builds (see video/README.md)
 /video/.out/
+/.storage/

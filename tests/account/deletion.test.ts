@@ -339,3 +339,21 @@ describe("deleting an account", () => {
     expect(await db.select().from(editors).where(eq(editors.id, ada.id))).toHaveLength(1);
   });
 });
+
+describe("deleting an account with a profile photo (Phase 22)", () => {
+  it("deletes the photo's files from storage, not just the row, and leaves other editors' photos", async () => {
+    const { savePhoto, photoObjects } = await import("@/server/profile-photos");
+    const { photoStorage } = await import("@/server/storage");
+    const { fileOf, png } = await import("../support/photos");
+    const ada = await signedUp("ada@example.com", "Ada Verse");
+    const eve = await signedUp("eve@example.com", "Eve Other");
+    const mine = await savePhoto(ada.id, { file: fileOf(await png()), crop: "0,0,1" });
+    const theirs = await savePhoto(eve.id, { file: fileOf(await png()), crop: "0,0,1" });
+    if (!mine.ok || !theirs.ok) throw new Error("save failed");
+    const files = async () => (await photoStorage().list("photos/")).map((o) => o.key).sort();
+    expect(await files()).toEqual([...photoObjects(mine.photoKey), ...photoObjects(theirs.photoKey)].sort());
+
+    expect(await remove(ada, "Ada Verse")).toMatchObject({ ok: true });
+    expect(await files()).toEqual(photoObjects(theirs.photoKey).sort());
+  });
+});

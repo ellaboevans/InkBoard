@@ -15,6 +15,8 @@ export { truncate };
  */
 
 export const OG_SIZE = { width: 1200, height: 630 };
+/** The author's picture on link cards (from the 512 px JPEG copy). */
+export const OG_PICTURE = 120;
 
 export const FEATHER_PATHS = [
   "M14.086 18.412A2 2 0 0112.67 19H5v-7.672a2 2 0 01.586-1.414L11.75 3.75a6 6 0 118.49 8.49z",
@@ -60,11 +62,14 @@ export function OgCard({
   title,
   quote,
   footer,
+  picture,
 }: {
   kicker?: string;
   title: string;
   quote?: string | null;
   footer?: string;
+  /** The author's photo or avatar as a data URI (pictureDataUri, src/server/author-picture.ts), drawn round at the top right. */
+  picture?: string | null;
 }) {
   const titleSize = title.length > 60 ? 60 : title.length > 30 ? 76 : 96;
   return (
@@ -85,6 +90,16 @@ export function OgCard({
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <LogoMark size={64} />
         <div style={{ fontSize: 40, fontFamily: ogFontFamily(SITE_NAME) }}>{SITE_NAME}</div>
+        {picture && (
+          // eslint-disable-next-line @next/next/no-img-element -- Satori, not the DOM
+          <img
+            src={picture}
+            alt=""
+            width={OG_PICTURE}
+            height={OG_PICTURE}
+            style={{ marginLeft: "auto", borderRadius: 999, border: `4px solid ${BRAND.paper}` }}
+          />
+        )}
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         {kicker && (

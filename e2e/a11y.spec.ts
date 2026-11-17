@@ -307,6 +307,32 @@ test("admin screens", async ({ page }) => {
   await scan(page, "profile: special letters");
 });
 
+test("profile photo: the crop step and the profile with a photo, phone and desktop", async ({ page }) => {
+  const sharp = (await import("sharp")).default;
+  const photo = await sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 120, g: 90, b: 70 } } }).jpeg().toBuffer();
+  await signUpAs(page, `a11y-photo-${unique()}@example.com`, `Photo A11y ${unique()}`);
+  for (const size of [{ width: 375, height: 812 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(size);
+    await page.goto("/admin/profile");
+    await expect(page.locator('#photo[data-ready="true"]')).toBeAttached();
+    await page.locator("[data-photo-input]").setInputFiles({ name: "me.jpg", mimeType: "image/jpeg", buffer: photo });
+    const dialog = page.getByRole("dialog", { name: "Crop your photo" });
+    await expect(dialog).toBeVisible();
+    await scan(page, `profile photo: crop step ${size.width}px`);
+    if (size.width === 375) {
+      await dialog.getByRole("button", { name: "Save photo" }).click();
+      await expect(page.locator("[data-sileo-toast]").getByText("Photo saved")).toBeVisible({ timeout: 45_000 });
+    } else {
+      await dialog.getByRole("button", { name: "Cancel" }).click();
+    }
+    await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
+    await scan(page, `profile with a photo ${size.width}px`);
+  }
+  await page.getByRole("button", { name: "Remove photo" }).click();
+  await expect(page.getByRole("alertdialog", { name: "Remove your photo?" })).toBeVisible();
+  await scan(page, "profile photo: remove dialog");
+});
+
 test("collections: admin pages and the reading page's navigation", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-coll-${id}@example.com`, `Sequence Poet ${id}`);

@@ -8,6 +8,7 @@ import { describeUserAgent } from "@/lib/user-agent";
 import { isSessionFresh } from "./auth/step-up";
 import { sha256 } from "./crypto";
 import { sendAccountDeletedEmail } from "./email";
+import { deletePhotoFiles } from "./profile-photos";
 
 /*
  * "Delete my account" (docs/PLAN.md, Phase 17). One transaction, under the
@@ -28,6 +29,8 @@ import { sendAccountDeletedEmail } from "./email";
  *    WebAuthn challenges, known sign-in devices and networks.
  *    tests/account/deletion.test.ts walks every table that references
  *    editors (directly or through those) and checks nothing is left.
+ *
+ * 5. After the commit, deletes the profile photo's files from storage.
  *
  * The caller then invalidates the readers' cache, clears the cookie and sends
  * the browser to the board. Saved offline copies in readers' browsers are out
@@ -54,7 +57,7 @@ export async function deleteAccount(input: {
   const { editorId, sessionId } = input;
   const result = await getDb().transaction(async (tx) => {
     const [editor] = await tx
-      .select({ email: editors.email, penName: editors.penName, slug: editors.slug })
+      .select({ email: editors.email, penName: editors.penName, slug: editors.slug, photoKey: editors.photoKey })
       .from(editors)
       .where(eq(editors.id, editorId))
       .for("no key update");
@@ -83,6 +86,9 @@ export async function deleteAccount(input: {
   if (!result.ok) return result;
 
   const { editor, poemIds } = result;
+  // The profile photo's files (Phase 22): deleted now, not just unlinked. A
+  // failure is logged and the daily sweep deletes them (no row points at them).
+  if (editor.photoKey) await deletePhotoFiles(editor.photoKey);
   const details = { penName: editor.penName, device: describeUserAgent(input.userAgent), at: new Date() };
   after(async () => {
     try {

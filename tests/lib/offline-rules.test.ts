@@ -66,6 +66,14 @@ describe("which request gets which strategy", () => {
     }
   });
 
+  it("never caches profile photos: removing one must not leave it in a reader's worker (Phase 22)", () => {
+    for (const path of ["/photos/AbCdEfGhIjKlMnOpQrStUv/96.webp", "/photos/AbCdEfGhIjKlMnOpQrStUv/384.webp"]) {
+      expect(req(path, { mode: "no-cors" }), path).toBe("passthrough");
+      expect(R.isStatic(new URL(path, ORIGIN).pathname), path).toBe(false);
+      expect(R.readerKind(new URL(path, ORIGIN).pathname), path).toBeNull();
+    }
+  });
+
   it("never caches: other documents (admin, sign-in, feeds) are online-only", () => {
     for (const path of ["/admin", "/admin/poems/new", "/sign-in", "/sign-in/link", "/feed.xml", "/a/odalys-moon/feed.xml", "/robots.txt", "/p/a/b/opengraph-image"]) {
       expect(req(path), path).toBe("online-only");

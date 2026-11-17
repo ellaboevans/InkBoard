@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { buildCsp } from "./src/lib/csp";
+import { PHOTO_MAX_BYTES } from "./src/lib/photo-limits";
 import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO } from "./src/lib/site";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -47,6 +48,10 @@ const nextConfig: NextConfig = {
     // Failed soft navigations, prefetches and Server Actions wait for the
     // connection instead of throwing; `useOffline()` drives the offline indicator.
     useOffline: true,
+    // Profile photos are posted to a Server Action (docs/PLAN.md, Phase 22):
+    // the largest file plus room for the multipart overhead and the crop field.
+    // PHOTO_MAX_BYTES stays below Vercel's 4.5 MB function body limit.
+    serverActions: { bodySizeLimit: PHOTO_MAX_BYTES + 64 * 1024 },
   },
   // E2E runs use a separate build dir so they don't share (or lock) the one
   // used by your own `pnpm dev` (see playwright.config.ts).

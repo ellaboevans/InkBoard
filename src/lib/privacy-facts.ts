@@ -36,6 +36,10 @@ export const PRIVACY_FACTS = {
   pushDeliveryCleanup: "two days",
   /** UNUSED_SUBSCRIPTION_DAYS (src/lib/push-rules.ts) */
   unusedSubscription: "90 days",
+  /** PHOTO_CACHE_SECONDS (src/lib/photo-limits.ts): how long a browser may keep a served photo. */
+  photoCacheLife: "an hour",
+  /** PHOTO_ORPHAN_GRACE_HOURS (src/server/profile-photos.ts): unlinked photo files older than this go in the daily clean-up. */
+  photoOrphanCleanup: "6 hours",
   /** REVISIONS_KEPT (src/server/poem-history.ts) */
   revisionsKept: "20",
   /** RECOVERY_CODES_PER_SET (src/lib/recovery-code-format.ts) */

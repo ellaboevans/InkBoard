@@ -24,6 +24,13 @@ export default defineConfig({
       AUTH_SECRET: "test-secret-test-secret-test-secret-1234",
       EDITOR_ALLOWLIST: "",
       RESEND_API_KEY: "",
+      // Profile photos (Phase 22): the local driver, in a folder of the test
+      // run's own; never R2, even if the shell has its variables set.
+      PHOTO_STORAGE_DIR: path.resolve(import.meta.dirname, ".storage/test"),
+      R2_ACCOUNT_ID: "",
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_BUCKET: "",
     },
   },
 });

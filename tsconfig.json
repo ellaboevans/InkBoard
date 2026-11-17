@@ -44,7 +44,9 @@
     "video/.out/next-prod/types/**/*.ts",
     "video/.out/next-prod/dev/types/**/*.ts",
     "video/.out/next-dev/types/**/*.ts",
-    "video/.out/next-dev/dev/types/**/*.ts"
+    "video/.out/next-dev/dev/types/**/*.ts",
+    ".next-build/types/**/*.ts",
+    ".next-build/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

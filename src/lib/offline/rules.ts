@@ -32,6 +32,8 @@ var InkboardOffline = (function () {
   var COLLECTION = /^\/a\/[^/]+\/c\/[^/]+$/;
   var PAGES = ["/about", "/privacy"];
   // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
+  // Never /photos/ (profile photos, Phase 22): they pass through to the browser's
+  // own cache (an hour), so a removed photo can't outlive that in the worker.
   var STATIC_PREFIXES = ["/_next/static/", "/icons/", "/avatars/"];
   var STATIC_FILES = ["/icon.svg", "/apple-icon", "/favicon.ico", "/manifest.webmanifest", "/install-capture.js"];
   var CAPS = { poem: 50, other: 30 };

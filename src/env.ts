@@ -99,3 +99,44 @@ export function env(): Env {
 export function resetEnvCache(): void {
   cached = undefined;
 }
+
+/*
+ * Photo storage (docs/PLAN.md, Phase 22). Read separately from env() and only
+ * when a photo is stored or served, so the build and every other request run
+ * without it, and production without R2 fails at upload time with this message.
+ */
+const R2_VARS = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"] as const;
+
+export type PhotoStorageConfig =
+  | { driver: "r2"; accountId: string; accessKeyId: string; secretAccessKey: string; bucket: string }
+  | { driver: "local"; dir: string }
+  | { driver: "none"; reason: string };
+
+export function photoStorageConfig(source: NodeJS.ProcessEnv = process.env): PhotoStorageConfig {
+  const set = R2_VARS.filter((k) => (source[k] ?? "").trim() !== "");
+  if (set.length === R2_VARS.length) {
+    const accountId = source.R2_ACCOUNT_ID!.trim();
+    if (!/^[a-f0-9]{32}$/i.test(accountId)) {
+      return { driver: "none", reason: "R2_ACCOUNT_ID must be the 32-character account ID from the Cloudflare dashboard" };
+    }
+    return {
+      driver: "r2",
+      accountId,
+      accessKeyId: source.R2_ACCESS_KEY_ID!.trim(),
+      secretAccessKey: source.R2_SECRET_ACCESS_KEY!.trim(),
+      bucket: source.R2_BUCKET!.trim(),
+    };
+  }
+  if (set.length > 0) {
+    const missing = R2_VARS.filter((k) => !set.includes(k));
+    return { driver: "none", reason: `R2 is only partly configured: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} missing` };
+  }
+  // A folder on disk: development, Vitest and E2E (never on Vercel, whose disk doesn't last).
+  const dir = (source.PHOTO_STORAGE_DIR ?? "").trim();
+  if (dir && !source.VERCEL) return { driver: "local", dir };
+  if (source.NODE_ENV !== "production" && !source.VERCEL) return { driver: "local", dir: ".storage/dev" };
+  return {
+    driver: "none",
+    reason: "Photo storage isn't configured: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_BUCKET (docs/DEPLOY.md)",
+  };
+}

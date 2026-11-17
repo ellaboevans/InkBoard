@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { sql } from "drizzle-orm";
 import { beforeEach, vi } from "vitest";
 import { getDb } from "@/db";
@@ -67,4 +68,6 @@ beforeEach(async () => {
   await getDb().execute(
     sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, retired_short_codes, push_subscriptions CASCADE`,
   );
+  // Profile photos' local storage (PHOTO_STORAGE_DIR, vitest.config.mts), like the tables.
+  await rm(process.env.PHOTO_STORAGE_DIR!, { recursive: true, force: true });
 });

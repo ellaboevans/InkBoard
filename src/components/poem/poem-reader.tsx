@@ -17,6 +17,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { poemPath } from "@/lib/share-image/share-text";
 import { absoluteUrl } from "@/lib/site";
 import { ShareImageButton } from "./share-image-button";
+import { AuthorPicture } from "@/components/author/author-picture";
 
 /*
  * The reading view, shared by the full page (/p/[author]/[poem]) and the
@@ -67,14 +68,17 @@ export async function PoemReader({
         ) : (
           <OfflineMarker save={false} />
         )}
-        <p className="mt-3 text-muted-foreground">
-          by{" "}
-          <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">
-            {poem.penName}
-          </Link>
-          {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
-          {languageName(poem.language) && <> · in {languageName(poem.language)}</>}
-        </p>
+        <div className="mt-3 flex items-center gap-2.5 text-muted-foreground">
+          <AuthorPicture picture={poem.picture} size={32} className="size-8" />
+          <p className="min-w-0">
+            by{" "}
+            <Link href={`/a/${poem.authorSlug}`} className="text-foreground underline-offset-4 hover:underline">
+              {poem.penName}
+            </Link>
+            {poem.publishedAt && <> · {dateFormat.format(new Date(poem.publishedAt))}</>}
+            {languageName(poem.language) && <> · in {languageName(poem.language)}</>}
+          </p>
+        </div>
         {/* Public poems only: a private poem never gets an image (N1, docs/PLAN.md Phase 21). */}
         {poem.visibility === "public" && poem.body !== null && (
           <div className="mt-4">

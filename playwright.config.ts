@@ -7,6 +7,8 @@ export const E2E_BASE_URL = `http://localhost:${PORT}`;
 export const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql://localhost:5432/poemhub_e2e";
 export const OTP_OUTBOX = path.resolve("test-results/otp-outbox.jsonl");
+// Profile photos (Phase 22): the local storage driver, in this run's own folder.
+export const E2E_PHOTO_DIR = path.resolve(".storage/e2e");
 // Notifications (Phase 18): a throwaway VAPID key pair per run, never in git.
 const vapid = webpush.generateVAPIDKeys();
 
@@ -50,6 +52,11 @@ export default defineConfig({
       VAPID_PRIVATE_KEY: vapid.privateKey,
       // localhost can't be the subject (Apple rejects it); nothing is sent to a push service in E2E.
       VAPID_SUBJECT: "mailto:e2e@inkboard.app",
+      PHOTO_STORAGE_DIR: E2E_PHOTO_DIR,
+      R2_ACCOUNT_ID: "",
+      R2_ACCESS_KEY_ID: "",
+      R2_SECRET_ACCESS_KEY: "",
+      R2_BUCKET: "",
     },
   },
 });

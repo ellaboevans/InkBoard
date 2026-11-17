@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { ShareImage } from "@/components/brand/share-image";
 import { OG_FONT } from "@/components/brand/og-type";
-import { avatarIdFor } from "@/lib/avatars";
 import { languageName } from "@/lib/poem-languages";
 import { measureWith, readFontMetrics, type FontMetrics } from "@/lib/share-image/font-metrics";
 import {
@@ -20,7 +19,7 @@ import { encodeSelection, poemLines } from "@/lib/share-image/selection";
 import { shortPath } from "@/lib/share-image/short-code";
 import { poemPath } from "@/lib/share-image/share-text";
 import { siteUrl } from "@/lib/site";
-import { renderAvatarSvg } from "./avatar-svg";
+import { pictureDataUri } from "./author-picture";
 import type { SharePoem } from "./board";
 
 /*
@@ -117,7 +116,7 @@ const RENDER_VERSION = 3;
 
 /**
  * The ETag: a hash of everything the picture is drawn from (the poem's
- * fields, the author's avatar, the address with its short code, the format,
+ * fields, the author's photo or avatar, the address with its short code, the format,
  * the design, the pick) and the
  * build. Rendering is deterministic, so the same inputs give the same bytes;
  * and the route can answer a revalidation with 304 without drawing anything,
@@ -128,7 +127,8 @@ export function shareImageEtag(poem: SharePoem, request: ShareImageRequest): str
     RENDER_VERSION,
     process.env.INKBOARD_BUILD_ID ?? "dev",
     shareImageInput(poem),
-    avatarIdFor({ id: poem.editorId, avatar: poem.avatar }),
+    // Photo or avatar (Phase 22): a new photo has a new key, so a new ETag.
+    poem.picture,
     request.format,
     request.design ?? "page",
     request.picked ? encodeSelection(request.picked, poemLines(poem.body)) : null,
@@ -147,8 +147,8 @@ export type RenderedShareImage = {
 export async function renderShareImage(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<RenderedShareImage> {
   const { fonts, measure } = await shareImageFonts();
   const layout = layoutShareImage(shareImageInput(poem), measure, request);
-  const svg = renderAvatarSvg(avatarIdFor({ id: poem.editorId, avatar: poem.avatar }));
-  const avatar = svg ? `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` : null;
+  // The photo's JPEG copy straight from storage, or the avatar (no fetch to our own URL).
+  const avatar = await pictureDataUri(poem.picture);
   const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} design={request.design && request.design in SHARE_DESIGNS ? request.design : "page"} />, {
     width: layout.frame.width,
     height: layout.frame.height,

@@ -42,6 +42,7 @@ describe("loadSharePoem", () => {
       authorSlug: "selorm-agbo",
       editorId: a,
       avatar: "a10",
+      picture: { avatarId: "a10", photoKey: null },
       shortCode: null, // made by the first picture (round 3)
     });
     // Never the email or any password field.

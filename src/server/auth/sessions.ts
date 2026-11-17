@@ -31,6 +31,8 @@ export type SessionEditor = {
   bio: string | null;
   /** Chosen avatar id, or null for the default (see avatarIdFor). */
   avatar: string | null;
+  /** Profile photo key (Phase 22), or null: see authorPicture in src/lib/author-picture.ts. */
+  photoKey: string | null;
 };
 
 export async function createSession(
@@ -74,6 +76,7 @@ export async function validateSession(
       slug: editors.slug,
       bio: editors.bio,
       avatar: editors.avatar,
+      photoKey: editors.photoKey,
     })
     .from(sessions)
     .innerJoin(editors, eq(editors.id, sessions.editorId))

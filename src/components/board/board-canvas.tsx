@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthorPicture } from "@/components/author/author-picture";
 import {
   FeatherIcon,
   InfoIcon,
@@ -674,7 +675,7 @@ function World({
               // Explicit width: the world is 0×0, so shrink-to-fit would truncate.
               style={{ left: box.x + 28, top: box.y + 18, width: box.w - 56 }}
             >
-              <span className="size-2.5 shrink-0 self-center rounded-full section-dot" aria-hidden />
+              <AuthorPicture picture={section.picture} size={40} loading="lazy" className="size-10 self-center" />
               <h2 className="min-w-0 truncate font-serif text-[28px] leading-tight">{section.penName}</h2>
               <span className="shrink-0 text-sm text-muted-foreground">
                 {pluralCount(section.poems.length, "poem")}

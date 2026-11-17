@@ -162,6 +162,13 @@
       "when": 1794917943483,
       "tag": "0022_short_codes_retire",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794939455923,
+      "tag": "0023_profile_photos",
+      "breakpoints": true
     }
   ]
 }

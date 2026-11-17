@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { UNUSED_SUBSCRIPTION_DAYS } from "@/lib/push-rules";
 import { safeEqual, sha256 } from "./crypto";
+import { describeStorageError, sweepOrphanPhotos } from "./profile-photos";
 
 /*
  * Periodic cleanup of rows that are useless once expired (Phase 6). Runs
@@ -41,6 +42,8 @@ export type CleanupResult = {
   signInDevices: number;
   pushSubscriptions: number;
   pushDeliveries: number;
+  /** Profile photos whose files no editor points at (Phase 22); null when photo storage isn't available. */
+  orphanPhotos: number | null;
 };
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
@@ -96,6 +99,15 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const pushDeliveries = await db.execute(sql`
     DELETE FROM push_deliveries WHERE sent_at < now() - ${days(CLEANUP_DAYS.pushDeliveries)}
   `);
+  // Profile photo files no editor points at (a failed or interrupted save, a
+  // failed delete), once PHOTO_ORPHAN_GRACE_HOURS old so an upload in progress
+  // is never touched. Storage trouble mustn't stop the rest of the cleanup.
+  let orphanPhotos: number | null = null;
+  try {
+    orphanPhotos = await sweepOrphanPhotos();
+  } catch (err) {
+    console.error("[cron] photo sweep failed", describeStorageError(err));
+  }
   return {
     otps: count(otps),
     stepUpCodes: count(stepUpCodes),
@@ -106,6 +118,7 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
     signInDevices: count(signInDevices),
     pushSubscriptions: count(pushSubscriptions),
     pushDeliveries: count(pushDeliveries),
+    orphanPhotos,
   };
 }
 

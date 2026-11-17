@@ -10,7 +10,7 @@ export type ChecklistStepId = (typeof CHECKLIST_STEPS)[number];
 /** What the server knows about the editor, from real rows. */
 export type ChecklistFacts = {
   hasPenName: boolean;
-  /** editors.avatar set (null = the default derived from the id). */
+  /** editors.avatar set (null = the default derived from the id), or a profile photo (editors.photo_key). */
   hasAvatar: boolean;
   /** Tagline or bio set. */
   hasAbout: boolean;
@@ -50,7 +50,7 @@ export function checklistSteps(f: ChecklistFacts): ChecklistStep[] {
   });
   return [
     step("pen-name", "Choose your pen name", "It labels your section of the board.", f.hasPenName, "/admin/profile#penName"),
-    step("avatar", "Pick an avatar", "The face that goes with your pen name.", f.hasAvatar, "/admin/profile#avatar"),
+    step("avatar", "Pick an avatar", "The face that goes with your pen name, or a photo of you.", f.hasAvatar, "/admin/profile#avatar"),
     step("about", "Tell readers about yourself", "A tagline or a few lines of bio for your author page.", f.hasAbout, "/admin/profile#tagline"),
     step("publish", "Publish your first poem", "Public or password protected: either goes on the board.", f.hasPublished, "/admin/poems/new"),
     step("way-in", "Keep a way in without your email", "Recovery codes or a passkey, for days your email isn’t to hand.", f.hasWayIn, "/admin/profile#recovery-codes", {

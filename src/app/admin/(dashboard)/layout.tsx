@@ -21,7 +21,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { avatarIdFor } from "@/lib/avatars";
+import { authorPicture } from "@/lib/author-picture";
 import { getCurrentEditor } from "@/server/auth/dal";
 import { InstallSlot } from "@/components/install/install-nudge";
 
@@ -118,5 +118,5 @@ async function CurrentUser() {
   const editor = await getCurrentEditor();
   // Pages redirect signed-out or not-yet-onboarded editors themselves.
   if (!editor?.penName) return null;
-  return <NavUser user={{ penName: editor.penName, email: editor.email, avatarId: avatarIdFor(editor) }} />;
+  return <NavUser user={{ penName: editor.penName, email: editor.email, picture: authorPicture(editor) }} />;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthorPicture } from "@/components/author/author-picture";
 import { PoemText } from "@/components/poem/poem-text";
 import { languageName } from "@/lib/poem-languages";
 import { FeatherIcon, LayoutGridIcon, LockIcon } from "lucide-react";
@@ -130,7 +131,7 @@ function BoardList({
           {sections.map((s) => (
             <section key={s.editorId} aria-labelledby={`author-${s.editorId}`} style={{ ["--hue" as string]: sectionHue(s.editorId) }}>
               <h2 id={`author-${s.editorId}`} className="flex items-center gap-2.5 border-b pb-2 font-serif text-2xl">
-                <span className="section-dot size-2.5 rounded-full" aria-hidden />
+                <AuthorPicture picture={s.picture} size={28} loading="lazy" className="size-7" />
                 {s.penName}
                 <span className="font-sans text-sm text-muted-foreground">
                   {pluralCount(s.poems.length, "poem")}

@@ -1,4 +1,4 @@
-# Deploying InkBoard (Neon + Vercel + Resend)
+# Deploying InkBoard (Neon + Vercel + Resend + Cloudflare R2)
 
 A one-time setup, about 20 minutes. After it, every push to `main` deploys to production, and every pull request gets a preview deployment with its **own database branch**, so previews never touch production data.
 
@@ -45,13 +45,43 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 
 There is no fallback, locally or in production: without `RESEND_API_KEY` the app refuses to start, and codes are never written to logs.
 
-## 4. After the first deploy
+## 4. Cloudflare R2 (profile photos)
+
+Writers' profile photos (docs/PLAN.md, Phase 22) are stored in an R2 bucket. Browsers never talk to R2: the app reads photos server-side and serves them from its own origin (`/photos/<key>/<size>.webp`), so there is **no public bucket, no custom domain and no CORS** to set up. Until these four variables are set, everything else works and uploads fail with "Your photo couldn't be stored just now" (the log says which variables are missing).
+
+1. **Create the bucket.** Cloudflare dashboard → R2 Object Storage → Create bucket. Name it e.g. `inkboard-photos`; location *Automatic*; storage class *Standard*. Leave **Public access off** (no r2.dev subdomain, no custom domain).
+2. **Create an API token with the narrowest permissions.** R2 → Manage R2 API Tokens (*API* on the R2 overview) → Create API token:
+   - Permissions: **Object Read & Write** (not Admin: it can't create or delete buckets).
+   - Specify bucket(s): **Apply to specific buckets only** → `inkboard-photos`.
+   - TTL: *Forever* (or a date you'll remember to rotate by).
+   - Client IP filtering: none (Vercel's outbound IPs change).
+   Create it, then copy the **Access Key ID** and the **Secret Access Key** (shown once). Ignore the token value and the endpoint URL; the app builds the endpoint from the account ID.
+3. **Find the account ID:** the 32-character hex string on the R2 overview page (also in the endpoint `https://<account id>.r2.cloudflarestorage.com`).
+4. **Set the variables**, in `.env.local` for development against the real bucket (optional) and in Vercel → Settings → Environment Variables for Production (and Preview, if previews should accept uploads; consider a second bucket for them):
+
+   | Variable | Value |
+   | --- | --- |
+   | `R2_ACCOUNT_ID` | the account ID |
+   | `R2_ACCESS_KEY_ID` | the token's Access Key ID |
+   | `R2_SECRET_ACCESS_KEY` | the token's Secret Access Key (mark it *Sensitive* in Vercel) |
+   | `R2_BUCKET` | `inkboard-photos` |
+
+   All four or none: a partial set is reported by name. `R2_PUBLIC_URL` is **not** used (photos aren't served from R2).
+5. **Check it:** `pnpm storage:check` (reads `.env.local`). It puts a small test object, reads it back, lists it (the daily cleanup needs listing), deletes it and prints `PASS`, or `FAIL (<reason>)` with what to fix: wrong key or secret, a bucket that doesn't exist, or a token without Object Read & Write on that bucket. It never prints a secret. To check Vercel's values: `vercel env pull .env.check --environment=production`, then `DOTENV_CONFIG_PATH=.env.check pnpm storage:check`, then delete `.env.check`.
+6. **Redeploy** (Vercel reads new variables on the next deploy), then upload a photo on your profile and open your author page.
+
+Nothing else is needed in Cloudflare: no lifecycle rules (removed photos are deleted by the app at once, and files a failed save left behind by the daily cron), no CORS, no cache rules. Removed photos may still show from a browser's cache for up to an hour.
+
+**Taking a photo down** (abuse): `APP_URL=https://<your domain> CRON_SECRET=<the production value> pnpm photo:remove <author-slug>` (the slug is the part after `/a/` in their author page's address). It deletes the photo's files, shows the avatar everywhere and refreshes every cached page and picture at once; the writer keeps their account and can upload another photo.
+
+## 5. After the first deploy
 
 - [ ] Sign in with your email, complete onboarding, and publish a test poem. Check that it appears on the board.
 - [ ] Make one poem private and open it in a private window. The text should stay hidden until the password is entered.
 - [ ] Search for the poem title with ⌘K.
 - [ ] Response headers on `/` include `Content-Security-Policy` and `Strict-Transport-Security`.
-- [ ] Trigger the cron once from the Cron Jobs page. It returns `{"ok":true,…}`.
+- [ ] Trigger the cron once from the Cron Jobs page. It returns `{"ok":true,…}` (`orphanPhotos` is a number once R2 is set, `null` before).
+- [ ] With R2 set: `pnpm storage:check` passes; upload a profile photo, check it on the board, your author page and a poem's share image, then remove it.
 - [ ] Open a few pages, then check Project → Analytics: the visits appear within a minute or two.
 - [ ] (Optional) Demo content: **don't** seed production. To try it on a preview branch, run `DATABASE_URL=<preview branch URL> pnpm db:seed` locally.
 

@@ -3,6 +3,8 @@ import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { collections, editors, poems, shortLinks } from "@/db/schema";
 import { EXPORT_FORMAT_VERSION, type EditorExport } from "@/lib/export-format";
+import { PHOTO_JPEG_SIZE } from "@/lib/photo-limits";
+import { readPhotoJpeg } from "./profile-photos";
 import { revisionsForExport } from "./poem-history";
 import { rateLimit } from "./rate-limit";
 
@@ -42,6 +44,7 @@ export async function loadEditorExport(
       bio: editors.bio,
       links: editors.links,
       avatar: editors.avatar,
+      photoKey: editors.photoKey,
       pinnedPoemId: editors.pinnedPoemId,
       joinedAt: editors.createdAt,
     })
@@ -49,7 +52,7 @@ export async function loadEditorExport(
     .where(eq(editors.id, editorId));
   if (!profile?.penName || !profile.slug) return null;
 
-  const [poemRows, collectionRows, revisions] = await Promise.all([
+  const [poemRows, collectionRows, revisions, photoJpeg] = await Promise.all([
     db
       .select({
         id: poems.id,
@@ -85,6 +88,8 @@ export async function loadEditorExport(
       // The order of the editor's own Collections page.
       .orderBy(asc(sql`lower(${collections.title})`), asc(collections.id)),
     revisionsForExport(editorId),
+    // The photo's own JPEG copy (Phase 22). Unreadable storage leaves it out rather than failing the download.
+    profile.photoKey ? readPhotoJpeg(profile.photoKey) : Promise.resolve(null),
   ]);
 
   const titles = new Map(collectionRows.map((c) => [c.id, c.title]));
@@ -100,6 +105,9 @@ export async function loadEditorExport(
       bio: profile.bio,
       links: Array.isArray(profile.links) ? profile.links : [],
       avatar: profile.avatar,
+      photo: photoJpeg
+        ? { type: "image/jpeg", width: PHOTO_JPEG_SIZE, height: PHOTO_JPEG_SIZE, base64: Buffer.from(photoJpeg).toString("base64") }
+        : null,
       pinnedPoemId: profile.pinnedPoemId,
       joinedAt: profile.joinedAt.toISOString(),
     },

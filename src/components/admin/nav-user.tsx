@@ -14,17 +14,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { SidebarLink } from "./sidebar-link";
-import { avatarUrl, type AvatarId } from "@/lib/avatars";
+import type { AuthorPicture as Picture } from "@/lib/author-picture";
+import { AuthorPicture } from "@/components/author/author-picture";
 import { notify } from "@/lib/notify";
 import { InstallMenuItem } from "@/components/install/install-nudge";
 
-type User = { penName: string; email: string; avatarId: AvatarId };
+type User = { penName: string; email: string; picture: Picture };
 
 function Identity({ user }: { user: User }) {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG from our own route */}
-      <img src={avatarUrl(user.avatarId)} alt="" width={32} height={32} className="size-8 shrink-0 rounded-full bg-secondary" />
+      <AuthorPicture picture={user.picture} size={32} className="size-8" />
       <span className="grid flex-1 text-left text-sm leading-tight">
         <span className="truncate font-medium">{user.penName}</span>
         <span className="truncate text-xs text-muted-foreground">{user.email}</span>

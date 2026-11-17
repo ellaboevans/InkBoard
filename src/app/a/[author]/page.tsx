@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face";
 import { Button } from "@/components/ui/button";
 import { SiteLinks } from "@/components/site-links";
-import { avatarIdFor, avatarUrl } from "@/lib/avatars";
+import { AuthorPicture } from "@/components/author/author-picture";
 import { CARD_H } from "@/lib/board-layout";
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
@@ -106,14 +106,7 @@ async function Author({ params }: Pick<Props, "params">) {
       <OfflineMarker save kind="author" title={a.penName} />
       <SaveForOffline path={`/a/${author}`} />
       <header className="flex flex-col gap-6 sm:flex-row sm:items-start">
-        {/* eslint-disable-next-line @next/next/no-img-element -- tiny static SVG from our own route */}
-        <img
-          src={avatarUrl(avatarIdFor({ id: a.editorId, avatar: a.avatar }))}
-          alt=""
-          width={112}
-          height={112}
-          className="size-24 shrink-0 rounded-full bg-secondary sm:size-28"
-        />
+        <AuthorPicture picture={a.picture} size={112} loading="eager" className="size-24 sm:size-28" />
         <div className="grid min-w-0 gap-3">
           <div>
             <h1 className="font-serif text-4xl leading-tight sm:text-5xl">{a.penName}</h1>

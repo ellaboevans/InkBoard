@@ -22,6 +22,7 @@ const section = (editorId: string, poems: BoardPoem[]): BoardSection => ({
   editorId,
   penName: editorId,
   slug: editorId,
+  picture: { avatarId: "a01", photoKey: null },
   poems,
 });
 

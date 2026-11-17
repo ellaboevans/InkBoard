@@ -1,5 +1,6 @@
 import "server-only";
 import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
+import { authorPicture, type AuthorPicture } from "@/lib/author-picture";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { collections, editors, poems, shortLinks } from "@/db/schema";
@@ -71,6 +72,8 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       editorId: editors.id,
       penName: editors.penName,
       authorSlug: editors.slug,
+      avatar: editors.avatar,
+      photoKey: editors.photoKey,
       id: poems.id,
       title: poems.title,
       slug: poems.slug,
@@ -105,6 +108,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
         editorId: row.editorId,
         penName: row.penName!,
         slug: row.authorSlug!,
+        picture: authorPicture({ id: row.editorId, avatar: row.avatar, photoKey: row.photoKey }),
         poems: [],
       };
       sections.push(section);
@@ -177,6 +181,9 @@ export async function loadReaderPoem(
       publishedAt: poems.publishedAt,
       id: poems.id,
       collectionId: poems.collectionId,
+      editorId: editors.id,
+      avatar: editors.avatar,
+      photoKey: editors.photoKey,
     })
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
@@ -190,9 +197,10 @@ export async function loadReaderPoem(
     )
     .limit(1);
   if (!row) return null;
-  const { id, collectionId, ...poem } = row;
+  const { id, collectionId, editorId, avatar, photoKey, ...poem } = row;
   return {
     ...poem,
+    picture: authorPicture({ id: editorId, avatar, photoKey }),
     penName: row.penName!,
     authorSlug: row.authorSlug!,
     publishedAt: row.publishedAt?.toISOString() ?? null,
@@ -218,6 +226,8 @@ export type SharePoem = {
   authorSlug: string;
   editorId: string;
   avatar: string | null;
+  /** The author's photo or avatar (Phase 22): drawn in the byline, part of the ETag. */
+  picture: AuthorPicture;
   /** Its short link's code (/s/<code>, Phase 21 round 3), or null until its first picture makes one. */
   shortCode: string | null;
 };
@@ -234,6 +244,7 @@ export async function loadSharePoem(authorSlug: string, poemSlug: string): Promi
       authorSlug: editors.slug,
       editorId: editors.id,
       avatar: editors.avatar,
+      photoKey: editors.photoKey,
       shortCode: shortLinks.code,
     })
     .from(poems)
@@ -250,7 +261,14 @@ export async function loadSharePoem(authorSlug: string, poemSlug: string): Promi
     )
     .limit(1);
   if (!row || row.body === null || row.penName === null || row.authorSlug === null) return null;
-  return { ...row, body: row.body, penName: row.penName, authorSlug: row.authorSlug };
+  const { photoKey, ...rest } = row;
+  return {
+    ...rest,
+    body: row.body,
+    penName: row.penName,
+    authorSlug: row.authorSlug,
+    picture: authorPicture({ id: row.editorId, avatar: row.avatar, photoKey }),
+  };
 }
 
 /**
@@ -291,6 +309,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
       penName: editors.penName,
       slug: editors.slug,
       avatar: editors.avatar,
+      photoKey: editors.photoKey,
       tagline: editors.tagline,
       bio: editors.bio,
       links: editors.links,
@@ -329,6 +348,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
     slug: author.slug!,
     editorId: author.editorId,
     avatar: author.avatar,
+    picture: authorPicture({ id: author.editorId, avatar: author.avatar, photoKey: author.photoKey }),
     tagline: author.tagline,
     bio: author.bio,
     links: Array.isArray(author.links) ? author.links : [],

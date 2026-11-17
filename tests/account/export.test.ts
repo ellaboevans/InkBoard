@@ -96,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 2, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 3, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -104,6 +104,7 @@ describe("what the export contains", () => {
       bio: `Writes in English and Ewe.\n${GHANAIAN}`,
       links: ["https://ada.example/"],
       avatar: null,
+      photo: null,
       pinnedPoemId: a.ewe,
       joinedAt: a.ed.createdAt.toISOString(),
     });
@@ -136,7 +137,7 @@ describe("what the export contains", () => {
     await countShareVisit(a.ewe, "198.51.100.2");
     for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(2);
+    expect(data.version).toBe(3);
     expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
       ["Ŋkɔ", 2],
       ["Locked room", 0],
@@ -221,7 +222,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 2,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 3,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });
@@ -313,5 +314,34 @@ describe("the download limit", () => {
     expect((await allowExport(b.id)).allowed).toBe(true);
     const keys = (await db.execute(sql`SELECT key FROM rate_limits ORDER BY key`)) as unknown as { rows: { key: string }[] };
     expect(keys.rows.map((r) => r.key)).toEqual([`export:${a.id}`, `export:${b.id}`].sort());
+  });
+});
+
+describe("the profile photo in the export (Phase 22)", () => {
+  it("JSON carries our processed JPEG copy (no metadata), Markdown says where it is; no photo is null", async () => {
+    const { savePhoto, readPhotoJpeg } = await import("@/server/profile-photos");
+    const { fileOf, phoneJpeg } = await import("../support/photos");
+    const sharp = (await import("sharp")).default;
+    const a = await ada();
+    expect((await exportOf(a.ed.id)).profile.photo).toBeNull();
+    expect(exportToMarkdown(await exportOf(a.ed.id))).not.toContain("profile photo");
+
+    const res = await savePhoto(a.ed.id, { file: fileOf(await phoneJpeg()), crop: "0,0,1" });
+    if (!res.ok) throw new Error(res.problem);
+    const data = await exportOf(a.ed.id);
+    expect(data.profile.photo).toEqual({
+      type: "image/jpeg",
+      width: 512,
+      height: 512,
+      base64: Buffer.from((await readPhotoJpeg(res.photoKey))!).toString("base64"),
+    });
+    const meta = await sharp(Buffer.from(data.profile.photo!.base64, "base64")).metadata();
+    expect([meta.format, meta.width, meta.exif, meta.icc]).toEqual(["jpeg", 512, undefined, undefined]);
+    // Not the storage key (it isn't the writer's data), and the secret checks still hold.
+    expect(exportToJson(data)).not.toContain(res.photoKey);
+    for (const key of keysOf(JSON.parse(exportToJson(data)))) {
+      expect(key).not.toMatch(/password|hash|session|token|passkey|recovery|email|counter|^ip$|userAgent|signIn/i);
+    }
+    expect(exportToMarkdown(data)).toContain("Your profile photo is in the JSON download (profile.photo).");
   });
 });

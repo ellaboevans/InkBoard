@@ -1,3 +1,5 @@
+import type { AuthorPicture } from "./author-picture";
+
 /** Reader-facing shapes, shared by the server loaders and the board UI. */
 
 export type BoardPoem = {
@@ -22,6 +24,8 @@ export type BoardSection = {
   editorId: string;
   penName: string;
   slug: string;
+  /** Photo or avatar, beside the section's label (Phase 22). */
+  picture: AuthorPicture;
   poems: BoardPoem[];
 };
 
@@ -55,6 +59,8 @@ export type ReaderPoem = {
   publishedAt: string | null;
   /** Null when the poem isn't in a collection. */
   collection: ReaderCollection | null;
+  /** The author's photo or avatar, in the byline and link card (Phase 22). */
+  picture: AuthorPicture;
 };
 
 /** An author's public page (/a/[author]). Never includes the email. */
@@ -64,6 +70,8 @@ export type AuthorPage = {
   /** For the stable default avatar when none is chosen. */
   editorId: string;
   avatar: string | null;
+  /** Photo or avatar (Phase 22). */
+  picture: AuthorPicture;
   tagline: string | null;
   bio: string | null;
   links: string[];

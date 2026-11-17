@@ -38,6 +38,7 @@ describe("sessions", () => {
       slug: null,
       bio: null,
       avatar: null,
+      photoKey: null,
     });
   });
 

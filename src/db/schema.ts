@@ -48,6 +48,12 @@ export const editors = pgTable(
     tagline: text("tagline"),
     /** Chosen avatar id from src/lib/avatars.ts; null = default derived from id. */
     avatar: text("avatar"),
+    /**
+     * Profile photo (docs/PLAN.md, Phase 22): the random key of its processed
+     * copies in photo storage (photos/<key>/…); null = show the avatar. A new
+     * photo always gets a new key, never the email, id or slug.
+     */
+    photoKey: text("photo_key").unique("editors_photo_key_unique"),
     /** Up to 4 https links (website, socials), validated in profile.ts. */
     links: jsonb("links").$type<string[]>().notNull().default([]),
     /** A published poem of this editor's to feature. Ownership is checked in profile.ts. */

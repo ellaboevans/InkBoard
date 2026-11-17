@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { OG_SIZE, OgCard, ogQuote } from "@/components/brand/og-card";
 import { ogFonts } from "@/components/brand/og-fonts";
+import { pictureDataUri } from "@/server/author-picture";
 import { SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
 
@@ -17,8 +18,10 @@ export default async function Image({ params }: { params: Promise<{ author: stri
   const p = await getReaderPoem(author, poem);
   const fonts = await ogFonts();
   if (!p) return new ImageResponse(<OgCard title="Poem not found" />, { ...size, fonts });
+  const picture = await pictureDataUri(p.picture);
   return new ImageResponse(
     <OgCard
+      picture={picture}
       kicker={`by ${p.penName}`}
       title={p.title}
       quote={p.visibility === "public" ? ogQuote(p.body) : "This poem is password protected."}

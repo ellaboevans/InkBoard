@@ -13,8 +13,18 @@ import { languageName } from "./poem-languages";
  * read it.
  */
 
-/** 2: poems carry `shareVisits` (Phase 21 round 3). */
-export const EXPORT_FORMAT_VERSION = 2;
+/**
+ * 2: poems carry `shareVisits` (Phase 21 round 3).
+ * 3: `profile.photo`, the profile photo itself (Phase 22).
+ */
+export const EXPORT_FORMAT_VERSION = 3;
+
+/**
+ * The profile photo inside the JSON download (Phase 22): our processed
+ * 512 px JPEG copy (no metadata), base64-encoded, so the backup is complete
+ * on its own and survives the account. Null when there's no photo.
+ */
+export type ExportedPhoto = { type: "image/jpeg"; width: number; height: number; base64: string };
 
 export type ExportedPoem = {
   id: string;
@@ -48,6 +58,7 @@ export type EditorExport = {
     bio: string | null;
     links: string[];
     avatar: string | null;
+    photo: ExportedPhoto | null;
     pinnedPoemId: string | null;
     joinedAt: string;
   };
@@ -195,6 +206,7 @@ export function exportToMarkdown(data: EditorExport): string {
   if (profile.tagline) out.push(`*${profile.tagline}*`, "");
   if (profile.bio) out.push(plainTextToMarkdown(profile.bio), "");
   if (profile.links.length) out.push("Links:", ...profile.links.map((l) => `- ${l}`), "");
+  if (profile.photo) out.push("Your profile photo is in the JSON download (profile.photo).", "");
   out.push(
     `Author page: ${new URL(`/a/${profile.slug}`, data.site).href}`,
     `Exported from InkBoard on ${day(data.exportedAt)}: ${count(data.poems.length, "poem")} (${count(drafts, "draft")}, ${count(privates, "private poem")}), ${count(data.collections.length, "collection")}.`,

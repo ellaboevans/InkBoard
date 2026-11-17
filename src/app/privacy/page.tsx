@@ -200,6 +200,22 @@ export default function PrivacyPage() {
               stays until you delete your account.
             </p>
           </Sub>
+          <Sub heading="Your profile photo">
+            <p>
+              If you upload a photo, we keep only copies we make from it: cropped to the square you chose, a few small
+              sizes, with everything else in the file removed (the camera’s details, the date, where it was taken, any
+              other metadata). The file you uploaded itself isn’t kept. The copies are stored with Cloudflare R2 under a
+              random name that has nothing to do with your email, name or account, and served from {SITE_NAME} itself.
+              Readers see it next to your pen name, and it’s in your JSON download.
+            </p>
+            <p>
+              Remove photo, on your profile, deletes the copies from storage at once, and so does deleting your account.
+              A browser that showed it may keep its copy for up to {F.photoCacheLife}; after that it shows your avatar.
+              If a save is interrupted, its unused copies are deleted by the daily clean-up once they’re{" "}
+              {F.photoOrphanCleanup} old. We may also remove a photo that breaks the rules of the site; your avatar
+              shows instead.
+            </p>
+          </Sub>
           <Sub heading="Your poems">
             <p>
               Each poem’s title, text, language, whether it’s public or private, whether it’s a draft or published and
@@ -267,7 +283,8 @@ export default function PrivacyPage() {
             <p>
               Delete account, in Settings, removes all of this at once: your profile, poems with their earlier versions,
               collections, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
-              email, attempt counters that name you or your poems, your poems’ visit counts, and readers’ follows of you.
+              email, attempt counters that name you or your poems, your poems’ visit counts, your profile photo’s files,
+              and readers’ follows of you.
               We keep only your old author address and your poems’ short addresses on a list, so they’re never given to
               someone else.
             </p>
@@ -330,6 +347,10 @@ export default function PrivacyPage() {
               there.
             </li>
             <li>
+              <strong className="font-medium">Cloudflare R2</strong> stores writers’ profile photos (the processed copies
+              described above). Readers’ browsers never contact it: photos are served through {SITE_NAME}.
+            </li>
+            <li>
               <strong className="font-medium">Resend</strong> sends our emails, so it receives your email address and
               each email’s contents.
             </li>
@@ -361,7 +382,7 @@ export default function PrivacyPage() {
           </Sub>
           <Sub heading="Writers">
             <ul className={list}>
-              <li>Edit or delete your poems and profile whenever you like.</li>
+              <li>Edit or delete your poems and profile whenever you like, and remove your profile photo.</li>
               <li>Download everything you’ve written, as Markdown or JSON, under Settings, then Download your poems.</li>
               <li>Delete your account, under Settings.</li>
               <li>Sign out other devices, remove passkeys and replace recovery codes, on your profile.</li>

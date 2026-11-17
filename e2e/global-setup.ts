@@ -63,6 +63,7 @@ async function warmUp() {
     ["/api/push/preferences"],
     ["/api/search?q=warm"],
     ["/p/warm-up/warm-up"],
+    ["/p/warm-up/warm-up/share-image"],
     ["/p/warm-up/warm-up", { RSC: "1", "Next-Url": "/" }],
   ];
   await Promise.all(

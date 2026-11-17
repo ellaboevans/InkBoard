@@ -103,6 +103,27 @@ test("a poem read online opens offline: reloaded, and from the board", async ({ 
   await expect(page.getByText("one blue rope, frayed at the wrist,")).toBeVisible();
 });
 
+test("the share image is never stored by the worker (docs/PLAN.md, Phase 21)", async ({ context, page }) => {
+  await withWorker(page);
+  await page.goto(url(F.read));
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+  const sheet = page.getByRole("dialog", { name: "Share as image" });
+  await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+  // Fetched through the worker, shown, and in no cache.
+  await expect.poll(() => saved(page)).toContain(url(F.read));
+  const { keys } = await cacheContents(page, "share-image");
+  expect(keys.filter((k) => k.includes("share-image"))).toEqual([]);
+  await page.keyboard.press("Escape");
+
+  // Offline, the saved poem still opens, and the sheet says plainly why there's no image.
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Low Tide Inventory" })).toBeVisible();
+  await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+  await expect(sheet.getByText("You're offline. Connect to the internet to make the image.")).toBeVisible();
+});
+
 test("the board opens offline, as last seen", async ({ context, page }) => {
   await withWorker(page);
   await context.setOffline(true);
@@ -234,7 +255,7 @@ test("production: missing reader pages are real 404s; real ones and a private po
 test("the About and Privacy pages are saved, and open offline", async ({ context, page }) => {
   await withWorker(page);
   await page.goto("/about");
-  await expect(page.getByText("Video coming soon")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play the walkthrough" })).toBeVisible();
   await page.goto("/privacy");
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
   await expect.poll(() => saved(page)).toEqual(expect.arrayContaining(["/about", "/privacy"]));
@@ -243,8 +264,9 @@ test("the About and Privacy pages are saved, and open offline", async ({ context
   await context.setOffline(true);
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1, name: "About InkBoard" })).toBeVisible();
-  // The cover image comes from the static cache with the page.
-  const cover = page.getByRole("img", { name: /^How InkBoard works/ });
+  // The cover image comes from the static cache with the page. (Behind the
+  // play button it is decoration, alt="", so find it inside the button.)
+  const cover = page.getByRole("button", { name: "Play the walkthrough" }).locator("img");
   await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await page.goto("/privacy");
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();

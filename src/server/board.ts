@@ -201,6 +201,55 @@ export async function loadReaderPoem(
 }
 
 /**
+ * What the share image needs (docs/PLAN.md, Phase 21): a published **public**
+ * poem by an author with a pen name, or null. A private, draft, deleted or
+ * unknown poem (or another author's slug) is the same null, so the route gives
+ * them one 404. The WHERE clause already excludes private poems; the body
+ * still goes through CASE WHEN like every reader query (N1), so a private
+ * poem's text is never selected even if the filter were changed.
+ */
+export type SharePoem = {
+  id: string;
+  title: string;
+  slug: string;
+  body: string;
+  language: string | null;
+  penName: string;
+  authorSlug: string;
+  editorId: string;
+  avatar: string | null;
+};
+
+export async function loadSharePoem(authorSlug: string, poemSlug: string): Promise<SharePoem | null> {
+  const [row] = await getDb()
+    .select({
+      id: poems.id,
+      title: poems.title,
+      slug: poems.slug,
+      body: sql<string | null>`CASE WHEN ${isPublic} THEN ${poems.body} END`,
+      language: poems.language,
+      penName: editors.penName,
+      authorSlug: editors.slug,
+      editorId: editors.id,
+      avatar: editors.avatar,
+    })
+    .from(poems)
+    .innerJoin(editors, eq(editors.id, poems.editorId))
+    .where(
+      and(
+        eq(editors.slug, authorSlug),
+        eq(poems.slug, poemSlug),
+        eq(poems.status, "published"),
+        eq(poems.visibility, "public"),
+        isNotNull(editors.penName),
+      ),
+    )
+    .limit(1);
+  if (!row || row.body === null || row.penName === null || row.authorSlug === null) return null;
+  return { ...row, body: row.body, penName: row.penName, authorSlug: row.authorSlug };
+}
+
+/**
  * The published poem's place in its collection: part n of the *published*
  * poems (drafts never leave gaps) and its published neighbours. Titles,
  * slugs and visibility only: no text, so private neighbours stay title-only (N1).

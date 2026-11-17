@@ -467,6 +467,54 @@ test("board, list view, search and reading", async ({ page }) => {
   await scan(page, "poem not found");
 });
 
+test("share as image: the sheet loading, ready (share and no-share browsers) and failed, phone and desktop", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-share-${id}@example.com`, `Share Reader ${id}`);
+  await publish(page, `Shared ${id}`, "first line\n    indented\n\n*second stanza*");
+  const { rows } = await sql(`SELECT e.slug AS author, p.slug FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.title = 'Shared ${id}'`);
+  const poemPage = `/p/${rows[0].author}/${rows[0].slug}`;
+  const sheet = page.getByRole("dialog", { name: "Share as image" });
+  const open = () => page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+
+  await page.goto(poemPage);
+  await scan(page, "poem page: public, with Share as image");
+
+  // Loading: hold the image until the scan is done.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  await page.route("**/share-image", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await open();
+  await expect(sheet.getByRole("status")).toHaveText("Making the image…");
+  await scan(page, "share sheet: loading");
+  release();
+  await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+  await scan(page, "share sheet: ready");
+  await page.keyboard.press("Escape");
+  await page.unroute("**/share-image");
+
+  await page.route("**/share-image", (route) => route.fulfill({ status: 500, body: "" }));
+  await open();
+  await expect(sheet.getByText("Couldn't load the image", { exact: false })).toBeVisible();
+  await scan(page, "share sheet: failed");
+  await page.keyboard.press("Escape");
+  await page.unroute("**/share-image");
+
+  // A browser that can't share files: Download image, Copy link, Send on WhatsApp.
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "canShare", { configurable: true, value: undefined });
+    Object.defineProperty(Navigator.prototype, "share", { configurable: true, value: undefined });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await open();
+  await expect(sheet.getByRole("link", { name: "Send on WhatsApp" })).toBeVisible();
+  await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+  await scan(page, "share sheet: no file sharing, phone");
+});
+
 test("About and Privacy pages, phone and desktop; a missing poem in the overlay", async ({ page }) => {
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });

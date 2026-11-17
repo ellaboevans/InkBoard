@@ -1,10 +1,17 @@
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
 import { BRAND, SITE_NAME } from "@/lib/site";
+import { ogFontFamily, truncate } from "./og-type";
+
+export { truncate };
 
 /*
  * Shared JSX for ImageResponse (Satori): flexbox only, inline styles, hex
  * colours. The mark is the same lucide Feather on an ink-red tile that the
  * app shows in its header and sidebar (and in src/app/icon.svg).
+ *
+ * Every piece of text sets its own fontFamily with ogFontFamily (og-type.ts):
+ * Gentium Book Plus first for Ghanaian letters and tone marks, Newsreader
+ * first otherwise (tests/lib/og-font-order.test.ts walks the tree).
  */
 
 export const OG_SIZE = { width: 1200, height: 630 };
@@ -71,21 +78,20 @@ export function OgCard({
         backgroundImage: `radial-gradient(${BRAND.dot} 2px, transparent 2px)`,
         backgroundSize: "32px 32px",
         color: BRAND.ink,
-        // Gentium supplies Ghanaian letters and IPA that Newsreader lacks (og-fonts.ts).
-        fontFamily: "Newsreader, Gentium Book Plus",
+        fontFamily: ogFontFamily(""),
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
         <LogoMark size={64} />
-        <div style={{ fontSize: 40 }}>{SITE_NAME}</div>
+        <div style={{ fontSize: 40, fontFamily: ogFontFamily(SITE_NAME) }}>{SITE_NAME}</div>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
         {kicker && (
-          <div style={{ fontSize: 30, color: BRAND.primary, fontStyle: "italic", marginBottom: 16 }}>
+          <div style={{ fontSize: 30, color: BRAND.primary, fontStyle: "italic", marginBottom: 16, fontFamily: ogFontFamily(kicker) }}>
             {kicker}
           </div>
         )}
-        <div style={{ fontSize: titleSize, lineHeight: 1.05, letterSpacing: -1, display: "flex" }}>
+        <div style={{ fontSize: titleSize, lineHeight: 1.05, letterSpacing: -1, display: "flex", fontFamily: ogFontFamily(title) }}>
           {truncate(title, 90)}
         </div>
         {quote && (
@@ -98,19 +104,16 @@ export function OgCard({
               fontStyle: "italic",
               whiteSpace: "pre-wrap",
               display: "flex",
+              fontFamily: ogFontFamily(quote),
             }}
           >
             {quote}
           </div>
         )}
       </div>
-      {footer && <div style={{ fontSize: 26, color: BRAND.muted, display: "flex" }}>{footer}</div>}
+      {footer && <div style={{ fontSize: 26, color: BRAND.muted, display: "flex", fontFamily: ogFontFamily(footer) }}>{footer}</div>}
     </div>
   );
-}
-
-export function truncate(s: string, max: number) {
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 }
 
 /** First lines of a public poem for the card, kept short enough to fit. */

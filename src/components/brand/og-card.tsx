@@ -22,14 +22,15 @@ export const FEATHER_PATHS = [
   "M17.488 15H9",
 ];
 
-export function LogoMark({ size }: { size: number }) {
+/** `tile`/`glyph` default to the brand's; the share image's Ink design lightens them for a dark page. */
+export function LogoMark({ size, tile = BRAND.primary, glyph = BRAND.onPrimary }: { size: number; tile?: string; glyph?: string }) {
   return (
     <div
       style={{
         width: size,
         height: size,
         borderRadius: size * 0.22,
-        background: BRAND.primary,
+        background: tile,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -40,7 +41,7 @@ export function LogoMark({ size }: { size: number }) {
         height={size * 0.58}
         viewBox="0 0 24 24"
         fill="none"
-        stroke={BRAND.onPrimary}
+        stroke={glyph}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

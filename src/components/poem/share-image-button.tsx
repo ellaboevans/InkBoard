@@ -6,6 +6,7 @@ import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { notify } from "@/lib/notify";
+import { SHARE_DESIGNS, SHARE_DESIGN_NAMES, type ShareDesign } from "@/lib/share-image/designs";
 import type { ShareFormat } from "@/lib/share-image/layout";
 import { encodeSelection, MAX_PICKED_LINES } from "@/lib/share-image/selection";
 import {
@@ -130,6 +131,8 @@ const FAILED: Record<"offline" | "network" | "limited", string> = {
 function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
   const [fileShare] = useState(canShareFiles);
   const [format, setFormat] = useState<ShareFormat>("story");
+  // Page each time the sheet opens (not remembered: nothing is stored in the browser).
+  const [design, setDesign] = useState<ShareDesign>("page");
   const [mode, setMode] = useState<Mode>("whole");
   const [picked, setPicked] = useState<number[]>([]);
   const [lines, setLines] = useState<Lines>({ status: "idle" });
@@ -141,11 +144,12 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
 
   // The current choice and the query that draws it (null: no lines picked yet).
   const selection = mode === "pick" && lines.status === "ready" ? encodeSelection(picked, lines.lines) || null : null;
-  const key = mode === "whole" ? shareImageQuery(format, null) : selection ? shareImageQuery(format, selection) : null;
+  const key =
+    mode === "whole" ? shareImageQuery(format, null, design) : selection ? shareImageQuery(format, selection, design) : null;
   const current = key !== null ? images[key] : undefined;
   const ready = current?.status === "ready" ? current : null;
   const failed = current?.status === "failed" ? current : null;
-  const fileName = shareImageFileName(slug, { format, lines: mode === "pick" });
+  const fileName = shareImageFileName(slug, { format, design, lines: mode === "pick" });
   const has = current !== undefined;
 
   useEffect(() => {
@@ -270,6 +274,7 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
             )}
             aria-busy={waiting || undefined}
             data-share-format={format}
+            data-share-design={design}
           >
             {ready ? (
               // eslint-disable-next-line @next/next/no-img-element -- a blob: preview of the exact file that will be shared
@@ -313,6 +318,12 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
         </div>
 
         <div className="grid min-w-0 gap-4">
+          <Choice
+            legend="Design"
+            value={design}
+            onChange={setDesign}
+            options={SHARE_DESIGN_NAMES.map((d) => ({ value: d, label: SHARE_DESIGNS[d].label, swatch: <Swatch design={d} /> }))}
+          />
           <Choice
             legend="Size"
             value={format}
@@ -387,13 +398,13 @@ function Choice<T extends string>({
   legend: string;
   value: T;
   onChange: (value: T) => void;
-  options: { value: T; label: string; hint?: string }[];
+  options: { value: T; label: string; hint?: string; swatch?: React.ReactNode }[];
 }) {
   const name = useId();
   return (
     <fieldset className="grid min-w-0 gap-1.5">
       <legend className="mb-1.5 text-sm font-medium">{legend}</legend>
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+      <div className={cn("grid gap-1 rounded-lg bg-muted p-1", options.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
         {options.map((o) => (
           <label
             key={o.value}
@@ -407,12 +418,42 @@ function Choice<T extends string>({
               onChange={() => onChange(o.value)}
               className="sr-only"
             />
+            {o.swatch}
             {o.label}
             {o.hint && <span className="text-xs font-normal tabular-nums">{o.hint}</span>}
           </label>
         ))}
       </div>
     </fieldset>
+  );
+}
+
+/**
+ * A small picture of a design's look, beside its name: its background, a line
+ * of "text" and the accent, in the design's own colours (decorative: the
+ * name says it).
+ */
+function Swatch({ design }: { design: ShareDesign }) {
+  const look = SHARE_DESIGNS[design];
+  const dotted =
+    "dots" in look
+      ? { backgroundImage: `radial-gradient(${look.dots.color} 1px, transparent 1.5px)`, backgroundSize: "5px 5px" }
+      : {};
+  return (
+    <span
+      aria-hidden
+      className="relative inline-flex h-6 w-5 shrink-0 items-center justify-center overflow-hidden rounded-[3px] ring-1 ring-foreground/20"
+      style={{ backgroundColor: look.background, ...dotted }}
+    >
+      <span
+        className="flex h-4 w-3.5 flex-col justify-center gap-[2px] rounded-[2px] px-[2px]"
+        style={{ backgroundColor: look.surface }}
+      >
+        <span className="block h-[2px] w-full rounded-full" style={{ backgroundColor: look.text }} />
+        <span className="block h-[2px] w-2/3 rounded-full" style={{ backgroundColor: look.accent }} />
+        <span className="block h-[2px] w-full rounded-full" style={{ backgroundColor: look.text }} />
+      </span>
+    </span>
   );
 }
 

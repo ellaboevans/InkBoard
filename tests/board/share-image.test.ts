@@ -42,6 +42,7 @@ describe("loadSharePoem", () => {
       authorSlug: "selorm-agbo",
       editorId: a,
       avatar: "a10",
+      shortCode: null, // made by the first picture (round 3)
     });
     // Never the email or any password field.
     expect(JSON.stringify(got)).not.toContain("a@x.com");

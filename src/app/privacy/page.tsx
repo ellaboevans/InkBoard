@@ -143,12 +143,22 @@ export default function PrivacyPage() {
               {F.unusedSubscription}.
             </p>
           </Sub>
+          <Sub heading="Short links on shared pictures">
+            <p>
+              A picture of a public poem carries a short address (like /s/k3x9qm) that leads to the poem. We count
+              visits through it: one number per poem, which only the poem’s writer sees, on their dashboard. To count
+              each network once {F.shareVisitRepeat} per poem, we use the same kind of counter as below, named after the
+              poem and the IP address (for IPv6, only its network part). Nothing else about who visited is kept, and no
+              cookie is set. Link previews (such as WhatsApp drawing a preview) and browsers fetching ahead aren’t
+              counted.
+            </p>
+          </Sub>
           <Sub heading="Limits on repeated attempts">
             <p>
               To stop abuse, such as guessing passwords or sign-in codes, or making pictures of chosen lines over and over,
-              we count recent attempts. The counters are named
-              after an IP address (for IPv6, only its network part), a hash of an email address, or an account or
-              session id, and the daily clean-up deletes them {F.rateLimitCleanup} after they start.
+              we count recent attempts. The counters are named after an IP address (for IPv6, only its network part),
+              a hash of an email address, or an account, session or poem id, and the daily clean-up deletes them{" "}
+              {F.rateLimitCleanup} after they start.
             </p>
           </Sub>
         </Section>
@@ -193,7 +203,8 @@ export default function PrivacyPage() {
           <Sub heading="Your poems">
             <p>
               Each poem’s title, text, language, whether it’s public or private, whether it’s a draft or published and
-              when, and its collection. Passwords for private poems (or your one shared password) are stored only as
+              when, and its collection; and, once a picture of it has been shared, its short address and the number of
+              visits through it. Passwords for private poems (or your one shared password) are stored only as
               scrypt hashes, never as written. We keep the {F.revisionsKept} most recent earlier versions of each poem,
               which only you can see, and your collections’ titles, introductions and order. They stay until you delete
               them or your account.
@@ -256,8 +267,9 @@ export default function PrivacyPage() {
             <p>
               Delete account, in Settings, removes all of this at once: your profile, poems with their earlier versions,
               collections, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
-              email, attempt counters that name you, and readers’ follows of you. We keep only your old author address on
-              a list, so it’s never given to someone else.
+              email, attempt counters that name you or your poems, your poems’ visit counts, and readers’ follows of you.
+              We keep only your old author address and your poems’ short addresses on a list, so they’re never given to
+              someone else.
             </p>
             <p>
               Some copies are outside our database: emails we’ve already sent stay in your inbox, readers’ offline copies

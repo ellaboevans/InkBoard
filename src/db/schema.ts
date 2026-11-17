@@ -420,6 +420,39 @@ export const retiredSlugs = pgTable("retired_slugs", {
 });
 
 /**
+ * Short links for shared images (docs/PLAN.md, Phase 21 round 3): one random
+ * code per poem, printed on its pictures as /s/<code>, made the first time a
+ * picture of the poem is drawn (src/server/short-links.ts). `visits` counts
+ * visits through the link: one number per poem, shown only to its writer;
+ * nothing about who visited is stored. Goes with the poem (and so with the
+ * account); a trigger (drizzle/0022) moves the code to retired_short_codes
+ * on delete, so it's never given to another poem.
+ */
+export const shortLinks = pgTable(
+  "short_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    poemId: uuid("poem_id")
+      .notNull()
+      .references(() => poems.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    visits: integer("visits").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("short_links_poem_key").on(t.poemId), uniqueIndex("short_links_code_key").on(t.code)],
+);
+
+/**
+ * Codes of deleted poems' short links: never given to another poem, so a
+ * printed /s/<code> can't come to point at someone else's poem. Only the code
+ * and when: nothing personal, no link to anyone.
+ */
+export const retiredShortCodes = pgTable("retired_short_codes", {
+  code: text("code").primaryKey(),
+  retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Push subscriptions for new-poem notifications (docs/PLAN.md, Phase 18), one
  * per device/browser. No link to any person or account: only what the push
  * service needs to reach the device (src/server/push.ts). The endpoint is a

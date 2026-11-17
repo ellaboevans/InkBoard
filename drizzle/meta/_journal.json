@@ -148,6 +148,20 @@
       "when": 1794854979433,
       "tag": "0020_welcome_checklist",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794917877138,
+      "tag": "0021_short_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794917943483,
+      "tag": "0022_short_codes_retire",
+      "breakpoints": true
     }
   ]
 }

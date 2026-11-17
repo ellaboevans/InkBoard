@@ -13,6 +13,7 @@ import { STEP_UP_TTL_SECONDS } from "@/server/auth/step-up-config";
 import { CLEANUP_DAYS } from "@/server/maintenance";
 import { REVISIONS_KEPT } from "@/server/poem-history";
 import { UNLOCK_TTL_SECONDS } from "@/server/unlock";
+import { SHARE_VISIT_WINDOW_SECONDS } from "@/lib/share-image/visits";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19) states how long things last.
@@ -34,6 +35,7 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   passkeyChallengeLife: PASSKEY_CHALLENGE_TTL_SECONDS,
   unlockLife: UNLOCK_TTL_SECONDS,
   rateLimitCleanup: CLEANUP_DAYS.rateLimitWindows * DAY,
+  shareVisitRepeat: SHARE_VISIT_WINDOW_SECONDS,
   pushDeliveryCleanup: CLEANUP_DAYS.pushDeliveries * DAY,
   unusedSubscription: UNUSED_SUBSCRIPTION_DAYS * DAY,
   revisionsKept: REVISIONS_KEPT,

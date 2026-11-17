@@ -557,6 +557,38 @@ test("share as image, round 2: the size toggle, the line picker (empty, picked, 
   }
 });
 
+test("share as image, round 3: the design choice (Ink, Board) and the dashboard's visit count", async ({ page, request }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-share3-${id}@example.com`, `Design Reader ${id}`);
+  await publish(page, `Designed ${id}`, "Sɛ wo werɛ fi na wosankɔfa a,\nyɛnkyiri.");
+  const { rows } = await sql(`SELECT p.id, e.slug AS author, p.slug FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.title = 'Designed ${id}'`);
+  const sheet = page.getByRole("dialog", { name: "Share as image" });
+  const choose = (name: RegExp) => sheet.locator("label").filter({ has: page.getByRole("radio", { name }) }).click();
+
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width < 1000 ? 720 : 900 });
+    await page.goto(`/p/${rows[0].author}/${rows[0].slug}`);
+    await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+    for (const design of [/^Ink$/, /^Board$/]) {
+      await choose(design);
+      await expect(sheet.locator(`[data-share-design="${design.source.replace(/[\^$]/g, "").toLowerCase()}"] img`)).toBeVisible();
+      await scan(page, `share sheet: design ${design.source}, ${width}px`);
+    }
+    await page.keyboard.press("Escape");
+  }
+
+  // A visit through the short link, then the writer's row with its count.
+  const { code } = (await sql(`SELECT code FROM short_links WHERE poem_id = '${rows[0].id}'`)).rows[0] as { code: string };
+  await request.get(`/s/${code}`);
+  await expect.poll(async () => (await sql(`SELECT visits FROM short_links WHERE poem_id = '${rows[0].id}'`)).rows[0].visits).toBe(1);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin");
+    await expect(page.locator("[data-share-visits]").filter({ visible: true })).toHaveText("1 visit from shared images");
+    await scan(page, `dashboard: a poem's visit count, ${width}px`);
+  }
+});
+
 test("About and Privacy pages, phone and desktop; a missing poem in the overlay", async ({ page }) => {
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });

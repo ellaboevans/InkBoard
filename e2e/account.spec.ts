@@ -71,7 +71,9 @@ test("download your poems as Markdown and JSON, drafts and private poems include
   const json = await download(page, /^Download JSON/);
   expect(json.name).toMatch(/\.json$/);
   const data = JSON.parse(json.text);
-  expect(data).toMatchObject({ format: "inkboard-export", version: 1, profile: { penName: pen } });
+  // Version 2: each poem carries shareVisits (Phase 21 round 3).
+  expect(data).toMatchObject({ format: "inkboard-export", version: 2, profile: { penName: pen } });
+  expect(data.poems.map((p: { shareVisits: number }) => p.shareVisits)).toEqual([0, 0, 0]);
   expect(data.poems.map((p: { title: string }) => p.title)).toEqual([`Ŋkɔ ${id}`, `Locked ${id}`, `Unfinished ${id}`]);
   expect(data.poems[1]).toMatchObject({ visibility: "private", text: "only for friends" });
   expect(data.poems[2]).toMatchObject({ status: "draft", text: "half a line" });

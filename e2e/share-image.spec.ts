@@ -48,6 +48,8 @@ type Shared = {
   title?: string;
   url?: string;
   files: { name: string; type: string; size: number; width: number; height: number }[];
+  /** Each file's top-left pixel, #rrggbb: tells the designs apart (paper, ink, the board's canvas). */
+  corners: string[];
 };
 
 /** navigator.share / canShare that record what they get, like a phone that can share files. */
@@ -78,6 +80,12 @@ async function stubShare(context: BrowserContext) {
             title: data.title,
             url: data.url,
             files: files.map((f, i) => ({ name: f.name, type: f.type, size: f.size, width: bitmaps[i].width, height: bitmaps[i].height })),
+            corners: bitmaps.map((b) => {
+              const c = new OffscreenCanvas(8, 8).getContext("2d")!;
+              c.drawImage(b, 0, 0);
+              const [r, g, bl] = c.getImageData(1, 1, 1, 1).data;
+              return `#${[r, g, bl].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+            }),
           });
           if (w.__shareMode === "abort") throw new DOMException("Share canceled", "AbortError");
         });
@@ -632,4 +640,181 @@ test("writers on a phone: the just-published card's button, no sideways scrollin
   await expect(preview(page)).toBeVisible();
   await noSidewaysScroll(page, "dashboard sheet");
   await context.close();
+});
+
+/* ---- Round 3: short links, the visit count, designs ------------------------------- */
+
+const PAPER = "#fdfaf4";
+const INK = "#261d17";
+const CANVAS = "#f5efe6";
+
+test("the picture prints the short address, and following it lands on the poem", async ({ page, request }) => {
+  const id = unique();
+  await signUpAs(page, `short-${id}@example.com`, `Short Poet ${id}`);
+  const title = `Short ${id}`;
+  await publish(page, title, "a short line\nand another");
+  const o = await poemRow(title);
+  // No code until its first picture.
+  expect((await sql(`SELECT count(*)::int AS n FROM short_links WHERE poem_id = '${o.id}'`)).rows[0].n).toBe(0);
+
+  const res = await request.get(`/p/${o.author}/${o.slug}/share-image`);
+  const { code } = (await sql(`SELECT code FROM short_links WHERE poem_id = '${o.id}'`)).rows[0] as { code: string };
+  expect(code).toMatch(/^[23456789bcdfghjkmnpqrstvwxz]{6}$/);
+  expect(res.headers()["x-share-address"]).toBe(`/s/${code}`);
+  // Every design and size prints the same code.
+  for (const q of ["?format=chat", "?design=ink", "?design=board&format=chat", "?lines=1"]) {
+    expect((await request.get(`/p/${o.author}/${o.slug}/share-image${q}`)).headers()["x-share-address"], q).toBe(`/s/${code}`);
+  }
+
+  // A 302 that nothing may store, then the poem's own page; typed with a capital, too.
+  const redirect = await request.get(`/s/${code}`, { maxRedirects: 0 });
+  expect(redirect.status()).toBe(302);
+  expect(redirect.headers()["location"]).toMatch(new RegExp(`/p/${o.author}/${o.slug}$`));
+  expect(redirect.headers()["cache-control"]).toContain("no-store");
+  await page.goto(`/s/${code[0].toUpperCase()}${code.slice(1)}`);
+  await expect(page).toHaveURL(new RegExp(`/p/${o.author}/${o.slug}$`));
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+});
+
+test("short links that lead nowhere are the plain 404, a private poem's included, and its count stops", async ({ page, request }) => {
+  const id = unique();
+  await signUpAs(page, `gone-${id}@example.com`, `Gone Poet ${id}`);
+  const title = `Going ${id}`;
+  await publish(page, title, `soon private words ${id}`);
+  const o = await poemRow(title);
+  await request.get(`/p/${o.author}/${o.slug}/share-image`);
+  const { code } = (await sql(`SELECT code FROM short_links WHERE poem_id = '${o.id}'`)).rows[0] as { code: string };
+  await page.goto(`/s/${code}`);
+  await expect.poll(async () => (await sql(`SELECT visits FROM short_links WHERE poem_id = '${o.id}'`)).rows[0].visits).toBe(1);
+
+  // Made private through the editor.
+  await page.goto(`/admin/poems/${o.id}`);
+  await page.getByRole("switch", { name: "Password protected" }).click();
+  await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("now-private");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved and published")).toBeVisible();
+
+  const unknown = await request.get(`/s/zzzzzz`, { maxRedirects: 0 });
+  for (const path of [`/s/${code}`, "/s/zzzzzz", "/s/not-a-code", "/s/k3x9q0"]) {
+    const res = await request.get(path, { maxRedirects: 0 });
+    expect(res.status(), path).toBe(404);
+    expect(res.headers()["cache-control"], path).toContain("no-store");
+    const html = await res.text();
+    expect(html, path).toContain("Poem not found");
+    expect(html, path).not.toContain(`soon private words ${id}`);
+  }
+  // Same page as a code that never existed.
+  await page.goto(`/s/${code}`);
+  await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
+  expect(unknown.status()).toBe(404);
+  await sql("DELETE FROM rate_limits");
+  await page.goto(`/s/${code}`);
+  await page.waitForTimeout(500);
+  expect((await sql(`SELECT visits FROM short_links WHERE poem_id = '${o.id}'`)).rows[0].visits).toBe(1);
+});
+
+test("the writer sees visits on their dashboard row; a crawler, a prefetch or a HEAD don't count", async ({ page, request }) => {
+  const id = unique();
+  await signUpAs(page, `count-${id}@example.com`, `Count Poet ${id}`);
+  const title = `Counted ${id}`;
+  await publish(page, title, "count me");
+  const o = await poemRow(title);
+  await request.get(`/p/${o.author}/${o.slug}/share-image`);
+  const { code } = (await sql(`SELECT code FROM short_links WHERE poem_id = '${o.id}'`)).rows[0] as { code: string };
+  const visits = async () => (await sql(`SELECT visits FROM short_links WHERE poem_id = '${o.id}'`)).rows[0].visits as number;
+  const row = () => page.getByRole("row", { name: new RegExp(title) });
+
+  // Not people: WhatsApp drawing a preview, other crawlers, a prefetch, a HEAD.
+  for (const ua of ["WhatsApp/2.24.21.84 A", "facebookexternalhit/1.1", "TelegramBot (like TwitterBot)"]) {
+    expect((await request.get(`/s/${code}`, { maxRedirects: 0, headers: { "User-Agent": ua } })).status()).toBe(302);
+  }
+  expect((await request.get(`/s/${code}`, { maxRedirects: 0, headers: { "Sec-Purpose": "prefetch" } })).status()).toBe(302);
+  expect((await request.get(`/s/${code}`, { maxRedirects: 0, headers: { Purpose: "prefetch" } })).status()).toBe(302);
+  expect((await request.head(`/s/${code}`, { maxRedirects: 0 })).status()).toBe(302);
+  await page.waitForTimeout(500);
+  expect(await visits()).toBe(0);
+  await page.goto("/admin");
+  await expect(row()).toBeVisible();
+  await expect(row().locator("[data-share-visits]")).toHaveCount(0);
+
+  // A person following the link: counted (after the redirect), shown to the writer.
+  await page.goto(`/s/${code}`);
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  await expect.poll(visits).toBe(1);
+  // The same network again the same day: not counted twice.
+  await page.goto(`/s/${code}`);
+  await page.waitForTimeout(500);
+  expect(await visits()).toBe(1);
+  await page.goto("/admin");
+  await expect(row()).toContainText("1 visit from shared images");
+
+  // Readers never see it: not on the poem page, the board or the author page.
+  for (const path of [`/p/${o.author}/${o.slug}`, `/a/${o.author}`]) {
+    await page.goto(path);
+    await expect(page.getByRole("main")).not.toContainText("from shared images");
+  }
+});
+
+test("the design choice: preview and shared file follow it, both sizes and picked lines", async ({ page, context }) => {
+  await stubShare(context);
+  const id = unique();
+  const pen = `Designer ${id}`;
+  await signUpAs(page, `design-${id}@example.com`, pen);
+  const title = `Three looks ${id}`;
+  await publish(page, title, "Sɛ wo werɛ fi na wosankɔfa a,\nyɛnkyiri.\n\n*It is no taboo to go back*");
+  const o = await poemRow(title);
+
+  await page.goto(`/p/${o.author}/${o.slug}`);
+  await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+  await expect(sheet(page).getByRole("radio", { name: "Page" })).toBeChecked();
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1920]);
+  for (const name of ["Page", "Ink", "Board"]) {
+    const label = sheet(page).locator("label").filter({ has: page.getByRole("radio", { name }) });
+    expect((await label.boundingBox())!.height, name).toBeGreaterThanOrEqual(44);
+  }
+
+  const shareNow = async () => {
+    const before = (await shared(page)).length;
+    await expect(shareButton(page)).not.toHaveAttribute("aria-disabled");
+    await shareButton(page).click();
+    await expect.poll(async () => (await shared(page)).length).toBe(before + 1);
+    return (await shared(page)).at(-1)!;
+  };
+
+  // Ink, held back on the network: Share sends nothing until Ink's own file is here.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const inkWhole = (url: URL) => url.pathname.endsWith("/share-image") && url.searchParams.get("design") === "ink" && !url.searchParams.has("lines");
+  await page.route(inkWhole, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await choose(page, /^Ink$/);
+  await expect(shareButton(page)).toHaveAttribute("aria-disabled", "true");
+  await shareButton(page).click({ force: true });
+  await page.waitForTimeout(300);
+  expect((await shared(page)).length).toBe(0);
+  release();
+  let s = await shareNow();
+  await page.unroute(inkWhole);
+  expect([s.files[0].name, s.files[0].height, s.corners[0]]).toEqual([`inkboard-${o.slug}-ink.png`, 1920, INK]);
+
+  await choose(page, /^Board$/);
+  await choose(page, /^Chat/);
+  s = await shareNow();
+  expect([s.files[0].name, s.files[0].height, s.corners[0]]).toEqual([`inkboard-${o.slug}-chat-board.png`, 1350, CANVAS]);
+
+  await choose(page, /^Choose lines$/);
+  await sheet(page).getByRole("checkbox", { name: /^Line 1: / }).click();
+  await expect(preview(page)).toHaveAttribute("alt", /^Preview of the image: lines from/);
+  s = await shareNow();
+  expect([s.files[0].name, s.files[0].height, s.corners[0]]).toEqual([`inkboard-${o.slug}-chat-board-lines.png`, 1350, CANVAS]);
+
+  await choose(page, /^Page$/);
+  await choose(page, /^Status or Story/);
+  s = await shareNow();
+  expect([s.files[0].name, s.files[0].height, s.corners[0]]).toEqual([`inkboard-${o.slug}-lines.png`, 1920, PAPER]);
+  // The text never changes with the look.
+  expect(new Set((await shared(page)).map((x) => x.text))).toEqual(new Set([`“${title}” by ${pen}, on InkBoard: ${E2E_BASE_URL}/p/${o.author}/${o.slug}`]));
+  await noSidewaysScroll(page, "design choice");
 });

@@ -65,6 +65,6 @@ beforeEach(async () => {
   passkeyNotices.length = 0;
   deletionNotices.length = 0;
   await getDb().execute(
-    sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, push_subscriptions CASCADE`,
+    sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, retired_short_codes, push_subscriptions CASCADE`,
   );
 });

@@ -131,6 +131,26 @@ test("the share image is never stored by the worker (docs/PLAN.md, Phase 21)", a
   await expect(sheet.getByText("You're offline. Connect to the internet to make the image.")).toBeVisible();
 });
 
+test("a short link (/s/<code>) through the worker: online it lands on the poem; offline, the offline page", async ({ context, page }) => {
+  await withWorker(page);
+  // The poem's first picture makes its code; the picture says which address it printed.
+  const res = await page.request.get(`${url(F.read)}/share-image`);
+  const address = res.headers()["x-share-address"];
+  expect(address).toMatch(/^\/s\/[23456789bcdfghjkmnpqrstvwxz]{6}$/);
+  // Online: the worker passes the navigation through and the browser follows the 302.
+  await page.goto(address);
+  await expect(page).toHaveURL(new RegExp(`${url(F.read)}$`));
+  await expect(page.getByRole("heading", { level: 1, name: "Low Tide Inventory" })).toBeVisible();
+  // A code that doesn't exist: the real 404 page, through the worker too.
+  const missing = await page.goto("/s/zzzzzz");
+  expect(missing!.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "Poem not found" })).toBeVisible();
+  // Offline: the worker can't know where a code goes, so the offline page (which lists saved poems).
+  await context.setOffline(true);
+  await page.goto(address);
+  await offlinePage(page);
+});
+
 test("the board opens offline, as last seen", async ({ context, page }) => {
   await withWorker(page);
   await context.setOffline(true);

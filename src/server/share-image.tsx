@@ -15,7 +15,9 @@ import {
   type ShareImageInput,
   type ShareImageLayout,
 } from "@/lib/share-image/layout";
+import { SHARE_DESIGNS, type ShareDesign } from "@/lib/share-image/designs";
 import { encodeSelection, poemLines } from "@/lib/share-image/selection";
+import { shortPath } from "@/lib/share-image/short-code";
 import { poemPath } from "@/lib/share-image/share-text";
 import { siteUrl } from "@/lib/site";
 import { renderAvatarSvg } from "./avatar-svg";
@@ -94,12 +96,13 @@ export function shareImageInput(poem: SharePoem): ShareImageInput {
     penName: poem.penName,
     language: languageName(poem.language),
     host: siteUrl().host,
-    path: poemPath(poem.authorSlug, poem.slug),
+    // The short link once the poem has one (always, by the time the route draws it).
+    path: poem.shortCode ? shortPath(poem.shortCode) : poemPath(poem.authorSlug, poem.slug),
   };
 }
 
 /** What to draw: a format, and picked lines (validated by parseSelection) or the whole poem. */
-export type ShareImageRequest = { format: ShareFormat; picked?: readonly number[] };
+export type ShareImageRequest = { format: ShareFormat; design?: ShareDesign; picked?: readonly number[] };
 
 export async function shareImageLayout(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<ShareImageLayout> {
   const { measure } = await shareImageFonts();
@@ -110,11 +113,12 @@ export async function shareImageLayout(poem: SharePoem, request: ShareImageReque
  * Bumped by hand when the picture changes for the same inputs within one
  * build id (in practice never: every deploy has a new INKBOARD_BUILD_ID).
  */
-const RENDER_VERSION = 2;
+const RENDER_VERSION = 3;
 
 /**
  * The ETag: a hash of everything the picture is drawn from (the poem's
- * fields, the author's avatar, the address, the format, the pick) and the
+ * fields, the author's avatar, the address with its short code, the format,
+ * the design, the pick) and the
  * build. Rendering is deterministic, so the same inputs give the same bytes;
  * and the route can answer a revalidation with 304 without drawing anything,
  * which matters for picked lines, whose pictures aren't cached.
@@ -126,6 +130,7 @@ export function shareImageEtag(poem: SharePoem, request: ShareImageRequest): str
     shareImageInput(poem),
     avatarIdFor({ id: poem.editorId, avatar: poem.avatar }),
     request.format,
+    request.design ?? "page",
     request.picked ? encodeSelection(request.picked, poemLines(poem.body)) : null,
   ]);
   return `"${createHash("sha256").update(inputs).digest("base64url").slice(0, 32)}"`;
@@ -144,7 +149,7 @@ export async function renderShareImage(poem: SharePoem, request: ShareImageReque
   const layout = layoutShareImage(shareImageInput(poem), measure, request);
   const svg = renderAvatarSvg(avatarIdFor({ id: poem.editorId, avatar: poem.avatar }));
   const avatar = svg ? `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` : null;
-  const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} />, {
+  const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} design={request.design && request.design in SHARE_DESIGNS ? request.design : "page"} />, {
     width: layout.frame.width,
     height: layout.frame.height,
     fonts,

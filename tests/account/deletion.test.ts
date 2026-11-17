@@ -7,8 +7,10 @@ import {
   passkeys,
   poems,
   rateLimits,
+  retiredShortCodes,
   retiredSlugs,
   sessions,
+  shortLinks,
   signInDevices,
   pushDeliveries,
   pushFollows,
@@ -28,6 +30,7 @@ import { createCollection, setPoemCollection } from "@/server/collections";
 import { sha256 } from "@/server/crypto";
 import { loadAuthorFeed, loadSiteFeed } from "@/server/feeds";
 import { createPoem, updatePoem } from "@/server/poems";
+import { countShareVisit, ensureShortCode } from "@/server/short-links";
 import { rateLimit } from "@/server/rate-limit";
 import { searchBoard } from "@/server/search";
 import { sendWelcomeOnce } from "@/server/welcome";
@@ -86,7 +89,10 @@ async function populated(email: string, penName: string) {
   await rateLimit(`signin-alert:${ed.id}`, 5, 86400);
   await rateLimit(`export:${ed.id}`, 10, 3600);
   await rateLimit(`stepup:cooldown:${ed.sessionId}`, 1, 60);
-  return { ...ed, poemSlug: one.slug, collectionSlug: col.collection.slug };
+  // A short link with a visit counted (Phase 21 round 3): its row, and the counter naming the poem.
+  await ensureShortCode(one.id);
+  await countShareVisit(one.id, "198.51.100.7");
+  return { ...ed, poemId: one.id, poemSlug: one.slug, collectionSlug: col.collection.slug };
 }
 
 /** Foreign keys in the schema: (table, column) → referenced table. */
@@ -176,6 +182,7 @@ describe("deleting an account", () => {
         "push_follows",
         "recovery_codes",
         "sessions",
+        "short_links",
         "sign_in_devices",
         "sign_in_locations",
         "step_up_codes",
@@ -194,17 +201,25 @@ describe("deleting an account", () => {
   it("also removes what isn't linked by a foreign key: sign-in codes and rate-limit counters", async () => {
     const ada = await populated("ada@example.com", "Ada Verse");
     const eve = await populated("eve@example.com", "Eve Other");
-    const named = (ed: typeof ada) => [ed.id, ed.sessionId, sha256(ed.email)];
+    // The editor, a session, the email's hash, or one of their poems (share-visit counters, Phase 21 round 3).
+    const named = (ed: typeof ada) => [ed.id, ed.sessionId, sha256(ed.email), ed.poemId];
     const countKeys = async (ed: typeof ada) => {
       const all = await db.select({ key: rateLimits.key }).from(rateLimits);
       return all.filter((r) => named(ed).some((n) => r.key.includes(n))).length;
     };
-    expect(await countKeys(ada)).toBeGreaterThanOrEqual(4);
+    expect(await countKeys(ada)).toBeGreaterThanOrEqual(5);
+    const visitKey = `share:visit:${ada.poemId}:198.51.100.7`;
+    expect((await db.select().from(rateLimits).where(eq(rateLimits.key, visitKey))).length).toBe(1);
+    const [link] = await db.select().from(shortLinks).where(eq(shortLinks.poemId, ada.poemId));
     await remove(ada, "Ada Verse");
+    expect(await db.select().from(rateLimits).where(eq(rateLimits.key, visitKey))).toEqual([]);
+    // The short link and its count are gone; its code is retired, never given to another poem.
+    expect(await db.select().from(shortLinks).where(eq(shortLinks.poemId, ada.poemId))).toEqual([]);
+    expect((await db.select().from(retiredShortCodes)).map((r) => r.code)).toContain(link.code);
     expect(await db.select().from(emailOtps).where(eq(emailOtps.email, ada.email))).toEqual([]);
     expect(await countKeys(ada)).toBe(0);
     expect(await db.select().from(emailOtps).where(eq(emailOtps.email, eve.email))).toHaveLength(1);
-    expect(await countKeys(eve)).toBeGreaterThanOrEqual(4);
+    expect(await countKeys(eve)).toBeGreaterThanOrEqual(5);
   });
 
   it("needs a recent verification: email or passkey, not a recovery-code sign-in alone", async () => {

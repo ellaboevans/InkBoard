@@ -10,6 +10,7 @@ import { getRecoveryCodeStatus } from "@/server/auth/recovery-codes";
 import { getEditorStats } from "@/server/editor-stats";
 import { StatCards } from "@/components/admin/stat-cards";
 import { listEditorPoems } from "@/server/poems";
+import { shareVisitsForEditor } from "@/server/short-links";
 import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
 import { FirstPublishFlash } from "@/components/install/install-nudge";
@@ -33,7 +34,7 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const { editor, sessionId } = await requireOnboardedSession();
-  const [poems, stats, profile, recovery, offerPasskey, checklist, flash] = await Promise.all([
+  const [poems, stats, profile, recovery, offerPasskey, checklist, flash, visits] = await Promise.all([
     listEditorPoems(editor.id),
     getEditorStats(editor.id),
     getProfile(editor.id),
@@ -41,6 +42,7 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     shouldOfferPasskey(editor.id, sessionId),
     getWelcomeChecklist(editor.id),
     searchParams,
+    shareVisitsForEditor(editor.id),
   ]);
   const lowCodes = recovery.total > 0 && recovery.unused <= RECOVERY_CODES_LOW;
   const rows: DashboardPoem[] = poems.map((p) => ({
@@ -50,6 +52,8 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     status: p.status,
     visibility: p.visibility,
     updatedLabel: dateFormat.format(p.updatedAt),
+    // Visits through the short link printed on its pictures (Phase 21 round 3): the writer's eyes only.
+    shareVisits: visits.get(p.id) ?? 0,
   }));
   // Just published (from the editor, `?published=<id>`): only one of this editor's own rows.
   const justPublished = typeof flash.published === "string" ? rows.find((r) => r.id === flash.published) : undefined;

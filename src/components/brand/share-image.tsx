@@ -1,3 +1,4 @@
+import { CARD, CARD_BLEED, SHARE_DESIGNS, type ShareDesign, type ShareDesignStyle } from "@/lib/share-image/designs";
 import {
   ADDRESS,
   BYLINE,
@@ -6,25 +7,26 @@ import {
   LINES_FROM_TEXT,
   MORE_TEXT,
   OMISSION_TEXT,
+  contentHeight,
   type PoemRow,
   type ShareImageLayout,
 } from "@/lib/share-image/layout";
-import { BRAND } from "@/lib/site";
 import { LogoMark } from "./og-card";
 import { fontFamilyList as family, ogFontFamily } from "./og-type";
 
 /*
- * The "Share as image" picture (docs/PLAN.md, Phase 21): the "Page" design at
- * 1080×1920 or 1080×1350 (layout.frame), whole or as "Lines from", drawn by Satori (next/og) from a layout computed and measured in
- * src/lib/share-image/layout.ts. Every row is placed here with an explicit
- * height and `whiteSpace: "pre"`, so Satori never re-wraps anything and the
- * picture can't outgrow the safe area. Fonts: ogFontFamily (og-type.ts), so
- * Ghanaian letters and tone marks are set in Gentium Book Plus first.
+ * The "Share as image" picture (docs/PLAN.md, Phase 21): 1080×1920 or
+ * 1080×1350 (layout.frame), whole or as "Lines from", in the Page, Ink or Board
+ * design (src/lib/share-image/designs.ts), drawn by Satori (next/og) from a
+ * layout computed and measured in src/lib/share-image/layout.ts. Every row is
+ * placed here with an explicit height and `whiteSpace: "pre"`, so Satori never
+ * re-wraps anything and the picture can't outgrow the safe area. The designs
+ * change colours only (and Board's canvas and card behind the content), never
+ * where text goes. Fonts: ogFontFamily (og-type.ts), so Ghanaian letters and
+ * tone marks are set in Gentium Book Plus first.
  */
 
-const RULE = "#e4dbcd";
-
-function PoemRows({ layout }: { layout: ShareImageLayout }) {
+function PoemRows({ layout, look }: { layout: ShareImageLayout; look: ShareDesignStyle }) {
   const { poem } = layout;
   return (
     <div
@@ -34,23 +36,23 @@ function PoemRows({ layout }: { layout: ShareImageLayout }) {
         width: CONTENT_WIDTH,
         fontSize: poem.size,
         lineHeight: `${poem.rowHeight}px`,
-        color: BRAND.ink,
+        color: look.text,
         fontFamily: family(poem.extendedFirst, "text"),
       }}
     >
       {poem.rows.map((row, i) => (
-        <Row key={i} row={row} rowHeight={poem.rowHeight} gapHeight={poem.gapHeight} />
+        <Row key={i} row={row} rowHeight={poem.rowHeight} gapHeight={poem.gapHeight} muted={look.muted} />
       ))}
     </div>
   );
 }
 
-function Row({ row, rowHeight, gapHeight }: { row: PoemRow; rowHeight: number; gapHeight: number }) {
+function Row({ row, rowHeight, gapHeight, muted }: { row: PoemRow; rowHeight: number; gapHeight: number; muted: string }) {
   if (row.kind === "gap") return <div style={{ display: "flex", height: gapHeight }} />;
   if (row.kind === "omission") {
     // Where a quote skips lines: one stanza gap high, so the layout's sums hold.
     return (
-      <div style={{ display: "flex", alignItems: "center", height: gapHeight, lineHeight: `${gapHeight}px`, color: BRAND.muted, whiteSpace: "pre" }}>
+      <div style={{ display: "flex", alignItems: "center", height: gapHeight, lineHeight: `${gapHeight}px`, color: muted, whiteSpace: "pre" }}>
         {OMISSION_TEXT}
       </div>
     );
@@ -76,18 +78,78 @@ function Row({ row, rowHeight, gapHeight }: { row: PoemRow; rowHeight: number; g
   );
 }
 
-export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avatar: string | null }) {
+/**
+ * Board's paper card: the content area grown by CARD_BLEED, so every word sits
+ * where it does on Page. Its edge is a border and a hard offset shadow, drawn
+ * as a second rectangle (a blurred box-shadow is what made the prototype slow).
+ */
+function BoardCard({ layout, look }: { layout: ShareImageLayout; look: ShareDesignStyle }) {
+  // Satori places absolute children from the padding's inner edge, i.e. the content area.
+  const box = {
+    position: "absolute" as const,
+    left: -CARD_BLEED,
+    top: -CARD_BLEED,
+    width: CONTENT_WIDTH + 2 * CARD_BLEED,
+    height: contentHeight(layout.format) + 2 * CARD_BLEED,
+    borderRadius: CARD.radius,
+    display: "flex",
+  };
+  return (
+    <>
+      <div style={{ ...box, top: box.top + CARD.shadowOffset, background: look.card!.shadow }} />
+      <div style={{ ...box, background: look.surface, border: `${CARD.border}px solid ${look.card!.border}` }} />
+    </>
+  );
+}
+
+/**
+ * Board's dot grid as one small SVG: a pattern of solid circles. A CSS
+ * radial-gradient background (the prototype's) made resvg paint a gradient
+ * per dot, ten times slower than the whole Page picture.
+ */
+function DotGrid({ layout, dots }: { layout: ShareImageLayout; dots: NonNullable<ShareDesignStyle["dots"]> }) {
+  const { width, height } = layout.frame;
+  const half = dots.spacing / 2;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+    `<defs><pattern id="d" width="${dots.spacing}" height="${dots.spacing}" patternUnits="userSpaceOnUse">` +
+    `<circle cx="${half}" cy="${half}" r="${dots.radius}" fill="${dots.color}"/></pattern></defs>` +
+    `<rect width="100%" height="100%" fill="url(#d)"/></svg>`;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- Satori, not the DOM
+    <img
+      src={`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`}
+      width={width}
+      height={height}
+      // From the content area's corner back to the picture's (see BoardCard).
+      style={{ position: "absolute", left: -layout.frame.side, top: -layout.frame.safeTop }}
+      alt=""
+    />
+  );
+}
+
+export function ShareImage({
+  layout,
+  avatar,
+  design = "page",
+}: {
+  layout: ShareImageLayout;
+  avatar: string | null;
+  design?: ShareDesign;
+}) {
   const { title, byline, address, frame } = layout;
+  const look: ShareDesignStyle = SHARE_DESIGNS[design];
   return (
     <div
       style={{
+        position: "relative",
         width: frame.width,
         height: frame.height,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        background: BRAND.paper,
-        color: BRAND.ink,
+        backgroundColor: look.background,
+        color: look.text,
         fontFamily: ogFontFamily(""),
         paddingTop: frame.safeTop,
         paddingBottom: frame.safeBottom,
@@ -95,6 +157,8 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
         paddingRight: frame.side,
       }}
     >
+      {look.dots && <DotGrid layout={layout} dots={look.dots} />}
+      {look.card && <BoardCard layout={layout} look={look} />}
       {/* Title, rule and poem, centred in the space above the byline. */}
       <div
         style={{
@@ -113,7 +177,7 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
               marginBottom: GAPS.linesFromToTitle,
               fontSize: GAPS.linesFrom,
               lineHeight: `${GAPS.linesFrom * GAPS.linesFromLineHeight}px`,
-              color: BRAND.primary,
+              color: look.accent,
               fontStyle: "italic",
               fontFamily: ogFontFamily(LINES_FROM_TEXT),
               whiteSpace: "pre",
@@ -132,8 +196,8 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", width: 120, height: GAPS.rule, marginTop: GAPS.titleToRule, marginBottom: GAPS.ruleToPoem, background: BRAND.primary }} />
-        <PoemRows layout={layout} />
+        <div style={{ display: "flex", width: 120, height: GAPS.rule, marginTop: GAPS.titleToRule, marginBottom: GAPS.ruleToPoem, background: look.accent }} />
+        <PoemRows layout={layout} look={look} />
         {layout.poem.truncated && (
           <div
             style={{
@@ -141,7 +205,7 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
               marginTop: GAPS.poemToMore,
               height: GAPS.more * GAPS.moreLineHeight,
               fontSize: GAPS.more,
-              color: BRAND.primary,
+              color: look.accent,
               fontStyle: "italic",
               fontFamily: ogFontFamily(MORE_TEXT),
               whiteSpace: "pre",
@@ -152,7 +216,7 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
         )}
       </div>
 
-      {/* Byline, a hairline, then InkBoard's mark and the poem's address. */}
+      {/* Byline, a hairline, then InkBoard's mark and the poem's (short) address. */}
       <div style={{ display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", height: byline.height }}>
           {avatar && (
@@ -177,7 +241,7 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
                   display: "flex",
                   fontSize: BYLINE.language,
                   lineHeight: `${BYLINE.language * BYLINE.languageLineHeight}px`,
-                  color: BRAND.muted,
+                  color: look.muted,
                   fontFamily: ogFontFamily(byline.language),
                   whiteSpace: "pre",
                 }}
@@ -187,9 +251,9 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
             )}
           </div>
         </div>
-        <div style={{ display: "flex", height: GAPS.divider, background: RULE, marginTop: GAPS.footerGap, marginBottom: GAPS.footerGap }} />
+        <div style={{ display: "flex", height: GAPS.divider, background: look.divider, marginTop: GAPS.footerGap, marginBottom: GAPS.footerGap }} />
         <div style={{ display: "flex", alignItems: "center", height: address.height }}>
-          <LogoMark size={ADDRESS.logo} />
+          <LogoMark size={ADDRESS.logo} tile={look.logo.tile} glyph={look.logo.glyph} />
           <div style={{ display: "flex", flexDirection: "column", marginLeft: ADDRESS.gap }}>
             <div
               style={{
@@ -209,7 +273,7 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
                   display: "flex",
                   fontSize: ADDRESS.path,
                   lineHeight: `${ADDRESS.path * ADDRESS.pathLineHeight}px`,
-                  color: BRAND.muted,
+                  color: look.muted,
                   fontFamily: family(address.pathExtended),
                   whiteSpace: "pre",
                 }}

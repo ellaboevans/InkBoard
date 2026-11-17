@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { OgCard } from "@/components/brand/og-card";
 import { needsExtendedFont, ogFontFamily } from "@/components/brand/og-type";
 import { ShareImage } from "@/components/brand/share-image";
+import { SHARE_DESIGN_NAMES } from "@/lib/share-image/designs";
 import { IPA_GROUPS, LANGUAGE_SETS, TONE_MARKS } from "@/lib/letter-sets";
 import { readFontMetrics } from "@/lib/share-image/font-metrics";
 import { layoutShareImage } from "@/lib/share-image/layout";
@@ -120,6 +121,28 @@ describe("the share cards (every opengraph-image)", () => {
     expect(nodes.length).toBeGreaterThanOrEqual(5);
     for (const n of nodes) expect(first(n.family), n.text).toBe("Newsreader");
   });
+});
+
+describe("the share image, in every design (round 3)", () => {
+  const input = (title: string, body: string, penName: string) => ({ title, body, penName, language: "Ewe", host: "x.test", path: "/s/k3x9qm" });
+  for (const design of SHARE_DESIGN_NAMES) {
+    it(`${design}: Ghanaian text in Gentium first, English in Newsreader, whole and as picked lines`, async () => {
+      const { measure } = await shareImageFonts();
+      for (const picked of [undefined, [1, 2]]) {
+        const layout = layoutShareImage(input("Àtí ɖèká".normalize("NFC"), EWE, "Selorm Agbɔ"), measure, { format: "chat", picked });
+        const nodes = textNodes(ShareImage({ layout, avatar: null, design }));
+        const families = Object.fromEntries(nodes.map((n) => [n.text, first(n.family)]));
+        expect(families["Àtí ɖèká".normalize("NFC")]).toBe("Gentium Book Plus");
+        expect(families["Selorm Agbɔ"]).toBe("Gentium Book Plus");
+        expect(families["mètúnɛ́"]).toBe("Gentium Book Plus");
+        expect(families["InkBoard · x.test"]).toBe("Newsreader");
+        expect(families["/s/k3x9qm"]).toBe("Newsreader");
+        if (picked) expect(families["Lines from"]).toBe("Newsreader");
+        // Text that needs Gentium never gets Newsreader first (a block may choose Gentium for all its words).
+        for (const n of nodes) if (needsExtendedFont(n.text)) expect(first(n.family), n.text).toBe("Gentium Book Plus");
+      }
+    });
+  }
 });
 
 describe("the share image", () => {

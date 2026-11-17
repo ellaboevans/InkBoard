@@ -1,7 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
+import { env } from "@/env";
 import { isDocumentRequest, readerPathFromPathname } from "@/lib/reader-paths";
 import { SESSION_COOKIE } from "@/server/auth/cookie";
+import { clientIpFromForwardedFor, ipBucket } from "@/server/auth/ip";
 import { readerPathExists } from "@/server/board";
+import { handleShortLink, SHORT_LINK_CACHE_CONTROL } from "@/server/short-link-route";
+import { countShareVisit, resolveShortCode } from "@/server/short-links";
 
 /**
  * Two jobs, both before anything renders:
@@ -23,9 +27,62 @@ import { readerPathExists } from "@/server/board";
  *    prerendered shell resets the status to 200.) Soft navigations,
  *    prefetches and the board's poem overlay never match (see the matcher's
  *    `missing` and isDocumentRequest), so they don't wait on the query.
+ *
+ * 3. Short links (/s/<code>, docs/PLAN.md Phase 21 round 3): a published public
+ *    poem's code is a 302 (no-store) to its page; anything else is the same
+ *    rewrite to /missing/poem as a missing poem page, so a private poem's code
+ *    looks like one that never existed (src/server/short-link-route.ts). A
+ *    visit is counted after the response (event.waitUntil): the redirect
+ *    never waits on the count or fails because of it.
  */
-export async function proxy(request: NextRequest) {
+const SHORT_LINK = /^\/s\/([^/]+)\/?$/;
+const MISSING_CACHE_CONTROL = "private, no-cache, no-store, max-age=0, must-revalidate";
+
+function missing(request: NextRequest, kind: string) {
+  const res = NextResponse.rewrite(new URL(`/missing/${kind}`, request.url));
+  // The static 404 page says "cache for a year"; this address could have a
+  // page tomorrow (a new author, a published poem), so nothing may keep it.
+  res.headers.set("Cache-Control", MISSING_CACHE_CONTROL);
+  return res;
+}
+
+async function shortLink(request: NextRequest, event: NextFetchEvent, raw: string) {
+  let outcome;
+  try {
+    outcome = await handleShortLink(request, raw, resolveShortCode);
+  } catch (error) {
+    // Not "missing": the link may well exist. Ask again in a moment.
+    console.error("short link lookup failed", error);
+    return new NextResponse("InkBoard couldn't open this link just now. Try again in a moment.", {
+      status: 503,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": MISSING_CACHE_CONTROL, "Retry-After": "30" },
+    });
+  }
+  if (outcome.kind === "missing") return missing(request, "poem");
+  const res = NextResponse.redirect(new URL(outcome.location, request.url), 302);
+  res.headers.set("Cache-Control", SHORT_LINK_CACHE_CONTROL);
+  res.headers.set("X-Robots-Tag", "noindex");
+  if (outcome.count) {
+    const bucket = ipBucket(clientIpFromForwardedFor(request.headers.get("x-forwarded-for"), env().TRUSTED_PROXY_HOPS));
+    event.waitUntil(
+      countShareVisit(outcome.poemId, bucket).catch((error) => console.error("share visit not counted", error)),
+    );
+  }
+  return res;
+}
+
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
+  const short = SHORT_LINK.exec(pathname);
+  if (short) {
+    let raw: string;
+    try {
+      raw = decodeURIComponent(short[1]);
+    } catch {
+      return missing(request, "poem");
+    }
+    return shortLink(request, event, raw);
+  }
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (!request.cookies.has(SESSION_COOKIE)) {
       return NextResponse.redirect(new URL("/sign-in", request.url));
@@ -42,13 +99,7 @@ export async function proxy(request: NextRequest) {
       // Fail open: the page renders as before (its own not-found UI, if any).
       console.error("reader 404 check failed", error);
     }
-    if (!exists) {
-      const res = NextResponse.rewrite(new URL(`/missing/${target.kind}`, request.url));
-      // The static 404 page says "cache for a year"; this address could have a
-      // page tomorrow (a new author, a published poem), so nothing may keep it.
-      res.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");
-      return res;
-    }
+    if (!exists) return missing(request, target.kind);
   }
   return NextResponse.next();
 }
@@ -61,6 +112,8 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/admin",
+    // Short links: every request, even a prefetch (it must still not count).
+    "/s/:code",
     {
       source: "/a/:author",
       missing: [

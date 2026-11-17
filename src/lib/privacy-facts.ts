@@ -30,6 +30,8 @@ export const PRIVACY_FACTS = {
   unlockLife: "12 hours",
   /** CLEANUP_DAYS.rateLimitWindows (src/server/maintenance.ts) */
   rateLimitCleanup: "two days",
+  /** SHARE_VISIT_WINDOW_SECONDS (src/lib/share-image/visits.ts): one visit per network per poem in this long. */
+  shareVisitRepeat: "a day",
   /** CLEANUP_DAYS.pushDeliveries (src/server/maintenance.ts) */
   pushDeliveryCleanup: "two days",
   /** UNUSED_SUBSCRIPTION_DAYS (src/lib/push-rules.ts) */

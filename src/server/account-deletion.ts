@@ -19,10 +19,12 @@ import { sendAccountDeletedEmail } from "./email";
  *    and old links never point at someone else's poems.
  * 3. Deletes what isn't tied to the editor row by a foreign key: sign-in codes
  *    (email_otps, by address) and rate-limit counters that name the editor,
- *    one of their sessions, or their email's hash.
+ *    one of their sessions, their email's hash, or one of their poems.
  * 4. Deletes the editor row. Everything else goes by ON DELETE CASCADE:
  *    sessions (and with them step-up codes and their WebAuthn challenges),
- *    poems (and their revisions), collections, passkeys, recovery codes,
+ *    poems (and their revisions, and their short links with their visit
+ *    counts, whose codes a trigger retires so no other poem gets them),
+ *    collections, passkeys, recovery codes,
  *    WebAuthn challenges, known sign-in devices and networks.
  *    tests/account/deletion.test.ts walks every table that references
  *    editors (directly or through those) and checks nothing is left.
@@ -69,7 +71,9 @@ export async function deleteAccount(input: {
 
     // Not linked by foreign keys, so deleted by hand.
     await tx.delete(emailOtps).where(eq(emailOtps.email, editor.email));
-    const named = [editorId, ...ownSessions.map((s) => s.id), sha256(editor.email)];
+    // Counters naming the editor, a session, the email's hash, or one of their poems
+    // (share-visit and unlock counters, Phase 21 round 3).
+    const named = [editorId, ...ownSessions.map((s) => s.id), sha256(editor.email), ...ownPoems.map((p) => p.id)];
     await tx.delete(rateLimits).where(or(...named.map((id) => sql`${rateLimits.key} LIKE ${`%${id}%`}`)));
 
     // Everything else follows by ON DELETE CASCADE (see the header).

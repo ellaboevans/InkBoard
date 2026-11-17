@@ -13,7 +13,8 @@ import { languageName } from "./poem-languages";
  * read it.
  */
 
-export const EXPORT_FORMAT_VERSION = 1;
+/** 2: poems carry `shareVisits` (Phase 21 round 3). */
+export const EXPORT_FORMAT_VERSION = 2;
 
 export type ExportedPoem = {
   id: string;
@@ -28,6 +29,8 @@ export type ExportedPoem = {
   createdAt: string;
   updatedAt: string;
   collection: { id: string; title: string; position: number } | null;
+  /** Visits through the short link printed on its shared pictures (0 if never shared as a picture). */
+  shareVisits: number;
   /** Saved versions, oldest first (the newest matches the poem). */
   revisions: { savedAt: string; title: string; text: string; language: string | null }[];
 };

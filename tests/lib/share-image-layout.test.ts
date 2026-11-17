@@ -380,3 +380,28 @@ describe("picked lines: a quote", () => {
     expect(widest(l, measure)).toBeLessThanOrEqual(CONTENT_WIDTH);
   });
 });
+
+/* ---- Round 3: the short address ------------------------------------------------- */
+
+describe("the short address frees rows for the poem", () => {
+  const LONG_PATH = "/p/an-author-with-a-remarkably-long-pen-name-that-go/a-very-long-slug-that-the-editor-chose-for-this-poem-12";
+
+  it("/s/<code> is one row where the long path took three", () => {
+    expect(layoutShareImage(input({ path: LONG_PATH }), mono).address.pathRows).toHaveLength(3);
+    expect(layoutShareImage(input({ path: "/s/k3x9qm" }), mono).address.pathRows).toEqual(["/s/k3x9qm"]);
+  });
+
+  for (const format of ["story", "chat"] as const) {
+    it(`${format}: the poem gets the rows back (more of a long poem shown), and the picture still fits`, () => {
+      const body = stanzas(12);
+      const long = layoutShareImage(input({ body, path: LONG_PATH }), mono, { format });
+      const short = layoutShareImage(input({ body, path: "/s/k3x9qm" }), mono, { format });
+      expect(short.address.height).toBeLessThan(long.address.height);
+      const freed = long.address.height - short.address.height;
+      expect(freed).toBeCloseTo(2 * 34 * 1.3, 5); // two path rows of 34 px
+      expect(short.poem.shownLines).toBeGreaterThanOrEqual(long.poem.shownLines);
+      expect(short.poem.height).toBeGreaterThan(long.poem.height);
+      expect(short.height).toBeLessThanOrEqual(contentHeight(format));
+    });
+  }
+});

@@ -2,7 +2,7 @@ import "server-only";
 import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collections, editors, poems } from "@/db/schema";
+import { collections, editors, poems, shortLinks } from "@/db/schema";
 import type {
   AuthorCollection,
   AuthorPage,
@@ -218,6 +218,8 @@ export type SharePoem = {
   authorSlug: string;
   editorId: string;
   avatar: string | null;
+  /** Its short link's code (/s/<code>, Phase 21 round 3), or null until its first picture makes one. */
+  shortCode: string | null;
 };
 
 export async function loadSharePoem(authorSlug: string, poemSlug: string): Promise<SharePoem | null> {
@@ -232,9 +234,11 @@ export async function loadSharePoem(authorSlug: string, poemSlug: string): Promi
       authorSlug: editors.slug,
       editorId: editors.id,
       avatar: editors.avatar,
+      shortCode: shortLinks.code,
     })
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
+    .leftJoin(shortLinks, eq(shortLinks.poemId, poems.id))
     .where(
       and(
         eq(editors.slug, authorSlug),

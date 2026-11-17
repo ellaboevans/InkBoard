@@ -1,8 +1,8 @@
 import "server-only";
 import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collections, editors, poems } from "@/db/schema";
-import type { EditorExport } from "@/lib/export-format";
+import { collections, editors, poems, shortLinks } from "@/db/schema";
+import { EXPORT_FORMAT_VERSION, type EditorExport } from "@/lib/export-format";
 import { revisionsForExport } from "./poem-history";
 import { rateLimit } from "./rate-limit";
 
@@ -64,8 +64,11 @@ export async function loadEditorExport(
         updatedAt: poems.updatedAt,
         collectionId: poems.collectionId,
         collectionPosition: poems.collectionPosition,
+        // Visits through its short link (Phase 21 round 3): a number about the poem, nothing about visitors.
+        shareVisits: sql<number>`coalesce(${shortLinks.visits}, 0)`,
       })
       .from(poems)
+      .leftJoin(shortLinks, eq(shortLinks.poemId, poems.id))
       .where(eq(poems.editorId, editorId))
       .orderBy(asc(poems.createdAt), asc(poems.id)),
     db
@@ -87,7 +90,7 @@ export async function loadEditorExport(
   const titles = new Map(collectionRows.map((c) => [c.id, c.title]));
   return {
     format: "inkboard-export",
-    version: 1,
+    version: EXPORT_FORMAT_VERSION,
     exportedAt: now.toISOString(),
     site,
     profile: {
@@ -123,6 +126,7 @@ export async function loadEditorExport(
       publishedAt: iso(p.publishedAt),
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
+      shareVisits: Number(p.shareVisits),
       collection:
         p.collectionId && p.collectionPosition !== null
           ? { id: p.collectionId, title: titles.get(p.collectionId) ?? "", position: p.collectionPosition }

@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import type { ShareDesign } from "@/lib/share-image/designs";
 import type { ShareFormat } from "@/lib/share-image/layout";
 import { loadSharePoem, type SharePoem } from "./board";
 import { BOARD_TAG, poemTag } from "./cache-tags";
@@ -14,8 +15,9 @@ import { renderShareImage } from "./share-image";
  *
  * - getSharePoem: the public poem the route checks first (a private, draft or
  *   unknown poem is null, so its text never reaches this cache, N1).
- * - getShareImage: the whole poem's PNG, one entry per poem and format: one
- *   render per poem, format and change, not one per share.
+ * - getShareImage: the whole poem's PNG, one entry per poem, format, design and
+ *   short code: at most 2 × 3 = 6 per poem (only those someone opens), about
+ *   100–200 KB each, re-drawn once per change, not once per share.
  * - Picked lines are NOT cached here: a reader can pick any of thousands of
  *   combinations, and caching them would let anyone fill the cache. The route
  *   renders them on demand, behind a rate limit (round 2).
@@ -37,6 +39,8 @@ export async function getShareImage(
   authorSlug: string,
   poemSlug: string,
   format: ShareFormat,
+  design: ShareDesign,
+  shortCode: string,
 ): Promise<{ png: Uint8Array; etag: string } | null> {
   "use cache";
   cacheTag(BOARD_TAG);
@@ -44,6 +48,7 @@ export async function getShareImage(
   const poem = await getSharePoem(authorSlug, poemSlug);
   if (!poem) return null;
   cacheTag(poemTag(poem.id));
-  const { png, etag } = await renderShareImage(poem, { format });
+  // The route made the code before calling (this function can't write); it's part of the key.
+  const { png, etag } = await renderShareImage({ ...poem, shortCode }, { format, design });
   return { png, etag };
 }

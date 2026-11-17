@@ -12,7 +12,7 @@ export default async function globalSetup() {
   const pool = new pg.Pool({ connectionString: E2E_DATABASE_URL });
   await migrate(drizzle(pool), { migrationsFolder: "./drizzle" });
   await pool.query(
-    "TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, push_subscriptions CASCADE",
+    "TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, retired_short_codes, push_subscriptions CASCADE",
   );
   await pool.end();
   await mkdir(path.dirname(OTP_OUTBOX), { recursive: true });
@@ -64,6 +64,8 @@ async function warmUp() {
     ["/api/search?q=warm"],
     ["/p/warm-up/warm-up"],
     ["/p/warm-up/warm-up/share-image"],
+    ["/p/warm-up/warm-up/share-image/lines"],
+    ["/s/warmup"],
     ["/p/warm-up/warm-up", { RSC: "1", "Next-Url": "/" }],
   ];
   await Promise.all(

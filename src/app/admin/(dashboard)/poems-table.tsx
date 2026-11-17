@@ -39,6 +39,7 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
+import { pluralCount } from "@/lib/plural";
 import { poemPath } from "@/lib/share-image/share-text";
 import { ShareImageButton, ShareImageDialog } from "@/components/poem/share-image-button";
 import { deletePoemAction } from "./poems/actions";
@@ -52,6 +53,8 @@ export type DashboardPoem = {
   visibility: "public" | "private";
   /** Formatted on the server, so server and client render the same text. */
   updatedLabel: string;
+  /** Visits through the short link on its shared pictures (0 if none yet). Only ever shown here, to its writer. */
+  shareVisits: number;
 };
 
 /**
@@ -198,6 +201,7 @@ export function PoemsTable({
                           </div>
                         )}
                       </div>
+                      <ShareVisits poem={poem} />
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={poem.status} />
@@ -239,6 +243,7 @@ export function PoemsTable({
                     {poem.id === pinnedPoemId && <PinnedBadge />}
                   </div>
                   <p className="text-xs text-muted-foreground">Edited {poem.updatedLabel}</p>
+                  <ShareVisits poem={poem} />
                   {poem.id === justPublishedId && shareable(poem) && (
                     <div className="relative z-10 justify-self-start">
                       <ShareImageButton {...sheetProps(poem)} />
@@ -273,6 +278,16 @@ function JustPublishedBadge() {
       <CircleCheckIcon aria-hidden />
       Just published
     </Badge>
+  );
+}
+
+/** "12 visits from shared images": only when someone has come through the poem's short link. */
+function ShareVisits({ poem }: { poem: DashboardPoem }) {
+  if (poem.shareVisits <= 0) return null;
+  return (
+    <p className="mt-0.5 font-sans text-xs text-muted-foreground" data-share-visits={poem.shareVisits}>
+      {pluralCount(poem.shareVisits, "visit")} from shared images
+    </p>
   );
 }
 

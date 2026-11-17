@@ -14,20 +14,26 @@ export function shareImagePath(authorSlug: string, poemSlug: string): string {
   return `${poemPath(authorSlug, poemSlug)}/share-image`;
 }
 
-/** The file's name in the share sheet, the gallery or Downloads: inkboard-<slug>[-chat][-lines].png. */
-export function shareImageFileName(poemSlug: string, { format = "story", lines = false }: { format?: string; lines?: boolean } = {}): string {
+/** The file's name in the share sheet, the gallery or Downloads: inkboard-<slug>[-chat][-ink|-board][-lines].png (Page has no suffix). */
+export function shareImageFileName(
+  poemSlug: string,
+  { format = "story", design = "page", lines = false }: { format?: string; design?: string; lines?: boolean } = {},
+): string {
   const base = poemSlug.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "poem";
-  return `inkboard-${base}${format === "chat" ? "-chat" : ""}${lines ? "-lines" : ""}.png`;
+  const designPart = design === "ink" || design === "board" ? `-${design}` : "";
+  return `inkboard-${base}${format === "chat" ? "-chat" : ""}${designPart}${lines ? "-lines" : ""}.png`;
 }
 
 /**
- * The image route's query for a format and a pick (canonical, selection.ts):
- * "" for the whole poem on a Status, else e.g. "?format=chat&lines=3-6,9".
- * The 9:16 whole-poem image keeps Phase 21's bare address.
+ * The image route's query for a format, a design and a pick (canonical,
+ * selection.ts): "" for the whole poem on a Status in the Page design, else
+ * e.g. "?format=chat&design=ink&lines=3-6,9". The default picture keeps
+ * Phase 21's bare address.
  */
-export function shareImageQuery(format: string, selection: string | null): string {
+export function shareImageQuery(format: string, selection: string | null, design = "page"): string {
   const q = new URLSearchParams();
   if (format !== "story") q.set("format", format);
+  if (design !== "page") q.set("design", design);
   if (selection) q.set("lines", selection);
   const s = q.toString();
   return s ? `?${s}` : "";

@@ -1,13 +1,15 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { getDb } from "@/db";
-import { editors, poems, rateLimits } from "@/db/schema";
+import { editors, poems, rateLimits, shortLinks } from "@/db/schema";
 import { loadSharePoem, type SharePoem } from "@/server/board";
 import { rateLimit } from "@/server/rate-limit";
-import { renderShareImage, shareImageEtag } from "@/server/share-image";
+import { renderShareImage, shareImageEtag, shareImageLayout } from "@/server/share-image";
+import { ensureShortCode } from "@/server/short-links";
 import {
   handleShareImage,
   handleShareLines,
+  parseDesign,
   parseFormat,
   SHARE_RENDER_LIMIT,
   shareRenderKey,
@@ -41,19 +43,22 @@ function deps(over: Partial<ShareRouteDeps> = {}) {
   const renderPicked = vi.fn(renderShareImage);
   const parsed = vi.fn();
   const limitRender = vi.fn(() => rateLimit(shareRenderKey("test-bucket"), 2, 600));
+  const ensure = vi.fn(ensureShortCode);
+  const whole = vi.fn(async (a: string, s: string, format: "story" | "chat", design: "page" | "ink" | "board", shortCode: string) => {
+    const p = await loadSharePoem(a, s);
+    return p ? renderShareImage({ ...p, shortCode }, { format, design }) : null;
+  });
   const d: ShareRouteDeps = {
     getPoem,
-    getWholeImage: async (a, s, format) => {
-      const p = await loadSharePoem(a, s);
-      return p ? renderShareImage(p, { format }) : null;
-    },
+    getWholeImage: whole,
+    ensureShortCode: ensure,
     renderPicked,
     etagFor: shareImageEtag,
     limitRender,
     onParseSelection: parsed,
     ...over,
   };
-  return { d, getPoem, renderPicked, parsed, limitRender };
+  return { d, getPoem, renderPicked, parsed, limitRender, ensure, whole };
 }
 
 const get = (path: string, headers: Record<string, string> = {}) => new Request(`http://x.test${path}`, { headers });
@@ -86,6 +91,95 @@ describe("format", () => {
     const res = await handleShareImage(get("/p/ama/open/share-image?format=square"), { author: "ama", poem: "open" }, d);
     expect(res.status).toBe(404);
     expect(res.headers.get("cache-control")).toContain("no-store");
+  });
+});
+
+describe("design (round 3)", () => {
+  it("absent is Page; page, ink and board are known; anything else or twice is unknown", () => {
+    const q = (s: string) => new URLSearchParams(s);
+    expect(parseDesign(q(""))).toBe("page");
+    for (const d of ["page", "ink", "board"]) expect(parseDesign(q(`design=${d}`))).toBe(d);
+    for (const s of ["design=", "design=Ink", "design=dark", "design=ink&design=ink", "design=page&design=board"]) {
+      expect(parseDesign(q(s)), s).toBeNull();
+    }
+  });
+
+  it("an unknown design is a 404 before the poem is even looked up", async () => {
+    await fixtures();
+    const { d, getPoem, ensure } = deps();
+    for (const q of ["?design=dark", "?design=ink&design=board", "?format=chat&design=", "?design=board&format=square"]) {
+      const res = await handleShareImage(get(`/p/ama/open/share-image${q}`), { author: "ama", poem: "open" }, d);
+      expect(res.status, q).toBe(404);
+    }
+    expect(getPoem).not.toHaveBeenCalled();
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  it("each design and format is its own picture, file name and ETag; picked lines work in every design", async () => {
+    await fixtures();
+    const { d, whole } = deps({ limitRender: async () => ({ allowed: true, remaining: 9, retryAfter: 0 }) });
+    const tags = new Set<string>();
+    for (const design of ["page", "ink", "board"] as const) {
+      for (const format of ["story", "chat"] as const) {
+        const q = new URLSearchParams({ ...(format === "chat" ? { format } : {}), ...(design !== "page" ? { design } : {}) });
+        const res = await handleShareImage(get(`/p/ama/open/share-image?${q}`), { author: "ama", poem: "open" }, d);
+        expect(res.status).toBe(200);
+        expect(await pngSize(res)).toEqual([1080, format === "chat" ? 1350 : 1920]);
+        const suffix = `${format === "chat" ? "-chat" : ""}${design === "page" ? "" : `-${design}`}`;
+        expect(res.headers.get("content-disposition")).toBe(`inline; filename="inkboard-open${suffix}.png"`);
+        tags.add(res.headers.get("etag")!);
+        const picked = await handleShareImage(get(`/p/ama/open/share-image?${q}&lines=1-2`), { author: "ama", poem: "open" }, d);
+        expect(picked.status).toBe(200);
+        expect(picked.headers.get("content-disposition")).toBe(`inline; filename="inkboard-open${suffix}-lines.png"`);
+        tags.add(picked.headers.get("etag")!);
+      }
+    }
+    expect(tags.size).toBe(12);
+    expect(whole.mock.calls.map((c) => [c[2], c[3]])).toEqual([
+      ["story", "page"],
+      ["chat", "page"],
+      ["story", "ink"],
+      ["chat", "ink"],
+      ["story", "board"],
+      ["chat", "board"],
+    ]);
+  });
+});
+
+describe("the short link on the picture (round 3)", () => {
+  it("the first picture makes the poem's code; later ones reuse it; it's what gets printed", async () => {
+    await fixtures();
+    const { d, ensure, whole } = deps();
+    expect(await db.select().from(shortLinks)).toEqual([]);
+    const first = await handleShareImage(get("/p/ama/open/share-image"), { author: "ama", poem: "open" }, d);
+    const [link] = await db.select().from(shortLinks);
+    expect(first.headers.get("x-share-address")).toBe(`/s/${link.code}`);
+    expect(link.code).toMatch(/^[23456789bcdfghjkmnpqrstvwxz]{6}$/);
+    expect(whole.mock.calls[0][4]).toBe(link.code);
+    await handleShareImage(get("/p/ama/open/share-image?format=chat"), { author: "ama", poem: "open" }, d);
+    expect(await db.select().from(shortLinks)).toHaveLength(1);
+    expect(ensure).toHaveBeenCalledTimes(1); // the second request found the code on the poem
+    const p = (await loadSharePoem("ama", "open"))!;
+    expect(p.shortCode).toBe(link.code);
+    expect((await shareImageLayout(p)).address.pathRows).toEqual([`/s/${link.code}`]);
+  });
+
+  it("the ETag follows the code", async () => {
+    await fixtures();
+    const p = (await loadSharePoem("ama", "open"))!;
+    expect(shareImageEtag({ ...p, shortCode: "bbbbbb" }, { format: "story" })).not.toBe(shareImageEtag({ ...p, shortCode: "cccccc" }, { format: "story" }));
+  });
+
+  it("never made for a private poem or a draft, whatever is asked", async () => {
+    await fixtures();
+    const { d, ensure } = deps();
+    for (const slug of ["locked", "draft"]) {
+      for (const q of ["", "?design=ink", "?lines=1"]) {
+        expect((await handleShareImage(get(`/p/ama/${slug}/share-image${q}`), { author: "ama", poem: slug }, d)).status).toBe(404);
+      }
+    }
+    expect(ensure).not.toHaveBeenCalled();
+    expect(await db.select().from(shortLinks)).toEqual([]);
   });
 });
 
@@ -160,8 +254,8 @@ describe("picked lines", () => {
     expect(await pngSize(chat)).toEqual([1080, 1350]);
     expect(renderPicked).toHaveBeenCalledTimes(2);
     expect(renderPicked.mock.calls.map((c) => c[1])).toEqual([
-      { format: "story", picked: [2, 4] },
-      { format: "chat", picked: [1, 4] },
+      { format: "story", design: "page", picked: [2, 4] },
+      { format: "chat", design: "page", picked: [1, 4] },
     ]);
   });
 

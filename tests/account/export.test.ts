@@ -2,7 +2,8 @@ import { HtmlRenderer, Parser } from "commonmark";
 import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { editors, passkeys, poems, recoveryCodes, sessions } from "@/db/schema";
+import { editors, passkeys, poems, recoveryCodes, sessions, shortLinks } from "@/db/schema";
+import { countShareVisit, ensureShortCode } from "@/server/short-links";
 import {
   EXPORT_CONTENT_TYPES,
   exportFileName,
@@ -95,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 1, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 2, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -119,8 +120,32 @@ describe("what the export contains", () => {
     expect(draft).toMatchObject({ text: "half a line", publishedAt: null, collection: { title: "Coastline", position: 2 } });
     expect(ewe).toMatchObject({ language: "ee", collection: { id: a.collectionId, title: "Coastline", position: 1 } });
     expect(Object.keys(ewe).sort()).toEqual(
-      ["collection", "createdAt", "id", "language", "publishedAt", "revisions", "slug", "status", "text", "title", "updatedAt", "visibility"],
+      ["collection", "createdAt", "id", "language", "publishedAt", "revisions", "shareVisits", "slug", "status", "text", "title", "updatedAt", "visibility"],
     );
+    // Never shared as a picture yet: no visits (Phase 21 round 3).
+    expect(data.poems.map((p) => p.shareVisits)).toEqual([0, 0, 0]);
+  });
+
+  it("carries each poem's visits through its short link, and only the editor's own (version 2)", async () => {
+    const a = await ada();
+    const eve = await editor("eve@example.com", "Eve Other");
+    const [theirs] = await db.insert(poems).values({ editorId: eve.id, title: "EVE-TITLE", slug: "eve", body: "x", status: "published", publishedAt: new Date() }).returning();
+    await ensureShortCode(a.ewe);
+    await ensureShortCode(theirs.id);
+    await countShareVisit(a.ewe, "198.51.100.1");
+    await countShareVisit(a.ewe, "198.51.100.2");
+    for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
+    const data = await exportOf(a.ed.id);
+    expect(data.version).toBe(2);
+    expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
+      ["Ŋkɔ", 2],
+      ["Locked room", 0],
+      ["Unfinished", 0],
+    ]);
+    // Nothing about who visited, and not the short code (a public address, not something they wrote).
+    const json = exportToJson(data);
+    expect(json).not.toMatch(/198\.51\.100/);
+    expect(json).not.toContain((await db.select().from(shortLinks))[0].code);
   });
 
   it("includes each poem's saved versions, oldest first, the newest matching the poem", async () => {
@@ -196,7 +221,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 1,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 2,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });

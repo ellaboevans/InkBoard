@@ -9,7 +9,7 @@
  * outgrow the safe area: its height is the sum of heights computed below.
  *
  * THE FITTING RULE (poem lines):
- *   1. The whole poem at the largest size in POEM_SIZES (72 → 48 px) that
+ *   1. The whole poem at the largest size in POEM_SIZES (84 → 48 px) that
  *      fits, among the sizes that wrap as few of the poet's lines as the
  *      smallest size would. A poem's line breaks are the poet's, so the type
  *      shrinks before a line wraps; a line too long even at 48 px wraps, with
@@ -40,11 +40,11 @@ export const CONTENT_WIDTH = SHARE_FRAME.width - 2 * SHARE_FRAME.side; // 888
 export const CONTENT_HEIGHT = SHARE_FRAME.height - SHARE_FRAME.safeTop - SHARE_FRAME.safeBottom; // 1260
 
 /**
- * Poem sizes, largest first: 72 px is about 24–27 CSS px when the image fills
- * a phone's width (360–400 px). 48 px is the floor: 16 CSS px on a 360 px
+ * Poem sizes, largest first: 84 px is about 28–31 CSS px when the image fills
+ * a phone's width (360–400 px), so a short poem reads large on a Status. 48 px is the floor: 16 CSS px on a 360 px
  * phone (common in Ghana), the size of comfortable body text.
  */
-export const POEM_SIZES = [72, 68, 64, 60, 56, 52, 48] as const;
+export const POEM_SIZES = [84, 78, 72, 68, 64, 60, 56, 52, 48] as const;
 export const POEM_MIN_SIZE = POEM_SIZES[POEM_SIZES.length - 1];
 export const POEM_LINE_HEIGHT = 1.4;
 /** A blank line (stanza break) is this many rows high. */

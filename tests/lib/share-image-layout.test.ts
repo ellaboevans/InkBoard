@@ -63,10 +63,12 @@ const stanzas = (count: number, chars = 20) =>
 
 describe("size: as large as it can be", () => {
   it("a short poem gets the largest size, whole", () => {
-    const l = layoutShareImage(input({ body: "the dry wind\nwrites on every window\nin a dust" }), mono);
+    // 20 letters at most: one row even at 84 px (20 × 42 = 840 ≤ 888).
+    const l = layoutShareImage(input({ body: "the dry wind\nwrites on every pane\nin a dust" }), mono);
     expect(l.poem.size).toBe(POEM_SIZES[0]);
+    expect(POEM_SIZES[0]).toBe(84);
     expect(l.poem.truncated).toBe(false);
-    expect(text(l.poem.rows)).toEqual(["the dry wind", "writes on every window", "in a dust"]);
+    expect(text(l.poem.rows)).toEqual(["the dry wind", "writes on every pane", "in a dust"]);
   });
 
   it("a longer poem steps down, but stays whole while it fits at the minimum", () => {
@@ -100,11 +102,11 @@ describe("size: as large as it can be", () => {
   });
 
   it("a turnover doesn't hold a lone word when the row above can spare one", () => {
-    // Too long for one row at any size, so 72 px (36 px a letter): 5 words, then 4 on the
-    // turnover (it starts 1 em in), which would leave "jjjj" alone on a third row.
-    const l = layoutShareImage(input({ body: "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj" }), mono);
-    expect(l.poem.size).toBe(72);
-    expect(text(l.poem.rows)).toEqual(["aaaa bbbb cccc dddd eeee", "ffff gggg hhhh", "iiii jjjj"]);
+    // Too long for one row at any size, so 84 px (42 px a letter): 4 words, then 4 on the
+    // turnover (it starts 1 em in), which would leave "iiii" alone on a third row.
+    const l = layoutShareImage(input({ body: "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii" }), mono);
+    expect(l.poem.size).toBe(84);
+    expect(text(l.poem.rows)).toEqual(["aaaa bbbb cccc dddd", "eeee ffff gggg", "hhhh iiii"]);
   });
 
   it("a word longer than a row is broken between letters, never past the edge", () => {
@@ -243,7 +245,12 @@ describe("with the real fonts", () => {
       expect(l.height).toBeLessThanOrEqual(CONTENT_HEIGHT);
       expect(widest(l, measure)).toBeLessThanOrEqual(CONTENT_WIDTH);
       expect(l.poem.size).toBeGreaterThanOrEqual(POEM_MIN_SIZE);
-      if (name !== "long") expect(l.poem.size).toBe(POEM_SIZES[0]);
+      // Short poems: whole, with every one of the poet's lines on one row
+      // (the largest size that allows it; the type shrinks before a line wraps).
+      if (name !== "long") {
+        expect(l.poem.truncated).toBe(false);
+        expect(l.poem.wrappedLines).toBe(0);
+      }
       expect(l.poem.extendedFirst).toBe(name !== "long");
     });
   }

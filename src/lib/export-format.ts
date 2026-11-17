@@ -1,5 +1,6 @@
 import { parsePoemLine, type PoemNode } from "./poem-markdown";
 import { languageName } from "./poem-languages";
+import { parseProse } from "./prose";
 
 /*
  * The two download formats (docs/PLAN.md, Phase 17). Pure, so they're unit-
@@ -16,8 +17,9 @@ import { languageName } from "./poem-languages";
 /**
  * 2: poems carry `shareVisits` (Phase 21 round 3).
  * 3: `profile.photo`, the profile photo itself (Phase 22).
+ * 4: `novels`, each with its chapters in order and their versions (Phase 23).
  */
-export const EXPORT_FORMAT_VERSION = 3;
+export const EXPORT_FORMAT_VERSION = 4;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -43,6 +45,37 @@ export type ExportedPoem = {
   shareVisits: number;
   /** Saved versions, oldest first (the newest matches the poem). */
   revisions: { savedAt: string; title: string; text: string; language: string | null }[];
+};
+
+export type ExportedChapter = {
+  id: string;
+  /** May be empty: readers see "Chapter n". */
+  title: string;
+  slug: string;
+  /** 1..n over all the novel's chapters, drafts included. */
+  position: number;
+  status: "draft" | "published";
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  wordCount: number;
+  /** As written: prose (paragraphs, kept line breaks, `* * *` scene breaks, light Markdown). */
+  text: string;
+  /** Saved versions, oldest first (the newest matches the chapter). */
+  revisions: { savedAt: string; title: string; text: string }[];
+};
+
+export type ExportedNovel = {
+  id: string;
+  title: string;
+  slug: string;
+  blurb: string | null;
+  language: string | null;
+  status: "ongoing" | "complete";
+  createdAt: string;
+  updatedAt: string;
+  /** In reading order, drafts included. */
+  chapters: ExportedChapter[];
 };
 
 export type EditorExport = {
@@ -74,6 +107,8 @@ export type EditorExport = {
   }[];
   /** Oldest first: drafts and private poems included, with their text. */
   poems: ExportedPoem[];
+  /** Oldest first, every chapter with its text (Phase 23). */
+  novels: ExportedNovel[];
 };
 
 export type ExportFormat = "markdown" | "json";
@@ -178,6 +213,23 @@ export function plainTextToMarkdown(text: string): string {
   return poemTextToMarkdown(text.replace(/\*/g, "\\*"));
 }
 
+/**
+ * Chapter prose (src/lib/prose.ts) as Markdown that renders the way readers
+ * see it: paragraphs separated by a blank line, kept line breaks as hard
+ * breaks (two spaces), leading spaces dropped (as the reader drops them),
+ * scene breaks as `* * *` (a thematic break), the light Markdown written back
+ * and everything else escaped exactly as for poems. Words are unchanged.
+ */
+export function proseToMarkdown(text: string): string {
+  return parseProse(text)
+    .map((block) =>
+      block.kind === "break"
+        ? "* * *"
+        : block.lines.map((line) => escapeBlockStart(nodesToMarkdown(line))).join("  \n"),
+    )
+    .join("\n\n");
+}
+
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
 const count = (n: number, one: string, other = `${one}s`) => `${n} ${n === 1 ? one : other}`;
 
@@ -191,6 +243,32 @@ function poemSection(p: ExportedPoem): string {
     `- Created ${day(p.createdAt)} · last edited ${day(p.updatedAt)}`,
   ];
   return [`### ${p.title}`, "", ...meta, "", poemTextToMarkdown(p.text), ""].join("\n");
+}
+
+function novelSection(n: ExportedNovel): string {
+  const language = n.language ? `${languageName(n.language) ?? n.language} (${n.language})` : "Not set";
+  const published = n.chapters.filter((c) => c.status === "published").length;
+  const out = [
+    `## ${n.title}`,
+    "",
+    `- Novel, ${n.status === "complete" ? "complete" : "ongoing"}: ${count(n.chapters.length, "chapter")} (${published} published)`,
+    `- Language: ${language}`,
+    `- Created ${day(n.createdAt)} · last edited ${day(n.updatedAt)}`,
+    "",
+  ];
+  if (n.blurb) out.push(plainTextToMarkdown(n.blurb), "");
+  if (n.chapters.length === 0) out.push("*No chapters yet.*", "");
+  for (const c of n.chapters) {
+    const status = c.status === "published" ? `Published ${day(c.publishedAt) ?? ""}`.trim() : "Draft";
+    out.push(
+      `### Chapter ${c.position}${c.title ? ` · ${c.title}` : ""}`,
+      "",
+      `- ${status} · ${count(c.wordCount, "word")}`,
+      "",
+      ...(c.text ? [proseToMarkdown(c.text), ""] : ["*Empty draft.*", ""]),
+    );
+  }
+  return out.join("\n");
 }
 
 /**
@@ -209,7 +287,7 @@ export function exportToMarkdown(data: EditorExport): string {
   if (profile.photo) out.push("Your profile photo is in the JSON download (profile.photo).", "");
   out.push(
     `Author page: ${new URL(`/a/${profile.slug}`, data.site).href}`,
-    `Exported from InkBoard on ${day(data.exportedAt)}: ${count(data.poems.length, "poem")} (${count(drafts, "draft")}, ${count(privates, "private poem")}), ${count(data.collections.length, "collection")}.`,
+    `Exported from InkBoard on ${day(data.exportedAt)}: ${count(data.poems.length, "poem")} (${count(drafts, "draft")}, ${count(privates, "private poem")}), ${count(data.collections.length, "collection")}${data.novels.length ? `, ${count(data.novels.length, "novel")}` : ""}.`,
     "",
   );
 
@@ -229,6 +307,8 @@ export function exportToMarkdown(data: EditorExport): string {
     for (const p of loose) out.push(poemSection(p));
   }
   if (data.poems.length === 0) out.push("---", "", "*No poems yet.*", "");
+  // Novels after the poems, each with its chapters in order (Phase 23).
+  for (const n of data.novels) out.push("---", "", novelSection(n));
   // Poem text went through poemTextToMarkdown: its lines, blank lines and indents are all kept.
   return out.join("\n").normalize("NFC");
 }

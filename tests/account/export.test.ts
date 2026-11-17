@@ -96,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 3, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 4, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -137,7 +137,7 @@ describe("what the export contains", () => {
     await countShareVisit(a.ewe, "198.51.100.2");
     for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(3);
+    expect(data.version).toBe(4);
     expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
       ["Ŋkɔ", 2],
       ["Locked room", 0],
@@ -222,7 +222,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 3,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 4,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });
@@ -343,5 +343,67 @@ describe("the profile photo in the export (Phase 22)", () => {
       expect(key).not.toMatch(/password|hash|session|token|passkey|recovery|email|counter|^ip$|userAgent|signIn/i);
     }
     expect(exportToMarkdown(data)).toContain("Your profile photo is in the JSON download (profile.photo).");
+  });
+});
+
+describe("novels in the export (Phase 23)", () => {
+  it("JSON carries every novel with its chapters in order (drafts too), their text exactly as stored and their versions", async () => {
+    const { createChapter, createNovel, saveChapter, moveChapter } = await import("@/server/novels");
+    const a = await ada();
+    const other = await editor("eve@example.com", "Eve Other");
+    const theirs = await createNovel(other.id, { title: "EVE-NOVEL" });
+    if (!theirs.ok) throw new Error();
+    await createChapter(other.id, theirs.novel.id, { title: "EVE-CHAPTER", body: "EVE-TEXT" });
+
+    const book = await createNovel(a.ed.id, { title: "Ɔdɔ ne Asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing" });
+    if (!book.ok) throw new Error();
+    const prose = `Akua waited.\nThe lake was high.\n\n* * *\n\n*Asuo yi*, ${GHANAIAN}`;
+    const one = await createChapter(a.ed.id, book.novel.id, { title: "Thursday", body: "first", status: "published" });
+    const two = await createChapter(a.ed.id, book.novel.id, { title: "", body: "" });
+    if (!one.ok || !two.ok) throw new Error();
+    await saveChapter(a.ed.id, one.chapter.id, { title: "Thursday", body: prose });
+    await moveChapter(a.ed.id, book.novel.id, two.chapter.id, "first");
+
+    const data = await exportOf(a.ed.id);
+    expect(data.version).toBe(4);
+    expect(data.novels).toHaveLength(1);
+    const [n] = data.novels;
+    expect(n).toMatchObject({ title: "Ɔdɔ ne Asuo", slug: "odo-ne-asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing" });
+    expect(n.chapters.map((c) => [c.position, c.title, c.status])).toEqual([
+      [1, "", "draft"],
+      [2, "Thursday", "published"],
+    ]);
+    expect(n.chapters[1].text).toBe(prose);
+    expect(n.chapters[1].revisions.map((r) => r.text)).toEqual(["first", prose]);
+    expect(n.chapters[1].publishedAt).toMatch(/^\d{4}-\d\d-\d\dT/);
+    expect(JSON.stringify(data)).not.toContain("EVE-");
+    // JSON round-trip keeps the text exactly.
+    expect(JSON.parse(exportToJson(data)).novels[0].chapters[1].text).toBe(prose);
+  });
+
+  it("Markdown: a section per novel after the poems, chapters in order, prose rendered as readers see it", async () => {
+    const { createChapter, createNovel } = await import("@/server/novels");
+    const a = await ada();
+    const book = await createNovel(a.ed.id, { title: "The Ferry", blurb: "Every *Thursday*." });
+    if (!book.ok) throw new Error();
+    await createChapter(a.ed.id, book.novel.id, { title: "Thursday", body: "Akua waited.\nThe lake was high.\n\n* * *\n\n# not a heading", status: "published" });
+    await createChapter(a.ed.id, book.novel.id, { title: "", body: "" });
+    const md = exportToMarkdown(await exportOf(a.ed.id));
+    expect(md).toContain(", 1 novel.");
+    const start = md.indexOf("## The Ferry");
+    expect(start).toBeGreaterThan(md.indexOf("Locked room")); // after the poems
+    const section = md.slice(start);
+    expect(section).toContain("Every \\*Thursday\\*."); // the blurb is plain text
+    expect(section.indexOf("### Chapter 1 · Thursday")).toBeLessThan(section.indexOf("### Chapter 2"));
+    expect(section).toContain("*Empty draft.*");
+    const html = new HtmlRenderer().render(new Parser().parse(section));
+    expect(html).toContain("<p>Akua waited.<br />\nThe lake was high.</p>\n<hr />\n<p># not a heading</p>");
+  });
+
+  it("an editor without novels gets an empty array, and Markdown says nothing about novels", async () => {
+    const a = await ada();
+    const data = await exportOf(a.ed.id);
+    expect(data.novels).toEqual([]);
+    expect(exportToMarkdown(data)).not.toMatch(/novel/i);
   });
 });

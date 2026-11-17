@@ -1,9 +1,11 @@
 import "server-only";
-import { and, desc, eq, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { poemRevisions, poems } from "@/db/schema";
 import type { PoemLanguage } from "@/lib/poem-languages";
+import type { Tx } from "./positions";
+import { recordVersion, type RevisionSpec } from "./revisions";
 
 /*
  * Revision history (docs/PLAN.md, Phase 13). Editor-only, like poems.ts:
@@ -25,10 +27,11 @@ const idSchema = z.uuid();
 
 export type PoemContent = { title: string; body: string; language: string | null };
 
-type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
-
 export const sameContent = (a: PoemContent, b: PoemContent) =>
   a.title === b.title && a.body === b.body && (a.language ?? null) === (b.language ?? null);
+
+/** Where poem versions live (src/server/revisions.ts, shared with chapters). */
+const REVISIONS = { table: poemRevisions, id: poemRevisions.id, owner: poemRevisions.poemId, savedAt: poemRevisions.savedAt } satisfies RevisionSpec;
 
 /**
  * Record `content` as the newest version and prune to REVISIONS_KEPT.
@@ -42,33 +45,15 @@ export async function recordRevision(
   content: PoemContent,
   previous?: PoemContent & { savedAt: Date },
 ) {
-  if (previous) {
-    const [any] = await tx
-      .select({ id: poemRevisions.id })
-      .from(poemRevisions)
-      .where(eq(poemRevisions.poemId, poemId))
-      .limit(1);
-    if (!any) {
-      await tx.insert(poemRevisions).values({
-        poemId,
-        title: previous.title,
-        body: previous.body,
-        language: previous.language,
-        savedAt: previous.savedAt,
-      });
-    }
-  }
-  await tx.insert(poemRevisions).values({ poemId, ...content });
-
-  const keep = tx
-    .select({ id: poemRevisions.id })
-    .from(poemRevisions)
-    .where(eq(poemRevisions.poemId, poemId))
-    .orderBy(desc(poemRevisions.savedAt), desc(poemRevisions.id))
-    .limit(REVISIONS_KEPT);
-  await tx
-    .delete(poemRevisions)
-    .where(and(eq(poemRevisions.poemId, poemId), notInArray(poemRevisions.id, keep)));
+  const row = (c: PoemContent) => ({ poemId, title: c.title, body: c.body, language: c.language });
+  await recordVersion(
+    tx,
+    REVISIONS,
+    poemId,
+    row(content),
+    REVISIONS_KEPT,
+    previous && { ...row(previous), savedAt: previous.savedAt },
+  );
 }
 
 export type PoemRevisionSummary = {

@@ -5,6 +5,7 @@ import { collections, editors, poems, shortLinks } from "@/db/schema";
 import { EXPORT_FORMAT_VERSION, type EditorExport } from "@/lib/export-format";
 import { PHOTO_JPEG_SIZE } from "@/lib/photo-limits";
 import { readPhotoJpeg } from "./profile-photos";
+import { novelsForExport } from "./novels";
 import { revisionsForExport } from "./poem-history";
 import { rateLimit } from "./rate-limit";
 
@@ -52,7 +53,7 @@ export async function loadEditorExport(
     .where(eq(editors.id, editorId));
   if (!profile?.penName || !profile.slug) return null;
 
-  const [poemRows, collectionRows, revisions, photoJpeg] = await Promise.all([
+  const [poemRows, collectionRows, revisions, photoJpeg, novelRows] = await Promise.all([
     db
       .select({
         id: poems.id,
@@ -90,6 +91,8 @@ export async function loadEditorExport(
     revisionsForExport(editorId),
     // The photo's own JPEG copy (Phase 22). Unreadable storage leaves it out rather than failing the download.
     profile.photoKey ? readPhotoJpeg(profile.photoKey) : Promise.resolve(null),
+    // Novels with every chapter and version (Phase 23); scoped in novels.ts like every read there.
+    novelsForExport(editorId),
   ]);
 
   const titles = new Map(collectionRows.map((c) => [c.id, c.title]));
@@ -142,6 +145,29 @@ export async function loadEditorExport(
       revisions: revisions
         .filter((r) => r.poemId === p.id)
         .map((r) => ({ savedAt: r.savedAt.toISOString(), title: r.title, text: r.body, language: r.language })),
+    })),
+    novels: novelRows.map((n) => ({
+      id: n.id,
+      title: n.title,
+      slug: n.slug,
+      blurb: n.blurb,
+      language: n.language,
+      status: n.status,
+      createdAt: n.createdAt.toISOString(),
+      updatedAt: n.updatedAt.toISOString(),
+      chapters: n.chapters.map((c) => ({
+        id: c.id,
+        title: c.title,
+        slug: c.slug,
+        position: c.position,
+        status: c.status,
+        publishedAt: iso(c.publishedAt),
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+        wordCount: c.wordCount,
+        text: c.body,
+        revisions: c.revisions.map((r) => ({ savedAt: r.savedAt.toISOString(), title: r.title, text: r.body })),
+      })),
     })),
   };
 }

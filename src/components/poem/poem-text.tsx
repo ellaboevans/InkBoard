@@ -18,7 +18,8 @@ export function PoemText({ text, truncated = false }: { text: string; truncated?
   ));
 }
 
-function Nodes({ nodes }: { nodes: PoemNode[] }) {
+/** Inline emphasis nodes (light Markdown), also used for chapter prose (src/components/novel/prose-text.tsx). */
+export function Nodes({ nodes }: { nodes: PoemNode[] }) {
   return nodes.map((n, i) => {
     if (typeof n === "string") return <Fragment key={i}>{n}</Fragment>;
     const Tag = n.kind === "strong" ? "strong" : "em";

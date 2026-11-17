@@ -30,6 +30,7 @@ import { createCollection, setPoemCollection } from "@/server/collections";
 import { sha256 } from "@/server/crypto";
 import { loadAuthorFeed, loadSiteFeed } from "@/server/feeds";
 import { createPoem, updatePoem } from "@/server/poems";
+import { createChapter, createNovel, saveChapter } from "@/server/novels";
 import { countShareVisit, ensureShortCode } from "@/server/short-links";
 import { rateLimit } from "@/server/rate-limit";
 import { searchBoard } from "@/server/search";
@@ -92,6 +93,12 @@ async function populated(email: string, penName: string) {
   // A short link with a visit counted (Phase 21 round 3): its row, and the counter naming the poem.
   await ensureShortCode(one.id);
   await countShareVisit(one.id, "198.51.100.7");
+  // A novel with a published chapter that has two saved versions (Phase 23).
+  const book = await createNovel(ed.id, { title: `${penName} Saga`, blurb: "A long story." });
+  if (!book.ok) throw new Error(JSON.stringify(book));
+  const ch = await createChapter(ed.id, book.novel.id, { title: "One", body: "It began.", status: "published" });
+  if (!ch.ok) throw new Error(JSON.stringify(ch));
+  await saveChapter(ed.id, ch.chapter.id, { title: "One", body: "It began, again." });
   return { ...ed, poemId: one.id, poemSlug: one.slug, collectionSlug: col.collection.slug };
 }
 
@@ -180,6 +187,9 @@ describe("deleting an account", () => {
         "poems",
         "push_deliveries",
         "push_follows",
+        "novels",
+        "chapters",
+        "chapter_revisions",
         "recovery_codes",
         "sessions",
         "short_links",

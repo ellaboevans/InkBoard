@@ -11,6 +11,7 @@ import {
 } from "@/lib/collection-limits";
 import { toNfc } from "@/lib/letters";
 import { firstFreeSlug, slugify } from "@/lib/slug";
+import { compact, endPosition, moveItem, orderOf as positionsOrder, reorderItems, type PositionSpec, type Tx } from "./positions";
 
 /*
  * Collections (docs/PLAN.md, Phase 14): an editor's named, ordered groups of
@@ -36,7 +37,7 @@ export { COLLECTION_INTRO_MAX, COLLECTION_POEMS_MAX, COLLECTION_TITLE_MAX, COLLE
 const idSchema = z.uuid();
 const isId = (id: unknown): id is string => idSchema.safeParse(id).success;
 
-export type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+export type { Tx };
 
 const inputSchema = z.object({
   title: z
@@ -94,43 +95,19 @@ export async function lockCollections(tx: Tx, editorId: string, ids: (string | n
   return new Set(rows.map((r) => r.id));
 }
 
-/** The collection's poem ids in order. */
-async function orderOf(tx: Tx, collectionId: string) {
-  const rows = await tx
-    .select({ id: poems.id })
-    .from(poems)
-    .where(eq(poems.collectionId, collectionId))
-    .orderBy(asc(poems.collectionPosition), asc(poems.id))
-    .for("update");
-  return rows.map((r) => r.id);
-}
+/** Where a collection's poems keep their order (src/server/positions.ts, shared with novels). */
+const POSITIONS = { table: poems, id: poems.id, group: poems.collectionId, position: poems.collectionPosition } satisfies PositionSpec;
 
-/**
- * Write positions 1..n for `ids`. Two steps, so the unique (collection,
- * position) index never sees two poems at one position mid-update: first move
- * everyone to a negative position, then to their final one.
- */
-async function applyOrder(tx: Tx, collectionId: string, ids: string[]) {
-  await tx
-    .update(poems)
-    .set({ collectionPosition: sql`-${poems.collectionPosition}` })
-    .where(eq(poems.collectionId, collectionId));
-  if (ids.length > 0) {
-    const cases = sql.join(
-      ids.map((id, i) => sql`WHEN ${id}::uuid THEN ${i + 1}::int`),
-      sql` `,
-    );
-    await tx
-      .update(poems)
-      .set({ collectionPosition: sql`CASE ${poems.id} ${cases} END` })
-      .where(and(eq(poems.collectionId, collectionId), inArray(poems.id, ids)));
-  }
-  await tx.update(collections).set({ updatedAt: sql`now()` }).where(eq(collections.id, collectionId));
-}
+const touch = (tx: Tx, collectionId: string) =>
+  tx.update(collections).set({ updatedAt: sql`now()` }).where(eq(collections.id, collectionId));
+
+/** The collection's poem ids in order (locked). */
+const orderOf = (tx: Tx, collectionId: string) => positionsOrder(tx, POSITIONS, collectionId);
 
 /** Close the gaps after a poem left (or was deleted). */
 export async function compactCollection(tx: Tx, collectionId: string) {
-  await applyOrder(tx, collectionId, await orderOf(tx, collectionId));
+  await compact(tx, POSITIONS, collectionId);
+  await touch(tx, collectionId);
 }
 
 const FULL = `A collection can hold at most ${COLLECTION_POEMS_MAX} poems`;
@@ -153,10 +130,10 @@ export async function placePoem(
   }
   await tx
     .update(poems)
-    .set(to ? { collectionId: to, collectionPosition: sql`(SELECT count(*) + 1 FROM poems WHERE collection_id = ${to})` } : { collectionId: null, collectionPosition: null })
+    .set(to ? { collectionId: to, collectionPosition: endPosition(POSITIONS, to) } : { collectionId: null, collectionPosition: null })
     .where(eq(poems.id, poemId));
   if (from) await compactCollection(tx, from);
-  if (to) await tx.update(collections).set({ updatedAt: sql`now()` }).where(eq(collections.id, to));
+  if (to) await touch(tx, to);
   return null;
 }
 
@@ -343,20 +320,11 @@ export async function moveCollectionPoem(
   return getDb().transaction(async (tx): Promise<MoveResult> => {
     await lockEditor(tx, editorId);
     if (!(await lockCollections(tx, editorId, [collectionId])).has(collectionId)) return { ok: false, notFound: true };
-    const ids = await orderOf(tx, collectionId);
-    const from = ids.indexOf(poemId);
-    if (from < 0) return { ok: false, notFound: true };
-    const to =
-      direction === "up" ? Math.max(0, from - 1)
-        : direction === "down" ? Math.min(ids.length - 1, from + 1)
-          : direction === "first" ? 0
-            : ids.length - 1;
-    if (to !== from) {
-      ids.splice(to, 0, ...ids.splice(from, 1));
-      await applyOrder(tx, collectionId, ids);
-    }
+    const moved = await moveItem(tx, POSITIONS, collectionId, poemId, direction);
+    if (!moved) return { ok: false, notFound: true };
+    if (moved.changed) await touch(tx, collectionId);
     const [p] = await tx.select({ title: poems.title }).from(poems).where(eq(poems.id, poemId));
-    return { ok: true, position: to + 1, total: ids.length, title: p.title };
+    return { ok: true, position: moved.position, total: moved.total, title: p.title };
   });
 }
 
@@ -374,9 +342,9 @@ export async function reorderCollection(editorId: string, collectionId: string, 
   return getDb().transaction(async (tx): Promise<ReorderResult> => {
     await lockEditor(tx, editorId);
     if (!(await lockCollections(tx, editorId, [collectionId])).has(collectionId)) return { ok: false, notFound: true };
-    const current = await orderOf(tx, collectionId);
-    if (current.length !== ids.length || !current.every((id) => ids.includes(id))) return { ok: false, stale: true };
-    if (current.some((id, i) => id !== ids[i])) await applyOrder(tx, collectionId, ids);
+    const result = await reorderItems(tx, POSITIONS, collectionId, ids);
+    if (result === "stale") return { ok: false, stale: true };
+    if (result === "changed") await touch(tx, collectionId);
     return { ok: true };
   });
 }

@@ -169,6 +169,13 @@
       "when": 1794939455923,
       "tag": "0023_profile_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794955477636,
+      "tag": "0024_novels",
+      "breakpoints": true
     }
   ]
 }

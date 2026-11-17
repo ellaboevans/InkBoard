@@ -420,6 +420,84 @@ export const poemRevisions = pgTable(
  * personal. A trigger (drizzle/0016_retired_slugs_guard.sql) refuses to put a
  * retired slug on an editor.
  */
+/*
+ * Novels (docs/PLAN.md, Phase 23; docs/research/novels.md): an editor's
+ * books, each with ordered chapters published one at a time. Their own
+ * tables, not poems in a collection; src/server/novels.ts scopes every query
+ * by the DAL editor id (chapters through their novel). Private novels,
+ * covers and notifications come in later phases, with their own columns.
+ */
+export const novelStatus = pgEnum("novel_status", ["ongoing", "complete"]);
+
+export const novels = pgTable(
+  "novels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => editors.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Unique per editor; follows the title until any chapter has been published, then fixed. */
+    slug: text("slug").notNull(),
+    /** Plain text, ≤ BLURB_MAX; null = none. */
+    blurb: text("blurb"),
+    /** BCP 47 tag from src/lib/poem-languages.ts, like poems; chapters inherit it. */
+    language: text("language"),
+    status: novelStatus("status").notNull().default("ongoing"),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("novels_editor_slug_key").on(t.editorId, t.slug)],
+);
+
+export const chapters = pgTable(
+  "chapters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    novelId: uuid("novel_id")
+      .notNull()
+      .references(() => novels.id, { onDelete: "cascade" }),
+    /** May be empty: readers then see "Chapter n". */
+    title: text("title").notNull().default(""),
+    /** Unique per novel; follows the title until first published, then fixed. */
+    slug: text("slug").notNull(),
+    /** Prose (src/lib/prose.ts), NFC, ≤ CHAPTER_BODY_MAX. May be empty while a draft. */
+    body: text("body").notNull().default(""),
+    /** 1..n over all the novel's chapters, drafts included, contiguous (src/server/positions.ts). */
+    position: integer("position").notNull(),
+    status: poemStatus("status").notNull().default("draft"),
+    /** First publish; kept when unpublished, so "ever published" fixes the slugs. */
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    wordCount: integer("word_count").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("chapters_novel_slug_key").on(t.novelId, t.slug),
+    uniqueIndex("chapters_novel_position_key").on(t.novelId, t.position),
+    index("chapters_status_published_idx").on(t.status, t.publishedAt),
+  ],
+);
+
+/**
+ * A chapter's saved versions (title and text), newest CHAPTER_REVISIONS_KEPT
+ * kept, recorded in the save transaction only when one of them changed
+ * (src/server/revisions.ts). Editor-only: only novels.ts reads it.
+ */
+export const chapterRevisions = pgTable(
+  "chapter_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chapterId: uuid("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    savedAt: timestamp("saved_at", { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [index("chapter_revisions_chapter_saved_idx").on(t.chapterId, t.savedAt.desc())],
+);
+
 export const retiredSlugs = pgTable("retired_slugs", {
   slug: text("slug").primaryKey(),
   retiredAt: timestamp("retired_at", { withTimezone: true }).notNull().defaultNow(),

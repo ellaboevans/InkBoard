@@ -1,0 +1,25 @@
+import { TITLE_MAX } from "./poem-limits";
+
+/**
+ * Novels (docs/PLAN.md, Phase 23; docs/research/novels.md §2): the numbers
+ * the server validator (src/server/novels.ts) and, later, the editor UI share.
+ */
+
+/** Novel and chapter titles: as for poems. */
+export const NOVEL_TITLE_MAX = TITLE_MAX;
+export const CHAPTER_TITLE_MAX = TITLE_MAX;
+
+/** About 10,000 English words: room for long chapters, not a whole book in one. */
+export const CHAPTER_BODY_MAX = 60_000;
+
+/** Chapters per novel (drafts included). */
+export const CHAPTERS_MAX = 200;
+
+/** A back-cover blurb is ~150–250 words. */
+export const BLURB_MAX = 2_000;
+
+/** Novels per editor (bounds the author page and the board). */
+export const NOVELS_MAX = 50;
+
+/** Versions kept per chapter, the current one included (10 × 60 K worst case). */
+export const CHAPTER_REVISIONS_KEPT = 10;

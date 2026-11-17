@@ -590,6 +590,19 @@ export async function listChapterRevisions(editorId: string, chapterId: string):
     .orderBy(desc(chapterRevisions.savedAt), desc(chapterRevisions.id));
 }
 
+/** One version of one of the editor's chapters, or null (missing, foreign, malformed, or another chapter's). */
+export async function getChapterRevision(editorId: string, chapterId: string, revisionId: string): Promise<ChapterRevision | null> {
+  if (!isId(chapterId) || !isId(revisionId)) return null;
+  const [row] = await getDb()
+    .select({ id: chapterRevisions.id, savedAt: chapterRevisions.savedAt, title: chapterRevisions.title, body: chapterRevisions.body })
+    .from(chapterRevisions)
+    .innerJoin(chapters, eq(chapters.id, chapterRevisions.chapterId))
+    .innerJoin(novels, eq(novels.id, chapters.novelId))
+    .where(and(eq(chapterRevisions.id, revisionId), eq(chapterRevisions.chapterId, chapterId), eq(novels.editorId, editorId)))
+    .limit(1);
+  return row ?? null;
+}
+
 // ---- export ----------------------------------------------------------------------
 
 export type NovelForExport = {

@@ -232,6 +232,64 @@ test("sign-in link page", async ({ page }) => {
   await scan(page, "sign-in link: expired");
 });
 
+test("novels in the dashboard: the list, a novel's page, the chapter editor (write, preview, History, device draft), phone and desktop", async ({ page }) => {
+  test.slow();
+  await signUpAs(page, `a11y-novels-${unique()}@example.com`, `Novel A11y ${unique()}`);
+  await page.goto("/admin/novels");
+  await expect(page.getByRole("heading", { level: 1, name: "Novels" })).toBeVisible();
+  await scan(page, "novels: empty list");
+  await page.getByRole("button", { name: "New novel" }).click();
+  await expect(page.getByRole("dialog", { name: "New novel" })).toBeVisible();
+  await scan(page, "novels: new novel dialog");
+  await page.getByRole("dialog").getByRole("textbox", { name: "Title" }).fill("Asuo ne Ɔdɔ");
+  await page.getByRole("dialog").getByRole("button", { name: "Create novel" }).click();
+  await expect(page).toHaveURL(/\/admin\/novels\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  const novelUrl = new URL(page.url()).pathname;
+  await scan(page, "novel page: no chapters");
+
+  for (const title of ["Thursday", ""]) {
+    await page.goto(novelUrl);
+    await page.getByRole("button", { name: "New chapter" }).click();
+    await expect(page).toHaveURL(/\/chapters\//, { timeout: 45_000 });
+    await page.getByRole("textbox", { name: /Chapter title/ }).fill(title);
+    await page.getByRole("textbox", { name: "Text" }).fill("The ferry came late.\n\n* * *\n\n*Asuo yi*, she sang.");
+    await page.getByRole("button", { name: "Save draft" }).click();
+    await expect(page.locator("[data-sileo-toast]").getByText("Draft saved").first()).toBeVisible({ timeout: 45_000 });
+  }
+  const chapterUrl = new URL(page.url()).pathname;
+
+  for (const size of [{ width: 375, height: 812 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(size);
+    await page.goto("/admin/novels");
+    await expect(page.locator("[data-novel-link]")).toHaveCount(1);
+    await scan(page, `novels: list ${size.width}px`);
+    await page.goto(novelUrl);
+    await expect(page.locator("[data-chapter-link]")).toHaveCount(2);
+    await scan(page, `novel page: chapters ${size.width}px`);
+    await page.goto(chapterUrl);
+    await expect(page.getByRole("textbox", { name: "Text" })).toBeVisible();
+    await scan(page, `chapter editor: write ${size.width}px`);
+    await page.getByRole("tab", { name: "Preview" }).click();
+    await expect(page.getByRole("article", { name: /Preview of/ })).toBeVisible();
+    await scan(page, `chapter editor: preview ${size.width}px`);
+  }
+
+  // History's version dialog, and the device-draft offer.
+  await page.getByRole("tab", { name: "Write" }).click();
+  await page.getByRole("region", { name: "History" }).getByRole("link").last().click();
+  await expect(page.getByRole("dialog", { name: /version, saved/ })).toBeVisible();
+  await scan(page, "chapter editor: a saved version");
+  await page.getByRole("button", { name: "Close" }).first().click();
+  await page.getByRole("textbox", { name: "Text" }).fill("Typed, not saved.");
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some((k) => k.startsWith("inkboard-chapter-draft:")))).toBe(true);
+  await page.reload();
+  await expect(page.locator("[data-device-draft]")).toBeVisible();
+  await scan(page, "chapter editor: a newer draft on this device");
+  await page.getByRole("button", { name: "Delete chapter" }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await scan(page, "chapter editor: delete chapter dialog");
+});
+
 test("admin screens", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-admin-${id}@example.com`, `Access Poet ${id}`);

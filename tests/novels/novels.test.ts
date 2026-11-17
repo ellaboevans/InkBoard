@@ -19,6 +19,7 @@ import {
   deleteChapter,
   deleteNovel,
   getChapter,
+  getChapterRevision,
   getNovel,
   listChapterRevisions,
   listNovels,
@@ -323,6 +324,24 @@ describe("revisions", () => {
     expect(kept.map((r) => r.body)).toEqual(Array.from({ length: CHAPTER_REVISIONS_KEPT }, (_, i) => `v${14 - i}`));
     const [{ n: rows }] = ((await db.execute(sql`SELECT count(*)::int AS n FROM chapter_revisions`)) as unknown as { rows: { n: number }[] }).rows;
     expect(rows).toBe(CHAPTER_REVISIONS_KEPT);
+  });
+});
+
+describe("one chapter version (History's ?version=)", () => {
+  it("is found only through the editor's own chapter", async () => {
+    const n = await novel(ada);
+    const c = await chapter(ada, n.id, { body: "v1" });
+    await saveChapter(ada, c.id, { title: "Thursday", body: "v2" });
+    const [newest, older] = await listChapterRevisions(ada, c.id);
+    expect(await getChapterRevision(ada, c.id, older.id)).toMatchObject({ id: older.id, body: "v1" });
+    expect(await getChapterRevision(ada, c.id, newest.id)).toMatchObject({ body: "v2" });
+    // Another editor, another chapter of the same editor, malformed or unknown ids: nothing.
+    expect(await getChapterRevision(eve, c.id, older.id)).toBeNull();
+    const other = await chapter(ada, n.id, { title: "Other", body: "x" });
+    expect(await getChapterRevision(ada, other.id, older.id)).toBeNull();
+    expect(await getChapterRevision(ada, c.id, "nope")).toBeNull();
+    expect(await getChapterRevision(ada, "nope", older.id)).toBeNull();
+    expect(await getChapterRevision(ada, c.id, MISSING)).toBeNull();
   });
 });
 

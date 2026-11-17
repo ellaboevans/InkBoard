@@ -23,3 +23,8 @@ export const NOVELS_MAX = 50;
 
 /** Versions kept per chapter, the current one included (10 × 60 K worst case). */
 export const CHAPTER_REVISIONS_KEPT = 10;
+
+/** What readers (and the editor's lists) call a chapter: its title, or "Chapter n" when it has none. */
+export function chapterDisplayTitle(title: string, n: number): string {
+  return title.trim() || `Chapter ${n}`;
+}

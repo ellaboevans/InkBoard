@@ -499,7 +499,7 @@ export function PoemForm({
           </section>
 
           {poem && history && (
-            <HistoryPanel poemId={poem.id} items={history} selectedId={selectedVersion?.id ?? null} />
+            <HistoryPanel basePath={`/admin/poems/${poem.id}`} items={history} selectedId={selectedVersion?.id ?? null} />
           )}
 
           {poem && deleteAction && <DeletePoem title={saved.title} action={deleteAction} />}
@@ -508,7 +508,7 @@ export function PoemForm({
 
       {poem && (
         <VersionDialog
-          poemId={poem.id}
+          basePath={`/admin/poems/${poem.id}`}
           version={selectedVersion}
           editor={{ title, body, language }}
           dirty={title !== saved.title || body !== saved.body || language !== saved.language}

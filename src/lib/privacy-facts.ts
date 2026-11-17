@@ -42,6 +42,8 @@ export const PRIVACY_FACTS = {
   photoOrphanCleanup: "6 hours",
   /** REVISIONS_KEPT (src/server/poem-history.ts) */
   revisionsKept: "20",
+  /** CHAPTER_REVISIONS_KEPT (src/lib/novel-limits.ts): versions kept per chapter, the current one included. */
+  chapterVersionsKept: "10",
   /** RECOVERY_CODES_PER_SET (src/lib/recovery-code-format.ts) */
   recoveryCodesPerSet: "10",
 } as const;

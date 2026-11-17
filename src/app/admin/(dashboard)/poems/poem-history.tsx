@@ -18,7 +18,9 @@ import { languageName } from "@/lib/poem-languages";
 import { pluralCount } from "@/lib/plural";
 
 /*
- * Revision history in the poem editor (docs/PLAN.md, Phase 13). The list and
+ * Revision history in the poem editor (docs/PLAN.md, Phase 13), and in the
+ * chapter editor (Phase 23a): `basePath` is the editor's own URL, and the
+ * language rows show only where versions have a language (poems). The list and
  * the selected version come from the server (scoped to the editor, times
  * preformatted there); a version is selected by URL (?version=<id>), so Back
  * closes it. Restoring only fills the editor's fields: the editor then saves
@@ -40,26 +42,30 @@ export type SelectedVersion = {
   savedLabel: string;
   title: string;
   body: string;
-  language: string | null;
+  /** Undefined where versions have no language (chapters). */
+  language?: string | null;
   current: boolean;
 };
 
-export type EditorContent = { title: string; body: string; language: string };
+export type EditorContent = { title: string; body: string; language?: string };
 
-const versionHref = (poemId: string, id?: string) => `/admin/poems/${poemId}${id ? `?version=${id}` : ""}`;
+const versionHref = (basePath: string, id?: string) => `${basePath}${id ? `?version=${id}` : ""}`;
 
 export function HistoryPanel({
-  poemId,
+  basePath,
   items,
   selectedId,
+  changesWhat = "the title, text or language",
 }: {
-  poemId: string;
+  /** The editor's URL, e.g. /admin/poems/<id>; a version opens at ?version=<id>. */
+  basePath: string;
   items: HistoryItem[];
   selectedId: string | null;
+  changesWhat?: string;
 }) {
   const earlier = items.length - 1;
   return (
-    <section aria-labelledby="history-heading" className="grid gap-2 rounded-xl border bg-card p-4">
+    <section id="history" aria-labelledby="history-heading" className="grid gap-2 rounded-xl border bg-card p-4">
       <h2 id="history-heading" className="flex items-center gap-1.5 text-sm font-medium">
         <HistoryIcon className="size-3.5" aria-hidden />
         History
@@ -67,14 +73,14 @@ export function HistoryPanel({
       <p id="history-help" className="text-xs text-muted-foreground">
         {earlier > 0
           ? `${pluralCount(earlier, "earlier version")}. Open one to compare it or bring it back.`
-          : "Earlier versions appear here when you save changes to the title, text or language."}
+          : `Earlier versions appear here when you save changes to ${changesWhat}.`}
       </p>
       {items.length > 0 && (
         <ol className="-mx-1 grid max-h-80 gap-0.5 overflow-y-auto" aria-describedby="history-help">
           {items.map((item) => (
             <li key={item.id}>
               <Link
-                href={versionHref(poemId, item.id)}
+                href={versionHref(basePath, item.id)}
                 scroll={false}
                 data-version-link={item.id}
                 aria-current={item.id === selectedId ? "true" : undefined}
@@ -98,13 +104,13 @@ export function HistoryPanel({
 }
 
 export function VersionDialog({
-  poemId,
+  basePath,
   version,
   editor,
   dirty,
   onRestore,
 }: {
-  poemId: string;
+  basePath: string;
   version: SelectedVersion | null;
   /** What's in the editor right now (maybe unsaved): the diff's baseline. */
   editor: EditorContent;
@@ -122,7 +128,8 @@ export function VersionDialog({
   const diff = useMemo(() => (version ? diffLines(editor.body, version.body) : null), [editor.body, version]);
   const changed = diff ? linesChanged(diff) : 0;
   const titleDiffers = !!version && version.title !== editor.title;
-  const languageDiffers = !!version && (version.language ?? "") !== editor.language;
+  const hasLanguage = editor.language !== undefined;
+  const languageDiffers = hasLanguage && !!version && (version.language ?? "") !== editor.language;
   const same = !!version && !titleDiffers && !languageDiffers && version.body === editor.body;
 
   // `lang` only on the poem's own words, never on the UI around them.
@@ -131,7 +138,7 @@ export function VersionDialog({
   const close = () => {
     if (!version) return;
     setDismissed(version.id);
-    router.replace(versionHref(poemId), { scroll: false });
+    router.replace(versionHref(basePath), { scroll: false });
   };
 
   return (
@@ -173,15 +180,19 @@ export function VersionDialog({
                   <span className="block text-xs text-muted-foreground">In the editor: {editor.title || "(empty)"}</span>
                 )}
               </dd>
-              <dt className="text-muted-foreground">Language</dt>
-              <dd className="min-w-0">
-                {languageName(version.language) ?? "Not set"}
-                {languageDiffers && (
-                  <span className="block text-xs text-muted-foreground">
-                    In the editor: {languageName(editor.language) ?? "Not set"}
-                  </span>
-                )}
-              </dd>
+              {hasLanguage && (
+                <>
+                  <dt className="text-muted-foreground">Language</dt>
+                  <dd className="min-w-0">
+                    {languageName(version.language) ?? "Not set"}
+                    {languageDiffers && (
+                      <span className="block text-xs text-muted-foreground">
+                        In the editor: {languageName(editor.language) ?? "Not set"}
+                      </span>
+                    )}
+                  </dd>
+                </>
+              )}
             </dl>
 
             <div>

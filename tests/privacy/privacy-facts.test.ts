@@ -15,6 +15,7 @@ import { REVISIONS_KEPT } from "@/server/poem-history";
 import { UNLOCK_TTL_SECONDS } from "@/server/unlock";
 import { SHARE_VISIT_WINDOW_SECONDS } from "@/lib/share-image/visits";
 import { PHOTO_CACHE_SECONDS } from "@/lib/photo-limits";
+import { CHAPTER_REVISIONS_KEPT } from "@/lib/novel-limits";
 import { PHOTO_ORPHAN_GRACE_HOURS } from "@/server/profile-photos";
 
 /*
@@ -43,9 +44,10 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   photoCacheLife: PHOTO_CACHE_SECONDS,
   photoOrphanCleanup: PHOTO_ORPHAN_GRACE_HOURS * 3600,
   revisionsKept: REVISIONS_KEPT,
+  chapterVersionsKept: CHAPTER_REVISIONS_KEPT,
   recoveryCodesPerSet: RECOVERY_CODES_PER_SET,
 };
-const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "recoveryCodesPerSet"]);
+const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "chapterVersionsKept", "recoveryCodesPerSet"]);
 
 const page = readFileSync("src/app/privacy/page.tsx", "utf8");
 

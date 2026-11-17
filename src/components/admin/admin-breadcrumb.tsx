@@ -15,6 +15,12 @@ import {
 function crumbsFor(pathname: string): { label: string; href?: string }[] {
   if (pathname.startsWith("/admin/poems/new")) return [{ label: "Poems", href: "/admin" }, { label: "New poem" }];
   if (pathname.startsWith("/admin/poems/")) return [{ label: "Poems", href: "/admin" }, { label: "Edit poem" }];
+  if (/^\/admin\/novels\/[^/]+\/chapters\//.test(pathname)) {
+    const novel = pathname.split("/").slice(0, 4).join("/");
+    return [{ label: "Novels", href: "/admin/novels" }, { label: "Novel", href: novel }, { label: "Edit chapter" }];
+  }
+  if (pathname.startsWith("/admin/novels/")) return [{ label: "Novels", href: "/admin/novels" }, { label: "Edit novel" }];
+  if (pathname.startsWith("/admin/novels")) return [{ label: "Novels" }];
   if (pathname.startsWith("/admin/collections/")) return [{ label: "Collections", href: "/admin/collections" }, { label: "Edit collection" }];
   if (pathname.startsWith("/admin/collections")) return [{ label: "Collections" }];
   if (pathname.startsWith("/admin/profile")) return [{ label: "Profile" }];

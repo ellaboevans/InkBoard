@@ -179,7 +179,9 @@ export default function PrivacyPage() {
               install {SITE_NAME}, to decide when to suggest it.{" "}
               <code className={code}>inkboard-push-offer</code> remembers that you answered the offer to turn on
               notifications. <code className={code}>inkboard:special-letters-tab</code> remembers the writer’s last tab of
-              special letters.
+              special letters. <code className={code}>inkboard-chapter-draft:…</code>, one per chapter, keeps the title
+              and text of a chapter a writer is editing on that device until it’s saved to {SITE_NAME} (or the writer
+              discards it), so a dropped connection or a closed tab doesn’t lose their work. It never leaves the browser.
             </li>
             <li>
               <strong className="font-medium">For notifications.</strong> If they’re on, your browser also keeps your
@@ -224,6 +226,15 @@ export default function PrivacyPage() {
               scrypt hashes, never as written. We keep the {F.revisionsKept} most recent earlier versions of each poem,
               which only you can see, and your collections’ titles, introductions and order. They stay until you delete
               them or your account.
+            </p>
+          </Sub>
+          <Sub heading="Your novels">
+            <p>
+              Each novel’s title, blurb, language and whether it’s ongoing or complete, and each of its chapters: its
+              title, text, place in the book, word count, and whether it’s a draft or published and when. We keep the{" "}
+              {F.chapterVersionsKept} most recent versions of each chapter, which only you can see. They stay until you
+              delete them or your account. While you write a chapter, your browser also keeps a copy of it on your device
+              (see “On your device”).
             </p>
           </Sub>
           <Sub heading="Signing in">
@@ -282,7 +293,7 @@ export default function PrivacyPage() {
           <Sub heading="Deleting your account">
             <p>
               Delete account, in Settings, removes all of this at once: your profile, poems with their earlier versions,
-              collections, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
+              collections, novels with their chapters and their earlier versions, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
               email, attempt counters that name you or your poems, your poems’ visit counts, your profile photo’s files,
               and readers’ follows of you.
               We keep only your old author address and your poems’ short addresses on a list, so they’re never given to

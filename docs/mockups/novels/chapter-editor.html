@@ -1,0 +1,88 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="mockup.css">
+<title>Novels · the chapter editor</title>
+<style>
+body { background: oklch(0.97 0.012 80); }
+.shell { display: grid; grid-template-columns: 256px minmax(0, 1fr); min-height: 100vh; }
+aside { padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+aside .brand { display: flex; gap: 10px; align-items: center; padding: 4px 8px 16px; }
+aside .tile { width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; }
+aside .nav { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; }
+aside .nav.on { background: var(--accent); font-weight: 500; }
+aside .label { font-size: 12px; color: var(--muted-foreground); padding: 12px 8px 4px; }
+.inset { background: var(--background); margin: 8px 8px 8px 0; border-radius: 16px; border: 1px solid var(--border); min-width: 0; }
+.crumbs { display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--muted-foreground); min-width: 0; }
+.crumbs b { color: var(--foreground); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page { max-width: 52rem; margin: 0 auto; padding: 28px 24px 120px; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--muted-foreground); }
+label { display: block; font-size: 14px; font-weight: 500; margin: 22px 0 6px; }
+.title { width: 100%; font: 400 28px/1.2 var(--serif); padding: 10px 12px; border: 1px solid var(--input); border-radius: 10px; background: var(--card); }
+.toolbar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; background: var(--card); border: 1px solid var(--input); border-bottom: 0; border-radius: 10px 10px 0 0; }
+.toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.toolbar .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-left: auto; }
+.toolbar .seg span { padding: 6px 12px; font-size: 13px; min-height: 32px; display: inline-flex; align-items: center; }
+.toolbar .seg .on { background: var(--accent); font-weight: 500; }
+.text { width: 100%; min-height: 560px; resize: vertical; font: 400 18px/1.7 var(--serif); color: var(--foreground); padding: 18px 20px; border: 1px solid var(--input); border-radius: 0 0 10px 10px; background: var(--card); white-space: pre-wrap; }
+.under { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: 8px; font-size: 13px; color: var(--muted-foreground); }
+.help { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--muted); font-size: 13px; color: var(--muted-foreground); }
+.help code { font-family: var(--serif); background: var(--card); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; color: var(--foreground); }
+.savebar { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 24px; background: color-mix(in oklch, var(--background) 94%, transparent); backdrop-filter: blur(6px); border-top: 1px solid var(--border); border-radius: 0 0 16px 16px; }
+.savebar .note { margin-right: auto; font-size: 13px; color: var(--muted-foreground); }
+.chapnav { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+@media (max-width: 767px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  aside { display: none; }
+  .inset { margin: 0; border-radius: 0; border: 0; }
+  .crumbs { padding: 10px 16px; }
+  .page { padding: 20px 16px 120px; }
+  .title { font-size: 24px; }
+  .text { font-size: 18px; padding: 14px; min-height: 420px; }
+  .toolbar .seg { margin-left: 0; }
+  .toolbar .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .savebar { padding: 10px 16px; border-radius: 0; }
+  .savebar .note { flex-basis: 100%; }
+  .savebar .btn { flex: 1 1 0; min-height: 44px; }
+  .chapnav { display: none; }
+}
+</style></head><body>
+<div class="shell">
+  <aside>
+    <div class="brand"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="M14.086 18.412A2 2 0 0112.67 19H5v-7.672a2 2 0 01.586-1.414L11.75 3.75a6 6 0 118.49 8.49z"/><path d="M16 8 2 22"/><path d="M17.488 15H9"/></svg></span><div><div class="serif" style="font-size:16px">InkBoard</div><div class="muted" style="font-size:12px">Editor</div></div></div>
+    <span class="btn primary" style="justify-content:flex-start">+ New poem</span>
+    <div class="label">Manage</div>
+    <span class="nav">Poems</span><span class="nav on">Novels</span><span class="nav">Collections</span><span class="nav">Profile</span><span class="nav">Settings</span>
+  </aside>
+  <div class="inset">
+    <div class="crumbs"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg><span>Novels</span>›<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">The Ferry at Yeji</span>›<b>Chapter 8</b>
+      <span class="chapnav"><span class="btn">← Chapter 7</span><span class="btn">Chapter 9 →</span></span></div>
+    <main class="page">
+      <div class="status"><span class="badge">Draft</span><span>Chapter 8 of 12 · readers see 7 published chapters</span></div>
+      <label for="t">Chapter title <span class="muted" style="font-weight:400">(optional: empty shows “Chapter 8”)</span></label>
+      <input id="t" class="title" value="The Stranger's Name">
+      <label for="b">Text</label>
+      <div class="toolbar" role="toolbar" aria-label="Formatting">
+        <span class="btn" title="Italic (⌘I)"><i class="serif">I</i><span class="lbl">Italic</span></span>
+        <span class="btn" title="Bold (⌘B)"><b>B</b><span class="lbl">Bold</span></span>
+        <span class="btn" title="Scene break">⁂<span class="lbl">Scene break</span></span>
+        <span class="sep"></span>
+        <span class="btn">Ɛ ɔ<span class="lbl">Special letters</span></span>
+        <span class="seg" role="radiogroup" aria-label="View"><span class="on">Write</span><span>Preview</span></span>
+      </div>
+      <textarea id="b" class="text" aria-describedby="count help">Nobody in Yeji had ever asked the stranger his name, because nobody in Yeji asked a man his name until he had eaten in their house, and nobody had fed him.
+
+It was Maame Esi who broke the rule. She brought him a bowl of light soup on the Sunday, set it on the step of the guest room behind the chapel, and waited with her arms folded until he had finished.
+
+"Now," she said. "Who are you?"
+
+* * *
+
+Akua heard it from three people before noon. By evening the whole landing knew, and the name went across the water on the last ferry like a parcel nobody had paid for.</textarea>
+      <div class="under"><span id="count">2,431 words · about 10 min · 13,912 of 60,000 characters</span><span>Saved on this device 12 s ago</span></div>
+      <p id="help" class="help">A blank line starts a new paragraph. <code>*italic*</code>, <code>**bold**</code>; a line with only <code>* * *</code> is a scene break.</p>
+    </main>
+    <div class="savebar"><span class="note">Last saved to InkBoard 3 minutes ago · <a href="#">History (6)</a></span><span class="btn">Save draft</span><span class="btn primary">Publish chapter</span></div>
+  </div>
+</div>
+</body></html>

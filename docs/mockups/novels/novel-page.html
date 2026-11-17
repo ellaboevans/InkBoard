@@ -1,0 +1,74 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="mockup.css">
+<title>Novels · the novel page</title>
+<style>
+.wrap { max-width: 64rem; margin: 0 auto; padding: 32px 24px 64px; }
+.back { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; text-decoration: none; }
+.hero { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; margin-top: 28px; align-items: start; }
+.hero .cover { width: 220px; font-size: 30px; grid-row: 1 / span 3; }
+.hero > .blurb, .hero > .actions { grid-column: 2; }
+h1 { font: 400 48px/1.08 var(--serif); margin: 6px 0 12px; letter-spacing: -0.01em; }
+.by { display: flex; align-items: center; gap: 10px; }
+.facts { margin-top: 10px; font-size: 14px; color: var(--muted-foreground); }
+.blurb { margin: 0; font: 400 19px/1.6 var(--serif); max-width: 34em; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.hero { row-gap: 20px; }
+.restart { font-size: 14px; color: var(--muted-foreground); }
+h2 { font: 400 28px/1.2 var(--serif); margin: 56px 0 12px; }
+ol { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+li a { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 14px 4px; border-bottom: 1px solid var(--border); text-decoration: none; min-height: 44px; }
+li a:hover .ct { text-decoration: underline; }
+.n { font-size: 13px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.ct { font: 400 19px/1.35 var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.when { font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+li.read .ct { color: var(--muted-foreground); }
+li.next a { background: var(--accent); border-radius: 8px; border-bottom-color: transparent; }
+li.next .n { color: var(--primary); font-weight: 600; }
+.foot { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 14px; color: var(--muted-foreground); }
+@media (max-width: 640px) {
+  .wrap { padding: 20px 20px 48px; }
+  .hero { grid-template-columns: 112px minmax(0, 1fr); gap: 18px; margin-top: 18px; }
+  .hero .cover { width: 112px; font-size: 16px; grid-row: auto; }
+  h1 { font-size: 30px; }
+  .hero > .blurb, .hero > .actions { grid-column: 1 / -1; }
+  .blurb { font-size: 18px; margin-top: 4px; }
+  .actions { margin-top: 0; }
+  .actions .btn.primary { flex: 1 1 100%; }
+  li a { grid-template-columns: 2.6rem minmax(0, 1fr); }
+  .when { grid-column: 2; margin-top: -6px; }
+  h2 { margin-top: 40px; }
+}
+</style></head><body>
+<main class="wrap">
+  <a class="back muted" href="board.html"><svg class="i" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back to the board</a>
+  <div class="hero">
+    <div class="cover" aria-hidden><div><div class="t">The Ferry at Yeji</div><div class="rule"></div></div><div class="a">Ama Serwaa</div></div>
+    <div style="min-width:0">
+      <div class="badge" style="color:var(--primary);border-color:currentColor">Novel · ongoing</div>
+      <h1>The Ferry at Yeji</h1>
+      <div class="by"><span class="avatar" style="width:32px;height:32px;background:radial-gradient(circle at 50% 42%, #8d5a3b 30%, transparent 31%), linear-gradient(#7aa6c2 70%, #c9b27c 70%)"></span><span>by <a href="#">Ama Serwaa</a></span></div>
+      <div class="facts">12 chapters · about 3 h 40 min · in English · updated 15 November 2026</div>
+    </div>
+    <p class="blurb">Every Thursday the ferry crosses the Volta at Yeji, and every Thursday Akua waits at the landing for a brother who left with the fishermen and never came back. When a stranger steps off the boat carrying his radio, the whole town starts asking questions it had agreed to forget.</p>
+    <div class="actions">
+      <a class="btn primary big" href="chapter-phone.html">Continue: Chapter 4 · The Radio</a>
+      <a class="restart" href="#">Start from the beginning</a>
+      <span class="btn"><svg class="i" viewBox="0 0 24 24"><path d="M4 12v8h16v-8M16 6l-4-4-4 4M12 2v13"/></svg>Share</span>
+    </div>
+  </div>
+
+  <h2>Chapters</h2>
+  <ol>
+    <li class="read"><a href="#"><span class="n">1</span><span class="ct">Thursday</span><span class="when">16 min · 2 Oct</span></a></li>
+    <li class="read"><a href="#"><span class="n">2</span><span class="ct">The Landing</span><span class="when">21 min · 9 Oct</span></a></li>
+    <li class="read"><a href="#"><span class="n">3</span><span class="ct">What the Fishermen Said</span><span class="when">18 min · 16 Oct</span></a></li>
+    <li class="next"><a href="chapter-phone.html" aria-current="step"><span class="n">4</span><span class="ct">The Radio</span><span class="when">You stopped here · 19 min</span></a></li>
+    <li><a href="#"><span class="n">5</span><span class="ct">Market Day in the Rain, and Other Excuses</span><span class="when">22 min · 30 Oct</span></a></li>
+    <li><a href="#"><span class="n">6</span><span class="ct">Kwabena's Letters</span><span class="when">17 min · 6 Nov</span></a></li>
+    <li><a href="#"><span class="n">7</span><span class="ct">The Stranger's Name</span><span class="when">20 min · 15 Nov</span></a></li>
+  </ol>
+  <div class="foot"><a href="#">Follow this novel in a feed reader</a><a href="#">Notify me about new chapters</a><span>About InkBoard · Privacy</span></div>
+</main>
+</body></html>

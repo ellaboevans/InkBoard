@@ -1,0 +1,64 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="mockup.css">
+<title>Novels · reading a chapter</title>
+<style>
+body { background: var(--background); }
+.bar { position: sticky; top: 0; z-index: 2; background: color-mix(in oklch, var(--background) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+.bar .in { max-width: calc(34 * 21px); margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 8px 16px; min-height: 52px; }
+.bar a.book { display: flex; align-items: center; gap: 6px; min-width: 0; text-decoration: none; font-size: 14px; min-height: 44px; }
+.bar a.book span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .where { margin-left: auto; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+.progress { height: 3px; background: var(--secondary); }
+.progress i { display: block; height: 100%; width: 38%; background: var(--primary); }
+article { max-width: 34em; margin: 0 auto; padding: 40px 24px 24px; font-family: var(--serif); font-size: 21px; line-height: 1.7; }
+header { font-family: var(--sans); margin-bottom: 36px; }
+.kicker { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); font-weight: 600; }
+h1 { font: 400 40px/1.12 var(--serif); margin: 8px 0 10px; }
+.meta { font-size: 14px; color: var(--muted-foreground); }
+article p { margin: 0; text-indent: 1.5em; hyphens: auto; text-wrap: pretty; }
+article p.first, article .scene + p { text-indent: 0; }
+article p.first::first-letter { font-size: 3.1em; float: left; line-height: .9; padding: .06em .08em 0 0; color: var(--primary); }
+.scene { text-align: center; margin: 1.1em 0; color: var(--muted-foreground); font-size: 1.4em; line-height: 1; }
+.song { margin: .6em 0 .6em 1.5em; text-indent: 0 !important; font-style: italic; }
+.end { max-width: calc(34 * 21px); margin: 0 auto; padding: 8px 24px 64px; }
+.next { display: grid; gap: 2px; padding: 16px 18px; border-radius: 12px; background: var(--primary); color: var(--primary-foreground); text-decoration: none; min-height: 64px; }
+.next small { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .85; }
+.next b { font: 400 22px/1.25 var(--serif); }
+.links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 16px; font-size: 14px; }
+.links a { min-height: 44px; display: inline-flex; align-items: center; }
+@media (max-width: 640px) {
+  article { font-size: 19px; padding: 28px 20px 16px; }
+  h1 { font-size: 32px; }
+  header { margin-bottom: 28px; }
+  .end { max-width: none; padding: 8px 20px 48px; }
+}
+@media (max-width: 359px) { article { font-size: 18px; } }
+</style></head><body>
+<div class="bar"><div class="in">
+  <a class="book" href="novel-page.html"><svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span class="serif" style="font-size:16px">The Ferry at Yeji</span></a>
+  <span class="where">Chapter 4 of 12</span>
+</div><div class="progress" aria-hidden><i></i></div></div>
+
+<article lang="en">
+  <header>
+    <div class="kicker">Chapter 4</div>
+    <h1>The Radio</h1>
+    <div class="meta">Ama Serwaa · about 19 minutes</div>
+  </header>
+  <p class="first">The stranger did not ask for Akua. He asked for the woman who kept the ferry tickets, and when Maame Esi pointed at the kiosk he walked to it slowly, as if the ground might change its mind about holding him.</p>
+  <p>He put the radio on the counter. It was the green one, with the dent in the corner where Kwabena had dropped it the year the lake rose, and the tape over the battery door that said, in his square handwriting, <em>do not open, the spirits are inside</em>.</p>
+  <p>“Where did you get this?” Akua said. Her voice came out smaller than she meant it to.</p>
+  <p>“From a man in Makango,” the stranger said. “He told me to bring it to the girl at Yeji who counts the fishermen. He said she would know the song.”</p>
+  <div class="scene" role="separator" aria-label="Scene break">⁂</div>
+  <p>That night she turned it on for the first time in four years. It found the station on its own, the way it always had, and through the hiss a choir was singing the old song about the river:</p>
+  <p class="song">Asuo yi, asuo yi,<br>wo na wode me ba kɔeɛ,<br>fa no bra.</p>
+  <p>She sat with it until the battery died, and then she sat with the silence, which was worse, because now it sounded like him.</p>
+</article>
+
+<div class="end">
+  <a class="next" href="#"><small>Next chapter</small><b>5 · Market Day in the Rain, and Other Excuses</b></a>
+  <div class="links"><a href="#">← 3 · What the Fishermen Said</a><a href="novel-page.html">All chapters</a><a href="#">Share a passage</a></div>
+</div>
+</body></html>

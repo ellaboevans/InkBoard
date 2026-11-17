@@ -1,0 +1,39 @@
+/* Novels mockups (docs/research/novels.md). Tokens copied from src/app/globals.css (light only). */
+:root {
+  --background: oklch(0.985 0.008 85);
+  --foreground: oklch(0.24 0.018 55);
+  --card: oklch(0.995 0.005 85);
+  --primary: oklch(0.43 0.12 25);
+  --primary-foreground: oklch(0.985 0.01 85);
+  --secondary: oklch(0.95 0.014 80);
+  --muted: oklch(0.95 0.012 80);
+  --muted-foreground: oklch(0.46 0.02 60);
+  --accent: oklch(0.93 0.03 80);
+  --border: oklch(0.89 0.015 80);
+  --input: oklch(0.87 0.016 80);
+  --ring: oklch(0.55 0.1 25);
+  --canvas: oklch(0.96 0.014 80);
+  --canvas-dot: oklch(0.86 0.02 75);
+  --radius: 0.625rem;
+  --sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --serif: "Newsreader", "Gentium Book Plus", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-size: 14px; line-height: 1.5; }
+a { color: inherit; }
+.serif { font-family: var(--serif); }
+.muted { color: var(--muted-foreground); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); font: 500 14px/1 var(--sans); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.btn.big { min-height: 44px; padding: 0 18px; font-size: 15px; }
+@media (pointer: coarse) { .btn { min-height: 44px; } }
+.badge { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted-foreground); background: var(--card); }
+.avatar { border-radius: 999px; background: var(--secondary); flex-shrink: 0; display: block; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The drawn cover (phase 23b): title on a paper colour of the section's hue. */
+.cover { --h: 25; position: relative; aspect-ratio: 2 / 3; border-radius: 4px 8px 8px 4px; background: oklch(0.9 0.05 var(--h)); color: oklch(0.3 0.08 var(--h)); display: flex; flex-direction: column; justify-content: space-between; padding: 12% 10% 10% 14%; box-shadow: inset 6px 0 0 oklch(0.82 0.06 var(--h)), 0 1px 2px oklch(0 0 0 / 0.12); overflow: hidden; }
+.cover .t { font-family: var(--serif); line-height: 1.05; overflow-wrap: anywhere; }
+.cover .a { font-size: 0.62em; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85; }
+.cover .rule { height: 2px; width: 32%; background: currentColor; opacity: 0.6; margin: 8% 0; }

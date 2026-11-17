@@ -8,6 +8,8 @@ import {
   POEM_SIZES,
   STANZA_GAP_ROWS,
   TURNOVER_EM,
+  SHARE_FORMATS,
+  contentHeight,
   layoutShareImage,
   wrapText,
   type Measure,
@@ -36,9 +38,9 @@ const input = (over: Partial<ShareImageInput>): ShareImageInput => ({
   ...over,
 });
 
-/** The rows' text, one string per row ("" for a stanza gap). */
+/** The rows' text, one string per row ("" for a stanza gap, "…" where a quote skips lines). */
 const text = (rows: PoemRow[]) =>
-  rows.map((r) => (r.kind === "gap" ? "" : r.words.map((w) => w.pieces.map((p) => p.text).join("")).join(" ")));
+  rows.map((r) => (r.kind === "gap" ? "" : r.kind === "omission" ? "…" : r.words.map((w) => w.pieces.map((p) => p.text).join("")).join(" ")));
 
 /** The widest row, measured the way the layout measures. */
 function widest(layout: ShareImageLayout, measure: Measure) {
@@ -46,7 +48,7 @@ function widest(layout: ShareImageLayout, measure: Measure) {
   return Math.max(
     0,
     ...layout.poem.rows.map((r) =>
-      r.kind === "gap"
+      r.kind !== "row"
         ? 0
         : r.indent +
           r.words.reduce(
@@ -254,4 +256,127 @@ describe("with the real fonts", () => {
       expect(l.poem.extendedFirst).toBe(name !== "long");
     });
   }
+});
+
+/* ---- Round 2: the chat size (4:5) and picked lines --------------------------------- */
+
+describe("the chat size (4:5, 1080×1350)", () => {
+  const chat = { format: "chat" as const };
+
+  it("is 1080×1350 with 96 px margins all round: the same width as a Status, less height", () => {
+    expect(SHARE_FORMATS.chat).toEqual({ width: 1080, height: 1350, safeTop: 96, safeBottom: 96, side: 96 });
+    expect(contentHeight("chat")).toBe(1158);
+    const l = layoutShareImage(input({}), mono, chat);
+    expect(l.frame).toEqual(SHARE_FORMATS.chat);
+    expect(l.format).toBe("chat");
+  });
+
+  it("a short poem: whole, at the largest size, like a Status", () => {
+    const body = "the dry wind\nwrites on every pane\nin a dust";
+    const l = layoutShareImage(input({ body }), mono, chat);
+    expect(l.poem.size).toBe(POEM_SIZES[0]);
+    expect(l.poem.truncated).toBe(false);
+    expect(text(l.poem.rows)).toEqual(text(layoutShareImage(input({ body }), mono).poem.rows));
+  });
+
+  it("the same lines break the same way in both formats", () => {
+    const long = Array.from({ length: 12 }, () => "word").join(" ");
+    const story = layoutShareImage(input({ body: long }), mono);
+    const l = layoutShareImage(input({ body: long }), mono, chat);
+    expect(l.poem.size).toBe(story.poem.size);
+    expect(text(l.poem.rows)).toEqual(text(story.poem.rows));
+    expect(widest(l, mono)).toBeLessThanOrEqual(CONTENT_WIDTH);
+  });
+
+  it("a long poem is cut at a stanza break, with Read the whole poem, and fits the shorter frame", () => {
+    const body = stanzas(12);
+    const l = layoutShareImage(input({ body }), mono, chat);
+    expect(l.poem.truncated).toBe(true);
+    expect(l.height).toBeLessThanOrEqual(contentHeight("chat"));
+    expect(body.split("\n")[l.poem.shownLines]).toBe("");
+    // Less room than a Status, so never more lines than one.
+    expect(l.poem.shownLines).toBeLessThanOrEqual(layoutShareImage(input({ body }), mono).poem.shownLines);
+  });
+
+  it("a poem that fits a Status whole may be cut on a chat picture, never overflow it", () => {
+    for (let n = 1; n <= 6; n++) {
+      const l = layoutShareImage(input({ body: stanzas(n) }), mono, chat);
+      expect(l.height, `${n} stanzas`).toBeLessThanOrEqual(contentHeight("chat"));
+    }
+  });
+
+  it("a long title: at most three rows, cut at a word", () => {
+    const title = "Instructions for the House-Sitter, Including Several Things I Forgot to Mention About the Mango Tree";
+    const l = layoutShareImage(input({ title, body: stanzas(3) }), mono, chat);
+    expect(l.title.rows.length).toBeLessThanOrEqual(3);
+    expect(l.title.rows.at(-1)).toMatch(/[a-z]…$/i);
+    expect(l.height).toBeLessThanOrEqual(contentHeight("chat"));
+  });
+
+  it("very long lines wrap with turnovers and never pass the edge", () => {
+    const l = layoutShareImage(input({ body: `${"x".repeat(200)}\n${Array.from({ length: 30 }, (_, i) => `w${i}`).join(" ")}` }), mono, chat);
+    expect(widest(l, mono)).toBeLessThanOrEqual(CONTENT_WIDTH);
+    expect(l.height).toBeLessThanOrEqual(contentHeight("chat"));
+    expect(l.poem.wrappedLines).toBe(2);
+  });
+});
+
+describe("picked lines: a quote", () => {
+  // 1-4 stanza one, 5 blank, 6-9 stanza two, 10 blank, 11-14 stanza three.
+  const body = stanzas(3, 12);
+
+  it("is headed Lines from, takes the largest size, and has no Read the whole poem", () => {
+    const l = layoutShareImage(input({ body }), mono, { picked: [6, 7] });
+    expect(l.quote).toEqual({ picked: 2, shown: 2 });
+    expect(l.poem.truncated).toBe(false);
+    expect(l.poem.size).toBe(POEM_SIZES[0]);
+    expect(text(l.poem.rows)).toEqual(["s1l0xxxxxxxx", "s1l1xxxxxxxx"]);
+    // The heading takes its room: a little less than the same lines without it.
+    const whole = layoutShareImage(input({ body: "s1l0xxxxxxxx\ns1l1xxxxxxxx" }), mono);
+    expect(l.height).toBeGreaterThan(whole.height);
+    expect(whole.quote).toBeNull();
+  });
+
+  it("keeps a stanza break only when both sides are picked, and marks skipped lines with …", () => {
+    expect(text(layoutShareImage(input({ body }), mono, { picked: [4, 6] }).poem.rows)).toEqual(["s0l3xxxxxxxx", "", "s1l0xxxxxxxx"]);
+    expect(text(layoutShareImage(input({ body }), mono, { picked: [3, 6] }).poem.rows)).toEqual(["s0l2xxxxxxxx", "…", "s1l0xxxxxxxx"]);
+    expect(text(layoutShareImage(input({ body }), mono, { picked: [1, 2, 11] }).poem.rows)).toEqual([
+      "s0l0xxxxxxxx",
+      "s0l1xxxxxxxx",
+      "…",
+      "s2l0xxxxxxxx",
+    ]);
+  });
+
+  it("works in both formats, within each frame", () => {
+    for (const format of ["story", "chat"] as const) {
+      const l = layoutShareImage(input({ body }), mono, { format, picked: [2, 3, 4, 6, 7] });
+      expect(l.height, format).toBeLessThanOrEqual(contentHeight(format));
+      expect(l.quote, format).toEqual({ picked: 5, shown: 5 });
+    }
+  });
+
+  it("twelve long lines that can't all fit: cut at a stanza break, ending with …, and the count says so", () => {
+    const long = Array.from({ length: 3 }, (_, s) => Array.from({ length: 4 }, (_, i) => `s${s}l${i} `.padEnd(60, "y")).join("\n")).join("\n\n");
+    const picked = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14];
+    for (const format of ["story", "chat"] as const) {
+      const l = layoutShareImage(input({ body: long }), mono, { format, picked });
+      expect(l.height, format).toBeLessThanOrEqual(contentHeight(format));
+      expect(l.quote!.picked).toBe(12);
+      expect(l.quote!.shown).toBeLessThan(12);
+      expect(l.poem.rows.at(-1)?.kind, format).toBe("omission");
+      expect(l.poem.truncated).toBe(false);
+    }
+  });
+
+  it("keeps tone marks and emphasis on the picked lines", async () => {
+    const { measure } = await shareImageFonts();
+    const ewe = "Nùnyá, àdìdòé,\nàsí mètúnɛ́ ò.\nƑè ɖèká mèɖɔ̀a ŋkɔ́ ò,\nʋɔ̀ ɣè dzí ɖè.\n\n*Knowledge is a baobab tree:*".normalize("NFC");
+    const l = layoutShareImage(input({ title: "Nùnyá", body: ewe }), measure, { format: "chat", picked: [2, 4, 6] });
+    expect(text(l.poem.rows)).toEqual(["àsí mètúnɛ́ ò.".normalize("NFC"), "…", "ʋɔ̀ ɣè dzí ɖè.".normalize("NFC"), "", "Knowledge is a baobab tree:"]);
+    const last = l.poem.rows.at(-1) as Extract<PoemRow, { kind: "row" }>;
+    expect(last.words.every((w) => w.pieces.every((p) => p.italic))).toBe(true);
+    expect(l.poem.extendedFirst).toBe(true);
+    expect(widest(l, measure)).toBeLessThanOrEqual(CONTENT_WIDTH);
+  });
 });

@@ -14,9 +14,28 @@ export function shareImagePath(authorSlug: string, poemSlug: string): string {
   return `${poemPath(authorSlug, poemSlug)}/share-image`;
 }
 
-/** The file's name in the share sheet, the gallery or Downloads. */
-export function shareImageFileName(poemSlug: string): string {
-  return `inkboard-${poemSlug.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "poem"}.png`;
+/** The file's name in the share sheet, the gallery or Downloads: inkboard-<slug>[-chat][-lines].png. */
+export function shareImageFileName(poemSlug: string, { format = "story", lines = false }: { format?: string; lines?: boolean } = {}): string {
+  const base = poemSlug.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "poem";
+  return `inkboard-${base}${format === "chat" ? "-chat" : ""}${lines ? "-lines" : ""}.png`;
+}
+
+/**
+ * The image route's query for a format and a pick (canonical, selection.ts):
+ * "" for the whole poem on a Status, else e.g. "?format=chat&lines=3-6,9".
+ * The 9:16 whole-poem image keeps Phase 21's bare address.
+ */
+export function shareImageQuery(format: string, selection: string | null): string {
+  const q = new URLSearchParams();
+  if (format !== "story") q.set("format", format);
+  if (selection) q.set("lines", selection);
+  const s = q.toString();
+  return s ? `?${s}` : "";
+}
+
+/** The poem's lines for the picker (src/app/p/[author]/[poem]/share-image/lines/route.ts). */
+export function shareLinesPath(authorSlug: string, poemSlug: string): string {
+  return `${shareImagePath(authorSlug, poemSlug)}/lines`;
 }
 
 /**

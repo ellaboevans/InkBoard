@@ -3,6 +3,7 @@
 import {
   CircleCheckIcon,
   ExternalLinkIcon,
+  ImageIcon,
   LinkIcon,
   Loader2Icon,
   MoreHorizontalIcon,
@@ -38,6 +39,8 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
+import { poemPath } from "@/lib/share-image/share-text";
+import { ShareImageButton, ShareImageDialog } from "@/components/poem/share-image-button";
 import { deletePoemAction } from "./poems/actions";
 import { setPinnedPoemAction } from "./actions";
 
@@ -50,6 +53,16 @@ export type DashboardPoem = {
   /** Formatted on the server, so server and client render the same text. */
   updatedLabel: string;
 };
+
+/**
+ * "Share as image" (docs/PLAN.md, Phase 21 round 2): only a public, published
+ * poem, the same rule as the reading page. Derived from each render's rows,
+ * so a poem made private or unpublished loses it on the next render.
+ */
+const shareable = (p: DashboardPoem) => p.status === "published" && p.visibility === "public";
+
+/** What the share sheet needs besides the row: the site's origin (APP_URL, resolved on the server) and the pen name. */
+export type ShareContext = { origin: string; penName: string };
 
 type Filter = "all" | "published" | "drafts" | "private";
 const FILTERS: { value: Filter; label: string; test: (p: DashboardPoem) => boolean }[] = [
@@ -64,10 +77,12 @@ export function PoemsTable({
   authorSlug,
   pinnedPoemId,
   justPublishedId = null,
+  share,
 }: {
   poems: DashboardPoem[];
   authorSlug: string;
   pinnedPoemId: string | null;
+  share: ShareContext;
   /** The poem the editor just published (`?published=<id>`): marked, scrolled into view and focused. */
   justPublishedId?: string | null;
 }) {
@@ -97,7 +112,14 @@ export function PoemsTable({
     return poems.filter((p) => test(p) && (!q || p.title.toLocaleLowerCase().includes(q)));
   }, [poems, filter, query]);
 
-  const rowProps = { authorSlug, pinnedPoemId, onDelete: setDeleting };
+  const rowProps = { authorSlug, pinnedPoemId, onDelete: setDeleting, share };
+  const sheetProps = (poem: DashboardPoem) => ({
+    authorSlug,
+    slug: poem.slug,
+    poemUrl: share.origin + poemPath(authorSlug, poem.slug),
+    title: poem.title,
+    penName: share.penName,
+  });
 
   return (
     <div className="grid gap-4">
@@ -159,15 +181,23 @@ export function PoemsTable({
                     className={cn("relative", poem.id === justPublishedId && JUST_PUBLISHED_ROW)}
                   >
                     <TableCell className="max-w-0 pl-4 font-serif text-base">
-                      {/* Stretched link: the whole row opens the editor, one tab stop. */}
-                      <Link
-                        href={`/admin/poems/${poem.id}`}
-                        className="flex items-center gap-2 after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
-                      >
-                        <span className="truncate">{poem.title}</span>
-                        {poem.id === justPublishedId && <JustPublishedBadge />}
-                        {poem.id === pinnedPoemId && <PinnedBadge />}
-                      </Link>
+                      <div className="flex items-center gap-3">
+                        {/* Stretched link: the whole row opens the editor, one tab stop. */}
+                        <Link
+                          href={`/admin/poems/${poem.id}`}
+                          className="flex min-w-0 items-center gap-2 after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+                        >
+                          <span className="truncate">{poem.title}</span>
+                          {poem.id === justPublishedId && <JustPublishedBadge />}
+                          {poem.id === pinnedPoemId && <PinnedBadge />}
+                        </Link>
+                        {/* Right after a first publish: share it from here (above the stretched link). */}
+                        {poem.id === justPublishedId && shareable(poem) && (
+                          <div className="relative z-10 shrink-0 font-sans">
+                            <ShareImageButton {...sheetProps(poem)} />
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={poem.status} />
@@ -209,6 +239,11 @@ export function PoemsTable({
                     {poem.id === pinnedPoemId && <PinnedBadge />}
                   </div>
                   <p className="text-xs text-muted-foreground">Edited {poem.updatedLabel}</p>
+                  {poem.id === justPublishedId && shareable(poem) && (
+                    <div className="relative z-10 justify-self-start">
+                      <ShareImageButton {...sheetProps(poem)} />
+                    </div>
+                  )}
                 </div>
                 <div className="relative z-10">
                   <RowActions poem={poem} {...rowProps} />
@@ -255,13 +290,17 @@ function RowActions({
   authorSlug,
   pinnedPoemId,
   onDelete,
+  share,
 }: {
   poem: DashboardPoem;
   authorSlug: string;
   pinnedPoemId: string | null;
   onDelete: (poem: DashboardPoem) => void;
+  share: ShareContext;
 }) {
   const [pending, startTransition] = useTransition();
+  const [sharing, setSharing] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const published = poem.status === "published";
   const path = `/p/${authorSlug}/${poem.slug}`;
   const pinned = poem.id === pinnedPoemId;
@@ -287,9 +326,10 @@ function RowActions({
   };
 
   return (
+    <>
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${poem.title}`} disabled={pending}>
+        <Button ref={trigger} variant="ghost" size="icon-sm" aria-label={`Actions for ${poem.title}`} disabled={pending}>
           {pending ? <Loader2Icon className="animate-spin" /> : <MoreHorizontalIcon />}
         </Button>
       </DropdownMenuTrigger>
@@ -312,6 +352,12 @@ function RowActions({
               <LinkIcon />
               Copy link
             </DropdownMenuItem>
+            {shareable(poem) && (
+              <DropdownMenuItem onSelect={() => setSharing(true)}>
+                <ImageIcon />
+                Share as image
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={togglePin}>
               {pinned ? <PinOffIcon /> : <PinIcon />}
               {pinned ? "Unpin from profile" : "Pin to profile"}
@@ -325,6 +371,20 @@ function RowActions({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {shareable(poem) && (
+      <ShareImageDialog
+        open={sharing}
+        onOpenChange={setSharing}
+        // The menu item is gone by then: back to the row's menu button.
+        returnFocus={() => trigger.current?.focus()}
+        authorSlug={authorSlug}
+        slug={poem.slug}
+        poemUrl={share.origin + poemPath(authorSlug, poem.slug)}
+        title={poem.title}
+        penName={share.penName}
+      />
+    )}
+    </>
   );
 }
 

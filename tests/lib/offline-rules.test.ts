@@ -34,12 +34,19 @@ describe("which request gets which strategy", () => {
   it("the share image is never stored: fetched (and shown) straight from the network, never saved", () => {
     // The sheet fetches it (mode "cors"), its preview is a blob: URL, and a
     // direct visit is a document that isn't a reader page (docs/PLAN.md, Phase 21).
-    const path = "/p/odalys-moon/solstice/share-image";
-    expect(req(path, { mode: "cors" })).toBe("passthrough");
-    expect(req(path, { mode: "no-cors" })).toBe("passthrough");
-    expect(req(path)).toBe("online-only");
-    expect(R.readerKind(path)).toBeNull();
-    expect(R.isStatic(path)).toBe(false);
+    // Round 2: the chat size, picked lines and the picker's lines, too.
+    for (const path of [
+      "/p/odalys-moon/solstice/share-image",
+      "/p/odalys-moon/solstice/share-image?format=chat",
+      "/p/odalys-moon/solstice/share-image?format=chat&lines=3-6,9",
+      "/p/odalys-moon/solstice/share-image/lines",
+    ]) {
+      expect(req(path, { mode: "cors" }), path).toBe("passthrough");
+      expect(req(path, { mode: "no-cors" }), path).toBe("passthrough");
+      expect(req(path), path).toBe("online-only");
+      expect(R.readerKind(new URL(path, ORIGIN).pathname), path).toBeNull();
+      expect(R.isStatic(new URL(path, ORIGIN).pathname), path).toBe(false);
+    }
   });
 
   it("hashed assets, fonts, icons and avatars are cache-first", () => {

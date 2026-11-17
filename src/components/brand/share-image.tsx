@@ -3,8 +3,9 @@ import {
   BYLINE,
   CONTENT_WIDTH,
   GAPS,
+  LINES_FROM_TEXT,
   MORE_TEXT,
-  SHARE_FRAME,
+  OMISSION_TEXT,
   type PoemRow,
   type ShareImageLayout,
 } from "@/lib/share-image/layout";
@@ -14,7 +15,7 @@ import { fontFamilyList as family, ogFontFamily } from "./og-type";
 
 /*
  * The "Share as image" picture (docs/PLAN.md, Phase 21): the "Page" design at
- * 1080×1920, drawn by Satori (next/og) from a layout computed and measured in
+ * 1080×1920 or 1080×1350 (layout.frame), whole or as "Lines from", drawn by Satori (next/og) from a layout computed and measured in
  * src/lib/share-image/layout.ts. Every row is placed here with an explicit
  * height and `whiteSpace: "pre"`, so Satori never re-wraps anything and the
  * picture can't outgrow the safe area. Fonts: ogFontFamily (og-type.ts), so
@@ -46,6 +47,14 @@ function PoemRows({ layout }: { layout: ShareImageLayout }) {
 
 function Row({ row, rowHeight, gapHeight }: { row: PoemRow; rowHeight: number; gapHeight: number }) {
   if (row.kind === "gap") return <div style={{ display: "flex", height: gapHeight }} />;
+  if (row.kind === "omission") {
+    // Where a quote skips lines: one stanza gap high, so the layout's sums hold.
+    return (
+      <div style={{ display: "flex", alignItems: "center", height: gapHeight, lineHeight: `${gapHeight}px`, color: BRAND.muted, whiteSpace: "pre" }}>
+        {OMISSION_TEXT}
+      </div>
+    );
+  }
   return (
     <div style={{ display: "flex", height: rowHeight, paddingLeft: row.indent, whiteSpace: "pre" }}>
       {row.words.flatMap((w, wi) =>
@@ -68,22 +77,22 @@ function Row({ row, rowHeight, gapHeight }: { row: PoemRow; rowHeight: number; g
 }
 
 export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avatar: string | null }) {
-  const { title, byline, address } = layout;
+  const { title, byline, address, frame } = layout;
   return (
     <div
       style={{
-        width: SHARE_FRAME.width,
-        height: SHARE_FRAME.height,
+        width: frame.width,
+        height: frame.height,
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
         background: BRAND.paper,
         color: BRAND.ink,
         fontFamily: ogFontFamily(""),
-        paddingTop: SHARE_FRAME.safeTop,
-        paddingBottom: SHARE_FRAME.safeBottom,
-        paddingLeft: SHARE_FRAME.side,
-        paddingRight: SHARE_FRAME.side,
+        paddingTop: frame.safeTop,
+        paddingBottom: frame.safeBottom,
+        paddingLeft: frame.side,
+        paddingRight: frame.side,
       }}
     >
       {/* Title, rule and poem, centred in the space above the byline. */}
@@ -96,6 +105,23 @@ export function ShareImage({ layout, avatar }: { layout: ShareImageLayout; avata
           paddingBottom: GAPS.beforeFooter,
         }}
       >
+        {layout.quote && (
+          <div
+            style={{
+              display: "flex",
+              height: GAPS.linesFrom * GAPS.linesFromLineHeight,
+              marginBottom: GAPS.linesFromToTitle,
+              fontSize: GAPS.linesFrom,
+              lineHeight: `${GAPS.linesFrom * GAPS.linesFromLineHeight}px`,
+              color: BRAND.primary,
+              fontStyle: "italic",
+              fontFamily: ogFontFamily(LINES_FROM_TEXT),
+              whiteSpace: "pre",
+            }}
+          >
+            {LINES_FROM_TEXT}
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", fontFamily: family(title.extendedFirst) }}>
           {title.rows.map((r, i) => (
             <div

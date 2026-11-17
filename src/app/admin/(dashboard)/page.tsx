@@ -19,7 +19,7 @@ import { ChecklistAllSet, WelcomeChecklist } from "./welcome-checklist";
 import { getWelcomeChecklist } from "@/server/welcome-checklist";
 import { doneCount } from "@/lib/welcome-checklist";
 import { RECOVERY_CODES_LOW } from "@/lib/recovery-code-format";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Your poems" };
 
@@ -119,6 +119,8 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
           authorSlug={editor.slug}
           pinnedPoemId={profile?.pinnedPoemId ?? null}
           justPublishedId={justPublished?.id ?? null}
+          // Share as image (Phase 21 round 2): the same public sheet readers get.
+          share={{ origin: siteUrl().origin, penName: editor.penName }}
         />
       )}
     </div>

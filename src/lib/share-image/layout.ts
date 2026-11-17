@@ -1,6 +1,7 @@
 /*
  * The share image's layout (docs/PLAN.md, Phase 21): what goes where on the
- * 1080×1920 "Page", and at what size. Pure: it takes a Measure (the server's
+ * "Page", at 1080×1920 (Status or Story) or 1080×1350 (chat, 4:5), and at
+ * what size. Pure: it takes a Measure (the server's
  * reads the real font files, see src/server/share-image.ts; tests can pass a
  * fake one), so every rule here is tested without Satori.
  *
@@ -20,24 +21,55 @@
  *      (rule 1 again). If even the first stanza doesn't fit, whole lines from
  *      the start, ending on a line that ends a sentence when one is near; a
  *      single line too long for the image ends with "…".
+ *   3. Picked lines (round 2, src/lib/share-image/selection.ts) are a quote:
+ *      headed "Lines from", with no "Read the whole poem" line. The same rule 1
+ *      sizes them; "…" stands where skipped lines were. If they can't all fit
+ *      even at 48 px, rule 2 cuts them and a final "…" says so (the route
+ *      reports how many were shown, and the sheet tells the reader).
+ *
+ * Both formats share the width (888 px between 96 px margins), so a line
+ * breaks the same way in each; only the height differs, and with it how much
+ * fits before rule 2 cuts.
  */
 import { parsePoemLine, type PoemNode } from "@/lib/poem-markdown";
 import { needsExtendedFont, splitGraphemes } from "@/components/brand/og-type";
 import { SITE_NAME } from "@/lib/site";
+import { pickedItems, poemLines } from "./selection";
 
-/** The frame and the band kept clear of WhatsApp/Instagram's own bars (docs/research/share-image.md). */
-export const SHARE_FRAME = {
-  width: 1080,
-  height: 1920,
-  /** Progress bars, name and time across the top (≈250 px in the guides). */
-  safeTop: 260,
-  /** Reply bar and caption across the bottom (≈250–400 px in the guides; the cautious end). */
-  safeBottom: 400,
-  side: 96,
-} as const;
+export type ShareFrame = { width: number; height: number; safeTop: number; safeBottom: number; side: number };
 
-export const CONTENT_WIDTH = SHARE_FRAME.width - 2 * SHARE_FRAME.side; // 888
-export const CONTENT_HEIGHT = SHARE_FRAME.height - SHARE_FRAME.safeTop - SHARE_FRAME.safeBottom; // 1260
+/** The two pictures (docs/research/share-image.md, section 1). */
+export const SHARE_FORMATS = {
+  /** 9:16 for WhatsApp Status and Stories, clear of the apps' own bars. */
+  story: {
+    width: 1080,
+    height: 1920,
+    /** Progress bars, name and time across the top (≈250 px in the guides). */
+    safeTop: 260,
+    /** Reply bar and caption across the bottom (≈250–400 px in the guides; the cautious end). */
+    safeBottom: 400,
+    side: 96,
+  },
+  /**
+   * 4:5 for a chat or a feed: no app bars sit on it, so only a margin, the
+   * same 96 px as the sides (the poem gets the same width as on a Status).
+   */
+  chat: { width: 1080, height: 1350, safeTop: 96, safeBottom: 96, side: 96 },
+} as const satisfies Record<string, ShareFrame>;
+
+export type ShareFormat = keyof typeof SHARE_FORMATS;
+export const SHARE_FORMAT_NAMES = Object.keys(SHARE_FORMATS) as ShareFormat[];
+
+/** The 9:16 frame (Phase 21's only one). */
+export const SHARE_FRAME = SHARE_FORMATS.story;
+
+export const CONTENT_WIDTH = SHARE_FRAME.width - 2 * SHARE_FRAME.side; // 888, both formats
+/** Height inside the safe area: 1260 (story) or 1158 (chat). */
+export const contentHeight = (format: ShareFormat) => {
+  const f: ShareFrame = SHARE_FORMATS[format];
+  return f.height - f.safeTop - f.safeBottom;
+};
+export const CONTENT_HEIGHT = contentHeight("story"); // 1260
 
 /**
  * Poem sizes, largest first: 84 px is about 28–31 CSS px when the image fills
@@ -75,6 +107,10 @@ export const GAPS = {
   beforeFooter: 64,
   footerGap: 40,
   divider: 2,
+  /** "Lines from", above the title of a quote. */
+  linesFrom: 40,
+  linesFromLineHeight: 1.3,
+  linesFromToTitle: 12,
 } as const;
 
 /** Byline and address: no smaller than 32 px (about 11 CSS px on a phone), so the address can be read and typed. */
@@ -82,6 +118,8 @@ export const BYLINE = { avatar: 96, name: 46, nameLineHeight: 1.2, language: 32,
 export const ADDRESS = { logo: 72, gap: 24, host: 36, hostLineHeight: 1.25, path: 34, pathLineHeight: 1.3, pathRows: 3 } as const;
 
 export const MORE_TEXT = "Read the whole poem on InkBoard";
+export const LINES_FROM_TEXT = "Lines from";
+export const OMISSION_TEXT = "…";
 
 export type TextStyle = {
   /** Newsreader's display (72pt) or text (16pt) cut; Gentium has one. */
@@ -97,7 +135,8 @@ export type Measure = (text: string, style: TextStyle, fontSize: number) => numb
 export type Piece = { text: string; italic: boolean; bold: boolean };
 /** A word (one or more styled pieces with no space between) and the space before it, in px. */
 export type PlacedWord = { pieces: Piece[]; gap: number };
-export type PoemRow = { kind: "row"; indent: number; words: PlacedWord[] } | { kind: "gap" };
+/** A row of words, a stanza break, or "…" where a quote skips lines. */
+export type PoemRow = { kind: "row"; indent: number; words: PlacedWord[] } | { kind: "gap" } | { kind: "omission" };
 
 export type ShareImageInput = {
   title: string;
@@ -112,7 +151,17 @@ export type ShareImageInput = {
   path: string;
 };
 
+export type ShareImageOptions = {
+  format?: ShareFormat;
+  /** Picked line numbers (selection.ts), already validated; absent = the whole poem. */
+  picked?: readonly number[];
+};
+
 export type ShareImageLayout = {
+  format: ShareFormat;
+  frame: ShareFrame;
+  /** Picked lines: how many were picked and how many fit (rule 3); null for the whole poem. */
+  quote: { picked: number; shown: number } | null;
   title: { size: number; lineHeight: number; rows: string[]; extendedFirst: boolean };
   poem: {
     size: number;
@@ -131,7 +180,7 @@ export type ShareImageLayout = {
   byline: { penName: string; language: string | null; extendedFirst: boolean; height: number };
   /** "InkBoard · host" on one row, then the path on at most three. */
   address: { host: string; hostExtended: boolean; pathRows: string[]; pathExtended: boolean; height: number };
-  /** The sum of every block's height and gap; never more than CONTENT_HEIGHT. */
+  /** The sum of every block's height and gap; never more than the format's content height. */
   height: number;
 };
 
@@ -202,7 +251,11 @@ export function wrapText(
 // ---- the poem -----------------------------------------------------------------
 
 type SourceWord = { pieces: Piece[]; space: string };
-type SourceLine = { blank: true } | { blank: false; indentSpaces: number; words: SourceWord[]; text: string };
+type SourceLine =
+  | { blank: true; omission?: boolean }
+  | { blank: false; indentSpaces: number; words: SourceWord[]; text: string };
+
+const OMISSION: SourceLine = { blank: true, omission: true };
 
 function flatten(nodes: PoemNode[], italic = false, bold = false, out: Piece[] = []): Piece[] {
   for (const n of nodes) {
@@ -263,7 +316,7 @@ function layLines(lines: SourceLine[], size: number, measure: Measure, extendedF
   let wrapped = 0;
   for (const line of lines) {
     if (line.blank) {
-      rows.push({ kind: "gap" });
+      rows.push({ kind: line.omission ? "omission" : "gap" });
       height += rowHeight * STANZA_GAP_ROWS;
       continue;
     }
@@ -404,7 +457,9 @@ function withEllipsis(line: Extract<SourceLine, { blank: false }>): SourceLine {
 
 // ---- the whole page -------------------------------------------------------------
 
-export function layoutShareImage(input: ShareImageInput, measure: Measure): ShareImageLayout {
+export function layoutShareImage(input: ShareImageInput, measure: Measure, options: ShareImageOptions = {}): ShareImageLayout {
+  const format = options.format ?? "story";
+  const picked = options.picked ?? null;
   // Title.
   const titleExtended = needsExtendedFont(input.title);
   const titleStyle = plainStyle("display", titleExtended);
@@ -464,24 +519,33 @@ export function layoutShareImage(input: ShareImageInput, measure: Measure): Shar
   };
 
   const footerHeight = byline.height + GAPS.footerGap + GAPS.divider + GAPS.footerGap + address.height;
-  const fixed = titleHeight + GAPS.titleToRule + GAPS.rule + GAPS.ruleToPoem + GAPS.beforeFooter + footerHeight;
+  const linesFromHeight = picked ? GAPS.linesFrom * GAPS.linesFromLineHeight + GAPS.linesFromToTitle : 0;
+  const fixed = linesFromHeight + titleHeight + GAPS.titleToRule + GAPS.rule + GAPS.ruleToPoem + GAPS.beforeFooter + footerHeight;
   const moreHeight = GAPS.poemToMore + GAPS.more * GAPS.moreLineHeight;
-  const budget = CONTENT_HEIGHT - fixed;
+  const budget = contentHeight(format) - fixed;
 
-  // The poem.
+  // The poem, or the picked lines (rule 3).
   const poemExtended = needsExtendedFont(input.body);
-  const lines = sourceLines(input.body);
+  const lines = picked
+    ? pickedItems(poemLines(input.body), picked).map((it) => (it.kind === "omission" ? OMISSION : sourceLine(it.text)))
+    : sourceLines(input.body);
   let shown = lines;
   let best = bestSize(lines, budget, measure, poemExtended);
   let truncated = false;
+  let extra = 0;
   if (!best) {
-    shown = cut(lines, budget - moreHeight, measure, poemExtended);
-    best = bestSize(shown, budget - moreHeight, measure, poemExtended) ?? {
+    // A cut quote ends with "…" (one stanza gap high); a cut poem with "Read the whole poem".
+    const ending = picked ? POEM_MIN_SIZE * POEM_LINE_HEIGHT * STANZA_GAP_ROWS : moreHeight;
+    const kept = cut(lines, budget - ending, measure, poemExtended);
+    shown = picked ? [...kept, OMISSION] : kept;
+    best = bestSize(shown, budget - (picked ? 0 : moreHeight), measure, poemExtended) ?? {
       size: POEM_MIN_SIZE,
       laid: layLines(shown, POEM_MIN_SIZE, measure, poemExtended),
     };
-    truncated = true;
+    truncated = !picked;
+    extra = picked ? 0 : moreHeight;
   }
+  const countLines = (ls: SourceLine[]) => ls.filter((l) => !l.blank).length;
   const poem = {
     size: best.size,
     rowHeight: best.size * POEM_LINE_HEIGHT,
@@ -495,10 +559,13 @@ export function layoutShareImage(input: ShareImageInput, measure: Measure): Shar
   };
 
   return {
+    format,
+    frame: SHARE_FORMATS[format],
+    quote: picked ? { picked: countLines(lines), shown: countLines(shown) } : null,
     title: title!,
     poem,
     byline,
     address,
-    height: fixed + poem.height + (truncated ? moreHeight : 0),
+    height: fixed + poem.height + extra,
   };
 }

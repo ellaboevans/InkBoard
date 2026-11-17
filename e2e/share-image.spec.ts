@@ -320,6 +320,8 @@ test("an edit gives a new image; a poem made private, then deleted, stops being 
   const before = await request.get(path);
   const etag = before.headers()["etag"];
   const bytes = await before.body();
+  const chatBefore = await request.get(`${path}?format=chat`);
+  expect(pngSize(await chatBefore.body())).toEqual({ width: 1080, height: 1350 });
 
   // An edit: a different picture, and the old ETag no longer matches.
   await page.goto(`/admin/poems/${o.id}`);
@@ -328,6 +330,12 @@ test("an edit gives a new image; a poem made private, then deleted, stops being 
   await expect(page.getByText("Saved and published")).toBeVisible();
   const after = await request.get(path, { headers: { "If-None-Match": etag } });
   expect(after.status()).toBe(200);
+  // The chat size too (round 2): its own cached picture, refreshed by the same edit.
+  const chatAfter = await request.get(`${path}?format=chat`, { headers: { "If-None-Match": chatBefore.headers()["etag"] } });
+  expect(chatAfter.status()).toBe(200);
+  expect(chatAfter.headers()["etag"]).not.toBe(chatBefore.headers()["etag"]);
+  expect((await chatAfter.body()).equals(await chatBefore.body())).toBe(false);
+  expect(pngSize(await chatAfter.body())).toEqual({ width: 1080, height: 1350 });
   expect(after.headers()["etag"]).not.toBe(etag);
   expect((await after.body()).equals(bytes)).toBe(false);
 
@@ -360,4 +368,268 @@ test("an edit gives a new image; a poem made private, then deleted, stops being 
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete poem" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   expect((await request.get(path)).status()).toBe(404);
+});
+
+/* ---- Round 2: the chat size, choosing lines, writers' buttons -------------------- */
+
+const shared = (page: Page) => page.evaluate(() => (window as unknown as { __shared: Shared[] }).__shared);
+/** Click a choice the way people do: on its label (the radio inside is visually hidden). */
+const choose = (page: Page, name: RegExp) => sheet(page).locator("label").filter({ has: page.getByRole("radio", { name }) }).click();
+const shareButton = (page: Page) => sheet(page).getByRole("button", { name: "Share", exact: true });
+const previewSize = (page: Page) => preview(page).evaluate((img: HTMLImageElement) => [img.complete, img.naturalWidth, img.naturalHeight]);
+
+test("the size toggle: preview and shared file follow it, and Share never sends the other one", async ({ page, context }) => {
+  await stubShare(context);
+  const id = unique();
+  const pen = `Sizer ${id}`;
+  await signUpAs(page, `sizer-${id}@example.com`, pen);
+  const title = `Two sizes ${id}`;
+  await publish(page, title, "Sɛ wo werɛ fi na wosankɔfa a,\nyɛnkyiri.");
+  const o = await poemRow(title);
+
+  await page.goto(`/p/${o.author}/${o.slug}`);
+  await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+  await expect(sheet(page).getByRole("radio", { name: /Status or Story/ })).toBeChecked();
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1920]);
+  await shareButton(page).click();
+  await expect.poll(async () => (await shared(page)).length).toBe(1);
+
+  // Chat, held back on the network: until its file is here, Share is disabled and sends nothing.
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const chatWhole = (url: URL) => url.pathname.endsWith("/share-image") && url.searchParams.get("format") === "chat" && !url.searchParams.has("lines");
+  await page.route(chatWhole, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await choose(page, /^Chat/);
+  await expect(sheet(page).getByRole("radio", { name: /Chat/ })).toBeChecked();
+  await expect(shareButton(page)).toHaveAttribute("aria-disabled", "true");
+  await shareButton(page).click({ force: true }); // aria-disabled: Playwright won't click it otherwise
+  await page.waitForTimeout(300);
+  expect((await shared(page)).length).toBe(1);
+  release();
+  await expect(shareButton(page)).not.toHaveAttribute("aria-disabled");
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1350]);
+  await shareButton(page).click();
+  await expect.poll(async () => (await shared(page)).length).toBe(2);
+  await page.unroute(chatWhole);
+
+  // And back: the Status file again, at once (kept for the sheet's life).
+  await choose(page, /^Status or Story/);
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1920]);
+  await shareButton(page).click();
+  await expect.poll(async () => (await shared(page)).length).toBe(3);
+
+  const files = (await shared(page)).map((x) => x.files[0]);
+  expect(files.map((f) => [f.name, f.width, f.height])).toEqual([
+    [`inkboard-${o.slug}.png`, 1080, 1920],
+    [`inkboard-${o.slug}-chat.png`, 1080, 1350],
+    [`inkboard-${o.slug}.png`, 1080, 1920],
+  ]);
+  const text = `“${title}” by ${pen}, on InkBoard: ${E2E_BASE_URL}/p/${o.author}/${o.slug}`;
+  expect((await shared(page)).map((x) => [x.text, x.active])).toEqual([[text, true], [text, true], [text, true]]);
+});
+
+const LONG = [
+  "Nùnyá, àdìdòé,",
+  "àsí mètúnɛ́ ò.",
+  "Ƒè ɖèká mèɖɔ̀a ŋkɔ́ ò,",
+  "ʋɔ̀ ɣè dzí ɖè.",
+  "",
+  ...Array.from({ length: 14 }, (_, i) => `line ${i + 6} of the long poem`),
+].join("\n");
+
+test("choose lines: mouse and keyboard, the cap, back to the whole poem, and Share sends the picked image", async ({ page, context }) => {
+  await stubShare(context);
+  const id = unique();
+  const pen = `Picker ${id}`;
+  await signUpAs(page, `picker-${id}@example.com`, pen);
+  const title = `Many lines ${id}`;
+  await publish(page, title, LONG);
+  const o = await poemRow(title);
+  // Tagged Ewe before anything about it is cached, so the picker's lines carry lang="ee".
+  await sql(`UPDATE poems SET language = 'ee' WHERE id = '${o.id}'`);
+  const requested: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/share-image")) requested.push(new URL(r.url()).search);
+  });
+
+  await page.goto(`/p/${o.author}/${o.slug}`);
+  await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+  await expectPreview(page, title, pen);
+  await choose(page, /^Choose lines$/);
+  const picker = sheet(page).getByRole("group", { name: "Lines for the image" });
+  const line = (n: number) => picker.getByRole("checkbox", { name: new RegExp(`^Line ${n}: `) });
+  // One box per line of text, none for the stanza break; Ewe letters and tone marks as written.
+  await expect(picker.getByRole("checkbox")).toHaveCount(18);
+  await expect(line(2)).toHaveAccessibleName("Line 2: àsí mètúnɛ́ ò.".normalize("NFC"));
+  await expect(picker.locator('[lang="ee"]').first()).toBeVisible();
+  await expect(sheet(page).getByText("Pick the lines for your image.")).toBeVisible();
+  await expect(shareButton(page)).toHaveAttribute("aria-disabled", "true");
+  for (const b of await picker.getByRole("checkbox").all()) {
+    const box = await b.evaluate((el) => el.closest("label")!.getBoundingClientRect().height);
+    expect(box).toBeGreaterThanOrEqual(44);
+  }
+
+  // Mouse for line 4, keyboard for line 6: the stanza break between them stays.
+  await line(4).click();
+  await line(6).focus();
+  await page.keyboard.press("Space");
+  await expect(line(6)).toBeChecked();
+  await expect(picker.getByRole("status")).toHaveText("2 of 12 lines picked.");
+  await expect(preview(page)).toHaveAttribute("alt", `Preview of the image: lines from “${title}” by ${pen}, with its InkBoard address.`);
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1920]);
+  await shareButton(page).click();
+  await expect.poll(async () => (await shared(page)).length).toBe(1);
+  const [s] = await shared(page);
+  expect(s.files[0]).toMatchObject({ name: `inkboard-${o.slug}-lines.png`, width: 1080, height: 1920 });
+  expect(s.text).toBe(`“${title}” by ${pen}, on InkBoard: ${E2E_BASE_URL}/p/${o.author}/${o.slug}`);
+  expect(requested).toContain("?lines=4-6");
+
+  // Chat size for the same pick.
+  await choose(page, /^Chat/);
+  await expect.poll(() => previewSize(page)).toEqual([true, 1080, 1350]);
+  expect(requested).toContain("?format=chat&lines=4-6");
+
+  // The cap: twelve, then the rest are refused and the count says why.
+  for (const n of [7, 8, 9, 10, 11, 12, 13, 14, 15, 16]) await line(n).click();
+  await expect(picker.getByRole("status")).toHaveText("12 of 12 lines picked, the most for one image.");
+  await expect(line(17)).toHaveAttribute("aria-disabled", "true");
+  await line(17).click({ force: true });
+  await expect(line(17)).not.toBeChecked();
+  await line(17).focus();
+  await page.keyboard.press("Space");
+  await expect(line(17)).not.toBeChecked();
+  await expect(line(17)).toBeFocused();
+  // Twelve long-ish lines don't all fit on a chat picture: the sheet says so.
+  await expect(sheet(page).locator("[data-share-cut]")).toContainText(/Only the first \d+ of your 12 lines fit/);
+  await noSidewaysScroll(page, "picker");
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  // Back to the whole poem: one action, and the picks are kept for later.
+  await choose(page, /^Whole poem$/);
+  await expect(preview(page)).toHaveAttribute("alt", `Preview of the image: “${title}” by ${pen}, with lines from the poem and its InkBoard address.`);
+  await expect(picker).toHaveCount(0);
+  await choose(page, /^Choose lines$/);
+  await expect(sheet(page).getByRole("group", { name: "Lines for the image" }).getByRole("status")).toHaveText(
+    "12 of 12 lines picked, the most for one image.",
+  );
+});
+
+test("the route, round 2: the chat size, the lines JSON, and 404 or 400 for anything else", async ({ page, request }) => {
+  const id = unique();
+  await signUpAs(page, `route2-${id}@example.com`, `Route Two ${id}`);
+  await publish(page, `Open ${id}`, "one\ntwo\n\nfour");
+  await publish(page, `Shut ${id}`, `private words ${id}\nmore private words`, "route-pass");
+  const o = await poemRow(`Open ${id}`);
+  const base = `/p/${o.author}`;
+
+  const chat = await request.get(`${base}/open-${id}/share-image?format=chat`);
+  expect(chat.status()).toBe(200);
+  expect(pngSize(await chat.body())).toEqual({ width: 1080, height: 1350 });
+  const picked = await request.get(`${base}/open-${id}/share-image?format=chat&lines=2-4`);
+  expect(picked.status()).toBe(200);
+  expect(picked.headers()["cache-control"]).toBe("private, no-cache");
+  expect(picked.headers()["x-share-lines-shown"]).toBe("2");
+  expect((await request.get(`${base}/open-${id}/share-image?lines=2-4`, { headers: { "If-None-Match": (await request.get(`${base}/open-${id}/share-image?lines=2-4`)).headers()["etag"] } })).status()).toBe(304);
+
+  const lines = await request.get(`${base}/open-${id}/share-image/lines`);
+  expect(lines.status()).toBe(200);
+  expect(await lines.json()).toEqual({ language: null, lines: ["one", "two", "", "four"] });
+
+  // A private poem: the plain 404 for every format, selection and the lines, its text nowhere.
+  for (const q of ["", "?format=chat", "?lines=1", "?lines=1-2", "?lines=zzz", "/lines"]) {
+    const path = q === "/lines" ? `${base}/shut-${id}/share-image/lines` : `${base}/shut-${id}/share-image${q}`;
+    const res = await request.get(path);
+    expect(res.status(), path).toBe(404);
+    expect(await res.text(), path).toBe("Not found");
+  }
+  // Unknown format: 404. Bad selections on the public poem: 400, never cached.
+  expect((await request.get(`${base}/open-${id}/share-image?format=square`)).status()).toBe(404);
+  for (const bad of ["0", "5", "3", "1,1", "2,1", "1,2", "a", "1-13"]) {
+    const res = await request.get(`${base}/open-${id}/share-image?lines=${bad}`);
+    expect(res.status(), bad).toBe(400);
+    expect(res.headers()["cache-control"], bad).toContain("no-store");
+  }
+});
+
+test("writers: share from the dashboard after publishing and from a row's menu; never private poems or drafts", async ({ page }) => {
+  const id = unique();
+  const pen = `Writer ${id}`;
+  await signUpAs(page, `writer-${id}@example.com`, pen);
+  const open = `Shared ${id}`;
+  await publish(page, open, "a line to share\nand another");
+
+  // Right after the first publish: the marked row carries Share as image.
+  const row = page.locator("[data-just-published]").filter({ visible: true });
+  const button = row.getByRole("button", { name: "Share as image" });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expectPreview(page, open, pen);
+  await page.keyboard.press("Escape");
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(button).toBeFocused();
+
+  // The row menu: the same sheet, focus back on the menu button.
+  const menu = page.getByRole("button", { name: `Actions for ${open}` }).filter({ visible: true });
+  await menu.click();
+  await page.getByRole("menuitem", { name: "Share as image" }).click();
+  await expectPreview(page, open, pen);
+  await page.keyboard.press("Escape");
+  await expect(sheet(page)).toHaveCount(0);
+  await expect(menu).toBeFocused();
+
+  // A private poem: no button on its just-published row, nothing in its menu.
+  const locked = `Locked ${id}`;
+  await publish(page, locked, "not for sharing", "writer-pass");
+  await expect(page.locator("[data-just-published]").filter({ visible: true })).toContainText(locked);
+  await expect(page.locator("[data-just-published]").filter({ visible: true }).getByRole("button", { name: "Share as image" })).toHaveCount(0);
+  await page.getByRole("button", { name: `Actions for ${locked}` }).filter({ visible: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Share as image" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // A draft: none either.
+  await page.goto("/admin/poems/new");
+  await page.getByRole("textbox", { name: "Title" }).fill(`Draft ${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("not yet");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText("Poem created")).toBeVisible();
+  await page.goto("/admin");
+  await page.getByRole("button", { name: `Actions for Draft ${id}` }).filter({ visible: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Share as image" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Made private: the menu item is gone on the next render.
+  const o = await poemRow(open);
+  await page.goto(`/admin/poems/${o.id}`);
+  await page.getByRole("switch", { name: "Password protected" }).click();
+  await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("now-private");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Saved and published")).toBeVisible();
+  await page.goto("/admin");
+  await page.getByRole("button", { name: `Actions for ${open}` }).filter({ visible: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Share as image" })).toHaveCount(0);
+});
+
+test("writers on a phone: the just-published card's button, no sideways scrolling", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  const page = await context.newPage();
+  const id = unique();
+  await signUpAs(page, `phone-writer-${id}@example.com`, `Phone Writer ${id}`);
+  const title = `Pocket ${id}`;
+  await publish(page, title, "small enough for a pocket");
+  const card = page.locator("[data-just-published]").filter({ visible: true });
+  await expect(card.getByRole("button", { name: "Share as image" })).toBeVisible();
+  for (const width of [320, 375]) {
+    await page.setViewportSize({ width, height: 740 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), `${width}px`).toBeLessThanOrEqual(0);
+  }
+  await card.getByRole("button", { name: "Share as image" }).click();
+  await expect(preview(page)).toBeVisible();
+  await noSidewaysScroll(page, "dashboard sheet");
+  await context.close();
 });

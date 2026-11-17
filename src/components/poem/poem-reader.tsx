@@ -14,7 +14,7 @@ import { UnlockForm } from "./unlock-form";
 import { PoemOpened } from "@/components/install/install-nudge";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
-import { poemPath, shareImageFileName, shareImagePath } from "@/lib/share-image/share-text";
+import { poemPath } from "@/lib/share-image/share-text";
 import { absoluteUrl } from "@/lib/site";
 import { ShareImageButton } from "./share-image-button";
 
@@ -79,11 +79,11 @@ export async function PoemReader({
         {poem.visibility === "public" && poem.body !== null && (
           <div className="mt-4">
             <ShareImageButton
-              imagePath={shareImagePath(poem.authorSlug, poem.slug)}
+              authorSlug={poem.authorSlug}
+              slug={poem.slug}
               poemUrl={absoluteUrl(poemPath(poem.authorSlug, poem.slug))}
               title={poem.title}
               penName={poem.penName}
-              fileName={shareImageFileName(poem.slug)}
             />
           </div>
         )}

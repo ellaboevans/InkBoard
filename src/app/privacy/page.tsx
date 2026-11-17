@@ -145,7 +145,8 @@ export default function PrivacyPage() {
           </Sub>
           <Sub heading="Limits on repeated attempts">
             <p>
-              To stop abuse, such as guessing passwords or sign-in codes, we count recent attempts. The counters are named
+              To stop abuse, such as guessing passwords or sign-in codes, or making pictures of chosen lines over and over,
+              we count recent attempts. The counters are named
               after an IP address (for IPv6, only its network part), a hash of an email address, or an account or
               session id, and the daily clean-up deletes them {F.rateLimitCleanup} after they start.
             </p>

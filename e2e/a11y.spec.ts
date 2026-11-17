@@ -515,6 +515,48 @@ test("share as image: the sheet loading, ready (share and no-share browsers) and
   await scan(page, "share sheet: no file sharing, phone");
 });
 
+test("share as image, round 2: the size toggle, the line picker (empty, picked, at the cap) and the writer's buttons", async ({ page }) => {
+  const id = unique();
+  await signUpAs(page, `a11y-share2-${id}@example.com`, `Share Writer ${id}`);
+  const body = ["Nùnyá, àdìdòé,", "àsí mètúnɛ́ ò.", "", ...Array.from({ length: 14 }, (_, i) => `line ${i + 4} of a long poem`)].join("\n");
+  await publish(page, `Picked ${id}`, body);
+  // The dashboard right after publishing: the just-published row with its Share as image button.
+  await expect(page.locator("[data-just-published]").filter({ visible: true }).getByRole("button", { name: "Share as image" })).toBeVisible();
+  await scan(page, "dashboard: just published, with Share as image");
+  await page.getByRole("button", { name: `Actions for Picked ${id}` }).filter({ visible: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Share as image" })).toBeVisible();
+  await scan(page, "dashboard: row menu with Share as image");
+  await page.getByRole("menuitem", { name: "Share as image" }).click();
+  const sheet = page.getByRole("dialog", { name: "Share as image" });
+  await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+  await scan(page, "share sheet from the dashboard");
+  await page.keyboard.press("Escape");
+
+  const { rows } = await sql(`SELECT e.slug AS author, p.slug FROM poems p JOIN editors e ON e.id = p.editor_id WHERE p.title = 'Picked ${id}'`);
+  const choose = (name: RegExp) => sheet.locator("label").filter({ has: page.getByRole("radio", { name }) }).click();
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: width < 1000 ? 812 : 900 });
+    await page.goto(`/p/${rows[0].author}/${rows[0].slug}`);
+    await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
+    await choose(/^Chat/);
+    await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+    await scan(page, `share sheet: chat size, ${width}px`);
+    await choose(/^Choose lines$/);
+    const picker = sheet.getByRole("group", { name: "Lines for the image" });
+    await expect(picker.getByRole("checkbox").first()).toBeVisible();
+    await scan(page, `share sheet: picker, nothing picked, ${width}px`);
+    await picker.getByRole("checkbox", { name: /^Line 2: / }).click();
+    await picker.getByRole("checkbox", { name: /^Line 4: / }).click();
+    await expect(sheet.getByRole("img", { name: /^Preview of the image: lines from/ })).toBeVisible();
+    await scan(page, `share sheet: picker, two lines, ${width}px`);
+    for (let n = 5; n <= 14; n++) await picker.getByRole("checkbox", { name: new RegExp(`^Line ${n}: `) }).click();
+    await expect(picker.getByRole("status")).toHaveText("12 of 12 lines picked, the most for one image.");
+    await expect(sheet.getByRole("img", { name: /^Preview of the image: lines from/ })).toBeVisible();
+    await scan(page, `share sheet: picker at the cap, ${width}px`);
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("About and Privacy pages, phone and desktop; a missing poem in the overlay", async ({ page }) => {
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });

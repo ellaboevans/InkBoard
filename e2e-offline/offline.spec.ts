@@ -110,6 +110,13 @@ test("the share image is never stored by the worker (docs/PLAN.md, Phase 21)", a
   await page.getByRole("main").getByRole("button", { name: "Share as image" }).click();
   const sheet = page.getByRole("dialog", { name: "Share as image" });
   await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible();
+  // Round 2: the chat size, the picker's lines and a picked-lines image go through it too.
+  const choose = (name: RegExp) => sheet.locator("label").filter({ has: page.getByRole("radio", { name }) }).click();
+  await choose(/^Chat/);
+  await expect.poll(() => sheet.getByRole("img", { name: /^Preview of the image/ }).evaluate((img: HTMLImageElement) => img.naturalHeight)).toBe(1350);
+  await choose(/^Choose lines$/);
+  await sheet.getByRole("checkbox", { name: /^Line 1: / }).click();
+  await expect(sheet.getByRole("img", { name: /^Preview of the image: lines from/ })).toBeVisible();
   // Fetched through the worker, shown, and in no cache.
   await expect.poll(() => saved(page)).toContain(url(F.read));
   const { keys } = await cacheContents(page, "share-image");

@@ -8,7 +8,14 @@ import { OG_FONT } from "@/components/brand/og-type";
 import { avatarIdFor } from "@/lib/avatars";
 import { languageName } from "@/lib/poem-languages";
 import { measureWith, readFontMetrics, type FontMetrics } from "@/lib/share-image/font-metrics";
-import { layoutShareImage, SHARE_FRAME, type Measure, type ShareImageInput, type ShareImageLayout } from "@/lib/share-image/layout";
+import {
+  layoutShareImage,
+  type Measure,
+  type ShareFormat,
+  type ShareImageInput,
+  type ShareImageLayout,
+} from "@/lib/share-image/layout";
+import { encodeSelection, poemLines } from "@/lib/share-image/selection";
 import { poemPath } from "@/lib/share-image/share-text";
 import { siteUrl } from "@/lib/site";
 import { renderAvatarSvg } from "./avatar-svg";
@@ -91,23 +98,57 @@ export function shareImageInput(poem: SharePoem): ShareImageInput {
   };
 }
 
-export async function shareImageLayout(poem: SharePoem): Promise<ShareImageLayout> {
+/** What to draw: a format, and picked lines (validated by parseSelection) or the whole poem. */
+export type ShareImageRequest = { format: ShareFormat; picked?: readonly number[] };
+
+export async function shareImageLayout(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<ShareImageLayout> {
   const { measure } = await shareImageFonts();
-  return layoutShareImage(shareImageInput(poem), measure);
+  return layoutShareImage(shareImageInput(poem), measure, request);
 }
 
-/** The PNG and its ETag (a hash of the bytes: same picture, same tag). */
-export async function renderShareImage(poem: SharePoem): Promise<{ png: Uint8Array; etag: string }> {
+/**
+ * Bumped by hand when the picture changes for the same inputs within one
+ * build id (in practice never: every deploy has a new INKBOARD_BUILD_ID).
+ */
+const RENDER_VERSION = 2;
+
+/**
+ * The ETag: a hash of everything the picture is drawn from (the poem's
+ * fields, the author's avatar, the address, the format, the pick) and the
+ * build. Rendering is deterministic, so the same inputs give the same bytes;
+ * and the route can answer a revalidation with 304 without drawing anything,
+ * which matters for picked lines, whose pictures aren't cached.
+ */
+export function shareImageEtag(poem: SharePoem, request: ShareImageRequest): string {
+  const inputs = JSON.stringify([
+    RENDER_VERSION,
+    process.env.INKBOARD_BUILD_ID ?? "dev",
+    shareImageInput(poem),
+    avatarIdFor({ id: poem.editorId, avatar: poem.avatar }),
+    request.format,
+    request.picked ? encodeSelection(request.picked, poemLines(poem.body)) : null,
+  ]);
+  return `"${createHash("sha256").update(inputs).digest("base64url").slice(0, 32)}"`;
+}
+
+export type RenderedShareImage = {
+  png: Uint8Array;
+  etag: string;
+  /** Picked lines: how many were picked and how many fit; null for the whole poem. */
+  quote: { picked: number; shown: number } | null;
+};
+
+/** Draws the PNG (Satori + resvg, about 40–150 ms). */
+export async function renderShareImage(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<RenderedShareImage> {
   const { fonts, measure } = await shareImageFonts();
-  const layout = layoutShareImage(shareImageInput(poem), measure);
+  const layout = layoutShareImage(shareImageInput(poem), measure, request);
   const svg = renderAvatarSvg(avatarIdFor({ id: poem.editorId, avatar: poem.avatar }));
   const avatar = svg ? `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` : null;
   const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} />, {
-    width: SHARE_FRAME.width,
-    height: SHARE_FRAME.height,
+    width: layout.frame.width,
+    height: layout.frame.height,
     fonts,
   });
   const png = new Uint8Array(await response.arrayBuffer());
-  const etag = `"${createHash("sha256").update(png).digest("base64url").slice(0, 32)}"`;
-  return { png, etag };
+  return { png, etag: shareImageEtag(poem, request), quote: layout.quote };
 }

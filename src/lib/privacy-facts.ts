@@ -41,7 +41,7 @@ export const PRIVACY_FACTS = {
 } as const;
 
 /** The date at the top of the Privacy page: change it whenever the page's facts change. */
-export const PRIVACY_UPDATED = "2026-11-16";
+export const PRIVACY_UPDATED = "2026-11-17";
 
 const WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3 };
 const UNIT_SECONDS: Record<string, number> = { minute: 60, hour: 3600, day: 86400, year: 365 * 86400 };

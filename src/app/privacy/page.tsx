@@ -188,7 +188,8 @@ export default function PrivacyPage() {
               <code className={code}>inkboard-reading</code> remembers, for each novel you read, which chapter you opened
               last and when, so the novel’s page can offer to continue where you stopped. It keeps the{" "}
               {F.readingPlacesKept} novels you opened most recently and forgets older ones. It’s never sent to{" "}
-              {SITE_NAME}, and no cookie carries it.
+              {SITE_NAME}, and no cookie carries it. <code className={code}>inkboard-reading-text</code> remembers the
+              text size and font you chose for reading chapters. It’s never sent to {SITE_NAME} either.
             </li>
             <li>
               <strong className="font-medium">For notifications.</strong> If they’re on, your browser also keeps your

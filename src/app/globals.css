@@ -126,6 +126,11 @@
    text's `lang`: where the browser has no dictionary (Twi, Ewe) it simply
    doesn't hyphenate. */
 @layer components {
+  /* Long words (Ewe, Twi compounds) at the largest text size on a 320px phone
+     break instead of pushing the page sideways (Phase 26). */
+  .chapter-prose {
+    overflow-wrap: break-word;
+  }
   .chapter-prose > p {
     text-indent: 1.5em;
     hyphens: auto;

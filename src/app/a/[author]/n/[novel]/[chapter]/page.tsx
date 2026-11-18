@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProseText } from "@/components/novel/prose-text";
 import { RememberChapter } from "@/components/novel/novel-reading";
+import { ReadingSettingsBoot, ReadingSettingsControl } from "@/components/novel/reading-settings";
 import { SharePassageButton } from "@/components/novel/share-passage-button";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
@@ -28,6 +29,10 @@ import { getUnlockedChapterBody } from "@/server/unlock-cookie";
  * on phones, 18 px under 360 px, 21 px from 768 px; line height 1.7), then
  * next / previous chapter and "All chapters". Links are plain <a>s: each
  * chapter is its own page load, starting at the top.
+ *
+ * "Text settings" (Phase 26) in the sticky bar: the reader's size and font
+ * for the chapter text only, kept in this browser, applied by an inline
+ * script in the static shell before the text paints (src/lib/reading-settings.ts).
  *
  * `lang` is the novel's language, on the chapter's title and text only (the
  * bar, kicker and links stay in the UI's English), like a poem's.
@@ -78,6 +83,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default function ChapterPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* Phase 26: the reader's text size and font, applied before the text paints (src/lib/reading-settings.ts). */}
+      <ReadingSettingsBoot />
       {/* "You're offline · showing saved poems", as on the other reader pages. */}
       <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <Suspense fallback={<ChapterSkeleton />}>
@@ -144,6 +151,8 @@ async function Chapter({ params }: Pick<Props, "params">) {
           <span data-chapter-of className="ml-auto shrink-0 text-[13px] whitespace-nowrap text-muted-foreground">
             Chapter {c.number} of {c.of}
           </span>
+          {/* Text size and font (Phase 26): always in reach in the sticky bar, never over the text. */}
+          <ReadingSettingsControl />
         </nav>
         {/* How far through the chapter: scroll-driven where supported (globals.css), nothing elsewhere. */}
         <div aria-hidden className="chapter-progress h-[3px] bg-secondary">

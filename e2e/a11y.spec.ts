@@ -1171,3 +1171,28 @@ test("dashboard welcome checklist: fresh, part done (folded and open), all set",
   await expect(page.locator("[data-checklist-all-set]")).toBeVisible();
   await scan(page, "checklist all set");
 });
+
+test("chapter text settings: the open control, the default and the largest sans text, phone and desktop", async ({ page }) => {
+  const id = unique();
+  const { rows } = await sql(
+    `INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-reading-${id}@example.com', 'Reading A11y ${id}', 'reading-a11y-${id}') RETURNING id, slug`,
+  );
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${rows[0].id}', 'Settings', 'settings') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, 'One', 'one', '^^The ferry came late.' || chr(10) || chr(10) || 'Akua waited.', 1, 'published', now(), 5 FROM n`);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/a/${rows[0].slug}/n/settings/one`);
+    await page.getByRole("button", { name: "Text settings" }).click();
+    const panel = page.getByRole("dialog", { name: "Text settings" });
+    await expect(panel.getByRole("radio", { name: "Default" })).toBeChecked();
+    await scan(page, `text settings open at ${width}px`);
+    await panel.getByText("Largest", { exact: true }).click();
+    await panel.getByText("Sans", { exact: true }).click();
+    await expect(panel.getByRole("radio", { name: "Sans" })).toBeChecked();
+    await scan(page, `text settings largest sans at ${width}px`);
+    await page.keyboard.press("Escape");
+    await scan(page, `chapter at the largest sans at ${width}px`);
+    await page.evaluate(() => localStorage.removeItem("inkboard-reading-text"));
+  }
+});

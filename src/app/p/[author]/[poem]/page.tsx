@@ -8,7 +8,7 @@ import { SiteLinks } from "@/components/site-links";
 import { JsonLd } from "@/components/seo/json-ld";
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
-import { feedAlternates } from "@/lib/feed-links";
+import { poemPageAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getReaderPoem } from "@/server/board-cache";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url, ...feedAlternates({ slug: p.authorSlug, penName: p.penName }) },
+    alternates: poemPageAlternates(p),
     authors: [{ name: p.penName, url: `/a/${p.authorSlug}` }],
     openGraph: {
       ...BASE_OPEN_GRAPH,

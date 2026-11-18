@@ -12,7 +12,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { unlockNovelAction } from "@/components/poem/unlock-actions";
 import { UnlockForm } from "@/components/poem/unlock-form";
 import { JsonLd } from "@/components/seo/json-ld";
-import { feedAlternates } from "@/lib/feed-links";
+import { chapterPageAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
 import type { ReaderChapter } from "@/lib/board-types";
 import { pluralCount } from "@/lib/plural";
@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url, ...feedAlternates({ slug: c.authorSlug, penName: c.penName }, { slug: c.novel.slug, title: c.novel.title }) },
+    alternates: chapterPageAlternates(c),
     authors: [{ name: c.penName, url: `/a/${c.authorSlug}` }],
     openGraph: { ...BASE_OPEN_GRAPH, type: "article", url, title, description },
     twitter: { card: "summary_large_image", title, description },

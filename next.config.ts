@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+// Next's default list of HTML-limited bots: `htmlLimitedBots` replaces it, so ours extends it.
+import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-bots";
+import { htmlLimitedBots } from "./src/lib/html-limited-bots";
 import { buildCsp } from "./src/lib/csp";
 import { PHOTO_MAX_BYTES } from "./src/lib/photo-limits";
 import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO } from "./src/lib/site";
@@ -58,6 +61,9 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   cacheComponents: true,
   partialPrefetching: true,
+  // Feed readers get reader pages' metadata (their feed links) in the <head>, like Next's
+  // bots; browsers keep streamed metadata and the prerendered shell (src/lib/html-limited-bots.ts).
+  htmlLimitedBots: htmlLimitedBots(HTML_LIMITED_BOT_UA_RE),
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

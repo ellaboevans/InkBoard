@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { SiteLinks } from "@/components/site-links";
 import type { CollectionPage } from "@/lib/board-types";
 import { CARD_H } from "@/lib/board-layout";
-import { feedAlternates } from "@/lib/feed-links";
+import { collectionPageAlternates } from "@/lib/feed-links";
 import { pluralCount } from "@/lib/plural";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getCollectionPage } from "@/server/board-cache";
@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url, ...feedAlternates({ slug: c.authorSlug, penName: c.penName }) },
+    alternates: collectionPageAlternates(c),
     authors: [{ name: c.penName, url: `/a/${c.authorSlug}` }],
     openGraph: { ...BASE_OPEN_GRAPH, type: "website", url, title, description },
     twitter: { card: "summary_large_image", title, description },

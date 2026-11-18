@@ -12,7 +12,7 @@ import { BookCardFace, novelLinkSuffix } from "@/components/novel/book-card-face
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { FollowAuthorToggle } from "@/components/notifications/notifications-setting";
-import { feedAlternates } from "@/lib/feed-links";
+import { authorPageAlternates } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
 import { getAuthorPage } from "@/server/board-cache";
 import { OfflineMarker } from "@/components/offline/offline-marker";
@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url, ...feedAlternates(a) },
+    alternates: authorPageAlternates(a),
     openGraph: { ...BASE_OPEN_GRAPH, type: "profile", url, title, description },
     twitter: { card: "summary_large_image", title, description },
   };

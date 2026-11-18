@@ -47,10 +47,34 @@ async function parseFeed(page: Page, xml: string) {
   }, xml);
 }
 
-const feedLinks = (page: Page) =>
+const headFeedLinks = (page: Page) =>
   page.locator('head link[rel="alternate"][type="application/atom+xml"]').evaluateAll((links) =>
     links.map((l) => ({ href: l.getAttribute("href"), title: l.getAttribute("title") })),
   );
+
+/**
+ * The feed links in a browser's <head>, once the page has settled. Pages other
+ * than the board stream their metadata (src/lib/html-limited-bots.ts): a
+ * browser gets the tags at the end of the <body> and React moves them into the
+ * <head> as it hydrates, a few hundred ms after `load`. So wait for `count`.
+ */
+async function feedLinks(page: Page, count: number) {
+  await expect.poll(async () => (await headFeedLinks(page)).length, { timeout: 15_000 }).toBe(count);
+  return headFeedLinks(page);
+}
+
+/** What a feed reader's autodiscovery sees: the raw HTML, no scripts, feed links in the <head> only. */
+const FEED_READER_UA = "NetNewsWire (RSS Reader; https://netnewswire.com/)";
+async function rawHeadFeedLinks(request: APIRequestContext, path: string) {
+  const res = await request.get(path, { headers: { "user-agent": FEED_READER_UA } });
+  expect(res.status(), path).toBe(200);
+  const html = await res.text();
+  const head = html.slice(0, html.indexOf("</head>"));
+  return [...head.matchAll(/<link[^>]*rel="alternate"[^>]*>/g)]
+    .map((m) => m[0])
+    .filter((tag) => tag.includes('type="application/atom+xml"'))
+    .map((tag) => tag.match(/href="([^"]+)"/)?.[1]);
+}
 
 test("site and author feeds: content, privacy, and freshness after edits", async ({ page, request }) => {
   const id = unique();
@@ -130,13 +154,13 @@ test("browsers and feed readers find the feeds; robots.txt allows them", async (
   const abs = (path: string) => new RegExp(`^https?://[^/]+${path.replace(/[.]/g, "\\.")}$`);
 
   await page.goto("/");
-  let links = await feedLinks(page);
+  let links = await feedLinks(page, 1);
   expect(links).toHaveLength(1);
   expect(links[0].href).toMatch(abs("/feed.xml"));
 
   // Author page: their feed first, then the board's, plus a visible link.
   await page.goto(`/a/${slug}`);
-  links = await feedLinks(page);
+  links = await feedLinks(page, 2);
   expect(links.map((l) => l.href)).toEqual([expect.stringMatching(abs(`/a/${slug}/feed.xml`)), expect.stringMatching(abs("/feed.xml"))]);
   expect(links[0].title).toBe(`${pen} on InkBoard`);
   const follow = page.getByRole("main").getByRole("link", { name: `Follow ${pen} in a feed reader` });
@@ -148,8 +172,25 @@ test("browsers and feed readers find the feeds; robots.txt allows them", async (
 
   // Poem page (hard load): the author's feed and the board's.
   await page.goto(`/p/${slug}/${poem}`);
-  links = await feedLinks(page);
+  links = await feedLinks(page, 2);
   expect(links.map((l) => l.href)).toEqual([expect.stringMatching(abs(`/a/${slug}/feed.xml`)), expect.stringMatching(abs("/feed.xml"))]);
+
+  // A feed reader pasted any reader page's address finds the feeds in the raw HTML's <head>
+  // (those pages stream their metadata to browsers; feed readers get it up front).
+  const { rows: ed } = await sql(`SELECT id FROM editors WHERE email = '${email}'`);
+  await sql(`WITH c AS (INSERT INTO collections (editor_id, title, slug) VALUES ('${ed[0].id}', 'Cycle', 'cycle') RETURNING id)
+    UPDATE poems SET collection_id = (SELECT id FROM c), collection_position = 1 WHERE editor_id = '${ed[0].id}'`);
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${ed[0].id}', 'Lake', 'lake') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, 'One', 'one', 'The ferry came late.', 1, 'published', now(), 4 FROM n`);
+  const authorFeeds = [expect.stringMatching(abs(`/a/${slug}/feed.xml`)), expect.stringMatching(abs("/feed.xml"))];
+  const novelFeeds = [expect.stringMatching(abs(`/a/${slug}/n/lake/feed.xml`)), ...authorFeeds];
+  expect(await rawHeadFeedLinks(request, "/")).toEqual([expect.stringMatching(abs("/feed.xml"))]);
+  expect(await rawHeadFeedLinks(request, `/a/${slug}`)).toEqual(authorFeeds);
+  expect(await rawHeadFeedLinks(request, `/p/${slug}/${poem}`)).toEqual(authorFeeds);
+  expect(await rawHeadFeedLinks(request, `/a/${slug}/c/cycle`)).toEqual(authorFeeds);
+  expect(await rawHeadFeedLinks(request, `/a/${slug}/n/lake`)).toEqual(novelFeeds);
+  expect(await rawHeadFeedLinks(request, `/a/${slug}/n/lake/one`)).toEqual(novelFeeds);
 
   // Nothing in robots.txt blocks a feed.
   const robots = await (await request.get("/robots.txt")).text();
@@ -198,8 +239,11 @@ test("the board has a visible Subscribe, on phones and desktops, that explains, 
       // Copy puts the absolute feed URL (from siteUrl()) on the clipboard, shown in the popover too.
       const shown = (await popover.locator("[data-feed-url]").textContent())!;
       expect(shown).toMatch(/^https?:\/\/[^/]+\/feed\.xml$/);
+      // The previous view's toast may still be showing: let it go, so this checks the new one.
+      const copied = page.locator("[data-sileo-toast]").filter({ hasText: "Feed link copied" });
+      await expect(copied).toHaveCount(0, { timeout: 15_000 });
       await popover.getByRole("button", { name: "Copy feed link" }).click();
-      await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Feed link copied" })).toBeVisible();
+      await expect(copied).toBeVisible();
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(shown);
 
       // Escape closes it and returns focus to Subscribe.

@@ -93,10 +93,15 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   // days: we tried since the last success (or since it was made) and nothing
   // has succeeded in 90 days. A device we simply had nothing to send to stays.
   const pushSubscriptions = await db.execute(sql`
-    DELETE FROM push_subscriptions
-    WHERE COALESCE(last_success_at, created_at) < now() - make_interval(days => ${UNUSED_SUBSCRIPTION_DAYS})
-      AND last_attempt_at IS NOT NULL
-      AND last_attempt_at > COALESCE(last_success_at, created_at)
+    DELETE FROM push_subscriptions WHERE id IN (
+      -- Locked in id order, like every multi-row write on push_subscriptions (claimDeliveries,
+      -- sendAll in push.ts), so the cleanup can't deadlock with an announcement.
+      SELECT id FROM push_subscriptions
+      WHERE COALESCE(last_success_at, created_at) < now() - make_interval(days => ${UNUSED_SUBSCRIPTION_DAYS})
+        AND last_attempt_at IS NOT NULL
+        AND last_attempt_at > COALESCE(last_success_at, created_at)
+      ORDER BY id FOR UPDATE
+    )
   `);
   // What the limits count: the longest window is 24 hours.
   const pushDeliveries = await db.execute(sql`

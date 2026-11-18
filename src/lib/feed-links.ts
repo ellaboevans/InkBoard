@@ -26,3 +26,43 @@ export function feedAlternates(author?: { slug: string; penName: string }, novel
     },
   };
 }
+
+/*
+ * Each reader page's `alternates` (its canonical URL, then its feeds, most
+ * specific first), built here so tests/lib/feed-links.test.ts pins every page
+ * in one place. Pages spread nothing else into `alternates`: Next replaces a
+ * parent's `alternates` rather than merging it.
+ *
+ * Where they end up: the board's metadata is prerendered, so its links are in
+ * the <head> of the HTML. Every other page's metadata reads `params`, so under
+ * Cache Components Next streams it: browsers get the tags at the end of the
+ * <body> and React moves them into the <head> when it hydrates, while the user
+ * agents in `htmlLimitedBots` (Next's bots plus the feed readers in
+ * src/lib/html-limited-bots.ts) get them in the <head> before the page.
+ */
+type Author = { slug: string; penName: string };
+type Novel = { slug: string; title: string };
+
+export const boardAlternates = () => ({ canonical: "/", ...feedAlternates() });
+
+export const authorPageAlternates = (a: Author) => ({ canonical: `/a/${a.slug}`, ...feedAlternates(a) });
+
+export const collectionPageAlternates = (c: { authorSlug: string; penName: string; slug: string }) => ({
+  canonical: `/a/${c.authorSlug}/c/${c.slug}`,
+  ...feedAlternates({ slug: c.authorSlug, penName: c.penName }),
+});
+
+export const poemPageAlternates = (p: { authorSlug: string; penName: string; slug: string }) => ({
+  canonical: `/p/${p.authorSlug}/${p.slug}`,
+  ...feedAlternates({ slug: p.authorSlug, penName: p.penName }),
+});
+
+export const novelPageAlternates = (n: { authorSlug: string; penName: string } & Novel) => ({
+  canonical: `/a/${n.authorSlug}/n/${n.slug}`,
+  ...feedAlternates({ slug: n.authorSlug, penName: n.penName }, { slug: n.slug, title: n.title }),
+});
+
+export const chapterPageAlternates = (c: { authorSlug: string; penName: string; slug: string; novel: Novel }) => ({
+  canonical: `/a/${c.authorSlug}/n/${c.novel.slug}/${c.slug}`,
+  ...feedAlternates({ slug: c.authorSlug, penName: c.penName }, c.novel),
+});

@@ -4,12 +4,12 @@ import { BoardView } from "@/components/board/board-view";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
-import { feedAlternates, SITE_FEED_PATH } from "@/lib/feed-links";
+import { boardAlternates, SITE_FEED_PATH } from "@/lib/feed-links";
 import { absoluteUrl, BASE_OPEN_GRAPH, SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import { getBoardSections } from "@/server/board-cache";
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/", ...feedAlternates() },
+  alternates: boardAlternates(),
   openGraph: { ...BASE_OPEN_GRAPH, type: "website", url: "/" },
 };
 

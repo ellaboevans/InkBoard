@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import pg from "pg";
 import webpush from "web-push";
 import { POST as PREFS } from "@/app/api/push/preferences/route";
 import { POST as SUBSCRIBE } from "@/app/api/push/subscription/route";
@@ -8,7 +9,7 @@ import { editors, pushDeliveries, pushFollows, pushSubscriptions } from "@/db/sc
 import { resetEnvCache } from "@/env";
 import { UPDATES_PER_WINDOW } from "@/lib/push-rules";
 import { createPoem, type PoemInput } from "@/server/poems";
-import { announcePoem, changePrefs, deleteSubscription, saveSubscription } from "@/server/push";
+import { announcePoem, changePrefs, claimDeliveries, deleteSubscription, saveSubscription } from "@/server/push";
 
 /* Phase 18 round 2: following authors, proof of ownership, grouped bursts. */
 
@@ -298,6 +299,60 @@ describe("grouping a burst into one notification", () => {
     const alerts = (await db.execute(sql`SELECT count(*)::int AS n FROM push_deliveries WHERE kind = 'alert'`)) as unknown as { rows: { n: number }[] };
     expect(alerts.rows[0].n).toBe(3);
   });
+
+  it("a claim that waited for the device's lock is counted after the alert it waited behind (stamped when claimed, not when its transaction began)", async () => {
+    // The interleaving behind the flaky burst tests, forced: claim B's transaction begins and waits
+    // for the device's row lock; meanwhile an alert for the same author and device is committed.
+    // B then claims an update. With rows stamped by now() (the transaction's start), B's update was
+    // dated *before* that alert, so the next claim didn't count it: two notifications said "2 new",
+    // and a burst could pass UPDATES_PER_WINDOW.
+    await device(fcm(1));
+    const [{ id: subscription }] = await db.select({ id: pushSubscriptions.id }).from(pushSubscriptions);
+    const poems: string[] = [];
+    for (const t of ["P1", "P2", "P3"]) {
+      const r = await createPoem(ama, input({ title: t }));
+      if (!r.ok) throw new Error();
+      poems.push(r.poem.id);
+    }
+    const holder = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    const writer = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+    await writer.connect();
+    try {
+      await holder.query("BEGIN");
+      // NO KEY UPDATE: blocks claimDeliveries' FOR UPDATE, but not the writer's foreign-key check below.
+      await holder.query("SELECT id FROM push_subscriptions WHERE id = $1 FOR NO KEY UPDATE", [subscription]);
+      const waiting = claimDeliveries(ama, poems[1], [subscription]);
+      // B's transaction has begun and is blocked on the row lock.
+      await vi.waitFor(
+        async () => {
+          const { rows } = await writer.query(
+            "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+          );
+          if (rows[0].n < 1) throw new Error("not waiting yet");
+        },
+        { timeout: 10_000, interval: 20 },
+      );
+      await writer.query("INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, kind) VALUES ($1, $2, $3, 'alert')", [
+        subscription,
+        ama,
+        poems[0],
+      ]);
+      await holder.query("COMMIT");
+      const second = await waiting;
+      const third = await claimDeliveries(ama, poems[2], [subscription]);
+      expect(second.map((c) => c.count)).toEqual([2]);
+      expect(third.map((c) => c.count)).toEqual([3]);
+      const order = (await db.execute(
+        sql`SELECT kind FROM push_deliveries WHERE subscription_id = ${subscription} ORDER BY sent_at, kind`,
+      )) as unknown as { rows: { kind: string }[] };
+      expect(order.rows.map((r) => r.kind)).toEqual(["alert", "update", "update"]);
+    } finally {
+      await holder.query("ROLLBACK").catch(() => {});
+      await holder.end();
+      await writer.end();
+    }
+  }, 30_000);
 
   it("concurrent bursts can't pass the update cap", async () => {
     await device(fcm(1));

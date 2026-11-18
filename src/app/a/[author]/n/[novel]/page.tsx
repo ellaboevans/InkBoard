@@ -13,7 +13,7 @@ import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink, NovelFeedLink } from "@/components/feeds/feed-link";
-import { feedAlternates } from "@/lib/feed-links";
+import { novelPageAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { sectionHue } from "@/lib/board-layout";
@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url, ...feedAlternates({ slug: n.authorSlug, penName: n.penName }, { slug: n.slug, title: n.title }) },
+    alternates: novelPageAlternates(n),
     authors: [{ name: n.penName, url: `/a/${n.authorSlug}` }],
     openGraph: { ...BASE_OPEN_GRAPH, type: "book", url, title, description },
     twitter: { card: "summary_large_image", title, description },

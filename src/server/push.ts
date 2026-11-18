@@ -392,6 +392,15 @@ async function countAfter(id: string, editorId: string, audience: Audience): Pro
  * snapshot after the locks, so it sees deliveries a concurrent announcement
  * committed while we waited.
  *
+ * Time comes from one `clock_timestamp()` read in that second statement (the
+ * `clock` CTE), used for the windows and stamped as the new row's `sent_at`,
+ * never `now()`: `now()` is when the *transaction* began, before it waited for
+ * the lock. With `now()`, a claim that queued behind another's alert stamped
+ * its update earlier than that alert, so the next claim (which counts updates
+ * since the alert) missed it: two notifications showed the same "n new", and a
+ * burst could pass UPDATES_PER_WINDOW. The locks serialise claims per device,
+ * so stamps read after the lock follow the claim order.
+ *
  * Per device (Phase 18 round 2):
  * - no alert for this author in the last 12 hours: a new **alert**, if the
  *   device has had fewer than 3 alerts in 24 hours;
@@ -414,14 +423,15 @@ export async function claimDeliveries(editorId: string, target: string | Deliver
   return getDb().transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM push_subscriptions WHERE id IN (${list}) ORDER BY id FOR UPDATE`);
     const r = (await tx.execute(sql`
-      WITH state AS (
+      WITH clock AS (SELECT clock_timestamp() AS at),
+      state AS (
         SELECT s.id, s.endpoint, s.p256dh, s.auth,
           (SELECT max(d.sent_at) FROM push_deliveries d
             WHERE d.subscription_id = s.id AND d.editor_id = ${editorId} AND d.kind = 'alert'
-              AND d.sent_at > now() - make_interval(hours => ${PER_AUTHOR_WINDOW_HOURS})) AS alert_at,
+              AND d.sent_at > (SELECT at FROM clock) - make_interval(hours => ${PER_AUTHOR_WINDOW_HOURS})) AS alert_at,
           (SELECT count(*) FROM push_deliveries d
             WHERE d.subscription_id = s.id AND d.kind = 'alert'
-              AND d.sent_at > now() - make_interval(hours => ${DEVICE_WINDOW_HOURS})) AS alerts_today
+              AND d.sent_at > (SELECT at FROM clock) - make_interval(hours => ${DEVICE_WINDOW_HOURS})) AS alerts_today
         FROM push_subscriptions s WHERE s.id IN (${list})
       ), decided AS (
         SELECT st.*,
@@ -438,8 +448,8 @@ export async function claimDeliveries(editorId: string, target: string | Deliver
            OR (alert_at IS NOT NULL AND updates < ${UPDATES_PER_WINDOW}
                AND split_part(split_part(endpoint, '://', 2), '/', 1) NOT LIKE '%push.apple.com')
       ), ins AS (
-        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, chapter_id, kind)
-        SELECT id, ${editorId}, ${poemId}::uuid, ${chapterId}::uuid, kind FROM ok
+        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, chapter_id, kind, sent_at)
+        SELECT id, ${editorId}, ${poemId}::uuid, ${chapterId}::uuid, kind, (SELECT at FROM clock) FROM ok
         RETURNING subscription_id
       )
       SELECT ok.id, ok.endpoint, ok.p256dh, ok.auth, ok.count::int AS count
@@ -492,17 +502,22 @@ async function sendAll(
   await Promise.all(Array.from({ length: Math.min(SEND_CONCURRENCY, subs.length) }, worker));
 
   const db = getDb();
-  const ids = (xs: string[]) => sql.join(xs.map((id) => sql`${id}::uuid`), sql`, `);
+  // Every statement that locks several subscription rows takes them in id order, like
+  // claimDeliveries: a plain multi-row UPDATE/DELETE locks in scan order, so one
+  // announcement's bookkeeping could hold row X and wait for Y while another's claim
+  // held Y and waited for X (a deadlock, seen in tests/push/follows.test.ts).
+  const inIdOrder = (xs: string[], strength: "NO KEY UPDATE" | "UPDATE") =>
+    sql`SELECT id FROM push_subscriptions WHERE id IN (${sql.join(xs.map((id) => sql`${id}::uuid`), sql`, `)}) ORDER BY id FOR ${sql.raw(strength)}`;
   if (sent.length) {
     await db.execute(
-      sql`UPDATE push_subscriptions SET last_success_at = now(), last_attempt_at = now() WHERE id IN (${ids(sent)})`,
+      sql`UPDATE push_subscriptions SET last_success_at = now(), last_attempt_at = now() WHERE id IN (${inIdOrder(sent, "NO KEY UPDATE")})`,
     );
   }
   if (tried.length) {
-    await db.execute(sql`UPDATE push_subscriptions SET last_attempt_at = now() WHERE id IN (${ids(tried)})`);
+    await db.execute(sql`UPDATE push_subscriptions SET last_attempt_at = now() WHERE id IN (${inIdOrder(tried, "NO KEY UPDATE")})`);
   }
   // 404/410: the push service says this address is dead (unsubscribed, expired).
-  if (gone.length) await db.execute(sql`DELETE FROM push_subscriptions WHERE id IN (${ids(gone)})`);
+  if (gone.length) await db.execute(sql`DELETE FROM push_subscriptions WHERE id IN (${inIdOrder(gone, "UPDATE")})`);
   result.sent += sent.length;
   result.gone += gone.length;
   result.failed += tried.length;

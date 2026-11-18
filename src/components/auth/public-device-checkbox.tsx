@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { FormCheckbox } from "@/components/form-controls";
 import { Label } from "@/components/ui/label";
 
 /**
@@ -10,12 +9,12 @@ import { Label } from "@/components/ui/label";
  * browser, the server ends the session after 12 hours, and the browser isn't
  * remembered (src/server/auth/dal.ts).
  *
- * Controlled, and immune to form resets: React resets a `<form action>`
- * after every action, and Radix's Checkbox answers a reset by setting itself
- * back to its value at mount (through onCheckedChange), which unticked the
- * box after a failed attempt. So a change fired by a reset is ignored, and
- * the value is posted by our own hidden input (a reset doesn't touch hidden
- * inputs) rather than Radix's mirror input, which a reset leaves stale.
+ * Controlled, and immune to form resets (FormCheckbox): React resets a
+ * `<form action>` after every action, and Radix's Checkbox answers a reset by
+ * setting itself back to its value at mount, which unticked the box after a
+ * failed attempt. The value is posted by our own hidden input (a reset doesn't
+ * touch hidden inputs) rather than Radix's mirror input, which a reset leaves
+ * stale.
  */
 export function PublicDeviceCheckbox({
   id = "public-device",
@@ -28,30 +27,13 @@ export function PublicDeviceCheckbox({
   onCheckedChange: (checked: boolean) => void;
   disabled?: boolean;
 }) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const resetting = useRef(false);
-  useEffect(() => {
-    const form = ref.current?.closest("form");
-    if (!form) return;
-    // Capture: runs before Radix's own reset listener on the same form.
-    const onReset = () => {
-      resetting.current = true;
-      queueMicrotask(() => (resetting.current = false));
-    };
-    form.addEventListener("reset", onReset, { capture: true });
-    return () => form.removeEventListener("reset", onReset, { capture: true });
-  }, []);
-
   return (
     <div className="flex items-start gap-3">
       <input type="hidden" name="publicDevice" value={checked ? "on" : ""} />
-      <Checkbox
-        ref={ref}
+      <FormCheckbox
         id={id}
         checked={checked}
-        onCheckedChange={(v) => {
-          if (!resetting.current) onCheckedChange(v === true);
-        }}
+        onCheckedChange={(v) => onCheckedChange(v === true)}
         disabled={disabled}
         aria-describedby={`${id}-hint`}
         className="mt-0.5"

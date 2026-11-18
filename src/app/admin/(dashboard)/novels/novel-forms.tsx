@@ -2,7 +2,8 @@
 
 import { EyeIcon, EyeOffIcon, KeyRoundIcon, Loader2Icon, LockIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useState } from "react";
+import { FormSwitch } from "@/components/form-controls";
 import { SpecialLetters } from "@/components/special-letters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BLURB_MAX, NOVEL_TITLE_MAX } from "@/lib/novel-limits";
 import { notify, withErrorToast } from "@/lib/notify";
@@ -329,24 +329,6 @@ function AccessFields({
   error?: string;
 }) {
   const [show, setShow] = useState(false);
-  // React resets a <form action> after every action, and Radix's Switch
-  // answers a reset by going back to its value at mount (through
-  // onCheckedChange), which turned a just-saved private novel back to public
-  // in the form. A change fired by a reset is ignored, as in
-  // PublicDeviceCheckbox; our hidden input posts the value.
-  const switchRef = useRef<HTMLButtonElement>(null);
-  const resetting = useRef(false);
-  useEffect(() => {
-    const form = switchRef.current?.closest("form");
-    if (!form) return;
-    // Capture: runs before Radix's own reset listener on the same form.
-    const onReset = () => {
-      resetting.current = true;
-      queueMicrotask(() => (resetting.current = false));
-    };
-    form.addEventListener("reset", onReset, { capture: true });
-    return () => form.removeEventListener("reset", onReset, { capture: true });
-  }, []);
   return (
     <div className="grid gap-3 rounded-lg border p-4">
       <input type="hidden" name="visibility" value={isPrivate ? "private" : "public"} />
@@ -362,13 +344,11 @@ function AccessFields({
               : "Readers see the cover, title, blurb and chapter list. One password opens every chapter."}
           </p>
         </div>
-        <Switch
-          ref={switchRef}
+        {/* FormSwitch: keeps its state across the form's reset after a save; the hidden input posts it. */}
+        <FormSwitch
           id="novel-private"
           checked={isPrivate}
-          onCheckedChange={(v) => {
-            if (!resetting.current) setIsPrivate(v);
-          }}
+          onCheckedChange={setIsPrivate}
           aria-describedby="novel-private-help"
           className="max-sm:mt-1"
         />

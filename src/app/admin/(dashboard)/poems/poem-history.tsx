@@ -2,8 +2,8 @@
 
 import { HistoryIcon, RotateCcwIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,7 +23,10 @@ import { pluralCount } from "@/lib/plural";
  * language rows show only where versions have a language (poems). The list and
  * the selected version come from the server (scoped to the editor, times
  * preformatted there); a version is selected by URL (?version=<id>), so Back
- * closes it. Restoring only fills the editor's fields: the editor then saves
+ * closes it. The dialog is open exactly while the address bar says so:
+ * closing rewrites the URL at once (history.replaceState, which Next syncs
+ * into useSearchParams) instead of waiting for a router round trip, so a
+ * reload right after closing can't bring the dialog back. Restoring only fills the editor's fields: the editor then saves
  * as usual, which records the restore as a new version.
  */
 
@@ -118,11 +121,11 @@ export function VersionDialog({
   dirty: boolean;
   onRestore: (v: SelectedVersion) => void;
 }) {
-  const router = useRouter();
-  // Close at once, without waiting for the URL change to round-trip.
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  if (!version && dismissed) setDismissed(null);
-  const open = !!version && dismissed !== version.id;
+  // Open only while the URL names this version. `version` comes from the
+  // server and stays as it was after closing (no round trip), so the URL
+  // decides; opening the same version again is a new navigation that sets it.
+  const searchParams = useSearchParams();
+  const open = !!version && searchParams.get("version") === version.id;
   const restored = useRef(false);
 
   const diff = useMemo(() => (version ? diffLines(editor.body, version.body) : null), [editor.body, version]);
@@ -136,9 +139,11 @@ export function VersionDialog({
   const lang = version?.language ?? undefined;
 
   const close = () => {
-    if (!version) return;
-    setDismissed(version.id);
-    router.replace(versionHref(basePath), { scroll: false });
+    if (!open) return;
+    // Before: router.replace, which closed the dialog at once but left
+    // ?version= in the address bar until the server answered, so a reload
+    // in between (or a replace that never finished) reopened it.
+    window.history.replaceState(null, "", versionHref(basePath));
   };
 
   return (

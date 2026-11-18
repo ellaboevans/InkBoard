@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { StatusBadge } from "@/components/poem-badges";
+import { FormSwitch } from "@/components/form-controls";
 import { SpecialLetters } from "@/components/special-letters";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,7 +30,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { BODY_MAX, PASSWORD_MIN, TITLE_MAX } from "@/lib/poem-limits";
 import { toggleEmphasis } from "@/lib/poem-markdown";
@@ -433,7 +433,9 @@ export function PoemForm({
                       : "Readers see the title on the board but need the password to read it."}
                 </p>
               </div>
-              <Switch
+              {/* FormSwitch: a plain Switch went back to its value at mount after "Save changes", so a
+                  poem made private was sent as public on the next save. The hidden input posts it. */}
+              <FormSwitch
                 id="private"
                 checked={isPrivate}
                 onCheckedChange={setIsPrivate}

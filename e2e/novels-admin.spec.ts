@@ -112,9 +112,26 @@ test("a writer creates a novel, orders chapters, restores a device draft, publis
   const history = page.getByRole("region", { name: "History" });
   // Newest first: the edit, the published text, the titled draft, the empty new chapter.
   await expect(history.getByRole("link")).toHaveCount(4, { timeout: 30_000 });
-  await history.getByRole("link").nth(1).click();
   const version = page.getByRole("dialog", { name: /Earlier version, saved/ });
-  await expect(version).toBeVisible();
+  // Closing takes ?version= out of the address bar at once (not after a server round trip), so
+  // a reload straight after closing doesn't bring the dialog back (it did: the a11y test hit it).
+  const openOlder = async () => {
+    await history.getByRole("link").nth(1).click();
+    await expect(page).toHaveURL(/\?version=/);
+    await expect(version).toBeVisible();
+  };
+  await openOlder();
+  await page.keyboard.press("Escape");
+  expect(page.url()).not.toContain("version="); // synchronous: no waiting, no retry
+  await expect(version).toHaveCount(0);
+  await openOlder(); // the same version again, without a reload
+  await version.getByRole("button", { name: "Close" }).first().click();
+  expect(page.url()).not.toContain("version=");
+  await page.reload();
+  await expect(text).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/version=/);
+  await openOlder();
   await version.getByRole("button", { name: "Restore this version" }).click();
   await expect(toast(page, "Version restored in the editor")).toBeVisible();
   await expect(text).toHaveValue("The ferry came late.\n\n* * *\n\nAkua waited at the landing.");

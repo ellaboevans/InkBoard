@@ -7,7 +7,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { FormRadioGroup } from "@/components/form-controls";
+import { RadioGroupItem } from "@/components/ui/radio-group";
 import { PASSWORD_MIN } from "@/lib/poem-limits";
 import type { PasswordMode } from "@/server/password-settings";
 import { savePasswordSettingsAction, type PasswordSettingsState } from "./actions";
@@ -72,7 +73,9 @@ export function PasswordSettingsForm({
     >
       <fieldset className="grid gap-3">
         <legend className="mb-3 font-medium">Passwords for private poems and novels</legend>
-        <RadioGroup name="mode" value={mode} onValueChange={(v) => setMode(v as PasswordMode)} className="gap-3">
+        {/* FormRadioGroup: a failed save's form reset no longer flips the choice back; the hidden input posts it. */}
+        <input type="hidden" name="mode" value={mode} />
+        <FormRadioGroup value={mode} onValueChange={(v) => setMode(v as PasswordMode)} className="gap-3">
           <ModeOption
             value="per_poem"
             current={savedMode === "per_poem"}
@@ -87,7 +90,7 @@ export function PasswordSettingsForm({
             title="One password for all my private poems and novels"
             description="Set it once here. A reader who enters it can read every private poem and novel of yours, including ones you add or make private later, until you change the password."
           />
-        </RadioGroup>
+        </FormRadioGroup>
       </fieldset>
 
       {mode === "shared" && (

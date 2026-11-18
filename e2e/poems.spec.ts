@@ -90,6 +90,57 @@ test("private poems require a password and never expose its hash", async ({ page
   await expect(page.getByRole("row", { name: new RegExp(title) })).toContainText("Private");
 });
 
+test("the Password protected switch keeps its state across Save changes; a second save keeps the poem private", async ({ page }) => {
+  // React resets a <form action> after every action, and a plain Radix Switch answers by going back to
+  // its value at mount: the form showed (and the next save sent) "public" for a poem just made private.
+  const email = `switch-${unique()}@example.com`;
+  await signUpAs(page, email, "Wren Switch");
+  const { rows: who } = await sql(`SELECT id FROM editors WHERE email = '${email}'`);
+  const { rows: made } = await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at)
+    VALUES ('${who[0].id}', 'Open Gate', 'open-gate', 'a line', 'public', 'published', now()) RETURNING id`);
+  const id = made[0].id as string;
+  const poem = async () => (await sql(`SELECT visibility, body, password_hash FROM poems WHERE id = '${id}'`)).rows[0];
+  const toggle = page.getByRole("switch", { name: "Password protected" });
+  const sent = page.locator('input[type="hidden"][name="visibility"]');
+  /** Save, wait until the database has `expected`, then check the form after its reset has run. */
+  async function save(expected: Record<string, unknown>, checked: boolean) {
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect.poll(async () => await poem(), { timeout: 45_000 }).toMatchObject(expected);
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+    await page.waitForTimeout(1000); // a reset-driven flip would show by now
+    await expect(toggle).toHaveAttribute("aria-checked", String(checked));
+    await expect(sent).toHaveValue(checked ? "private" : "public");
+    await expect(page.getByText("Unsaved changes")).toHaveCount(0);
+  }
+
+  // Public at mount, made private: the switch stays on after "Save changes".
+  await page.goto(`/admin/poems/${id}`);
+  await toggle.click();
+  await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("gate-pass-1");
+  await save({ visibility: "private" }, true);
+  const first = await poem();
+  await expect(page.getByLabel("New password", { exact: true }).filter({ visible: true })).toBeVisible();
+
+  // A second save (an edit) keeps it private, with the same password.
+  await page.getByRole("textbox", { name: "Poem" }).fill("a line, revised");
+  await save({ body: "a line, revised" }, true);
+  expect(await poem()).toMatchObject({ visibility: "private", password_hash: first.password_hash });
+
+  // Private at mount (a fresh load, not reload(): Chrome restores typed text on a reload), saved: still private.
+  await page.goto(`/admin/poems/${id}`);
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("textbox", { name: "Poem" }).fill("a line, again");
+  await save({ body: "a line, again" }, true);
+  expect(await poem()).toMatchObject({ visibility: "private", password_hash: first.password_hash });
+
+  // And the other way: made public, it stays off (no "needs a password" on the next save).
+  await toggle.click();
+  await save({ visibility: "public" }, false);
+  await page.getByRole("textbox", { name: "Poem" }).fill("a line, public");
+  await save({ body: "a line, public" }, false);
+  expect(await poem()).toMatchObject({ visibility: "public", password_hash: null });
+});
+
 test("pressing Enter saves without publishing a draft", async ({ page }) => {
   await signUpAs(page, `enter-${unique()}@example.com`, "Wren Enter");
 

@@ -2,29 +2,9 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { PHOTO_JPEG_SIZE, PHOTO_MAX_BYTES, PHOTO_WEBP_SIZES } from "@/lib/photo-limits";
 import { processPhoto, readPhotoHeader } from "@/server/photos/process";
-import { bombPng, halves, isBlueish, isRedish, phoneJpeg, pixel, png, webp } from "../support/photos";
+import { bombPng, halves, isBlueish, isRedish, metadataMarkers, phoneJpeg, pixel, png, webp } from "../support/photos";
 
 const WHOLE = { x: 0, y: 0, size: 1 };
-
-/** Every metadata marker a JPEG or WebP could carry it in. */
-function metadataMarkers(file: Uint8Array): string[] {
-  const buf = Buffer.from(file);
-  const found: string[] = [];
-  for (const s of ["Exif", "EXIF", "GPS", "PhoneMaker", "Phone 15 Pro", "Ada Verse", "2026:05:01", "XMP-SECRET-CREATOR", "http://ns.adobe.com/xap", "x:xmpmeta", "ICC_PROFILE", "ICCP", "XMP ", "Display P3", "iptc", "Photoshop"]) {
-    if (buf.includes(s)) found.push(s);
-  }
-  // JPEG APPn segments other than JFIF's APP0 (APP1 = EXIF/XMP, APP2 = ICC, APP13 = IPTC).
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    let i = 2;
-    while (i + 4 <= buf.length && buf[i] === 0xff) {
-      const marker = buf[i + 1];
-      if (marker === 0xda) break; // start of scan: no more headers
-      if (marker >= 0xe1 && marker <= 0xef) found.push(`APP${marker - 0xe0}`);
-      i += 2 + buf.readUInt16BE(i + 2);
-    }
-  }
-  return found;
-}
 
 describe("processing a photo (Phase 22)", () => {
   it("strips all metadata: a phone photo with GPS, camera, date, XMP and an ICC profile comes out with none", async () => {

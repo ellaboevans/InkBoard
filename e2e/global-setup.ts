@@ -62,6 +62,7 @@ async function warmUp() {
     ["/a/warm-up/feed.xml"],
     ["/avatars/a01"],
     ["/photos/AAAAAAAAAAAAAAAAAAAAAA/96.webp"],
+    ["/covers/AAAAAAAAAAAAAAAAAAAAAA/128.webp"],
     // POST-only, like the passkey options.
     ["/api/owner/photo-takedown"],
     ["/a/warm-up/opengraph-image"],

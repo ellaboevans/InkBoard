@@ -219,11 +219,14 @@ export function NovelDetailsForm({
   initial,
   slug,
   access,
+  cover,
 }: {
   novelId: string;
   initial: NovelDetails;
   slug: string;
   access: NovelAccess;
+  /** The cover's upload panel (Phase 25), outside the form: it saves on its own. */
+  cover?: React.ReactNode;
 }) {
   const [values, set] = useDetails(initial);
   const [saved, setSaved] = useState(initial);
@@ -260,6 +263,7 @@ export function NovelDetailsForm({
       <h2 id="details-heading" className="font-serif text-xl">
         Details
       </h2>
+      {cover}
       <form
         action={formAction}
         onSubmit={(e) => {

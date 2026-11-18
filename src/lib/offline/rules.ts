@@ -40,8 +40,9 @@ var InkboardOffline = (function () {
   var NOVEL_FILES = ["opengraph-image", "twitter-image", "feed.xml"];
   var PAGES = ["/about", "/privacy"];
   // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
-  // Never /photos/ (profile photos, Phase 22): they pass through to the browser's
-  // own cache (an hour), so a removed photo can't outlive that in the worker.
+  // Never /photos/ (profile photos, Phase 22) or /covers/ (novel covers, Phase
+  // 25): they pass through to the browser's own cache (an hour), so a removed
+  // photo or cover can't outlive that in the worker.
   var STATIC_PREFIXES = ["/_next/static/", "/icons/", "/avatars/"];
   var STATIC_FILES = ["/icon.svg", "/apple-icon", "/favicon.ico", "/manifest.webmanifest", "/install-capture.js"];
   // Saved pages kept per kind, newest first: poems, chapters (a commute's

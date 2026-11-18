@@ -58,11 +58,25 @@ export function LogoMark({ size, tile = BRAND.primary, glyph = BRAND.onPrimary }
 }
 
 /**
- * A novel's drawn cover on a link card (Phase 23b): the title and pen name on
- * the paper tone of the author's hue, with a spine, like NovelCover on the
- * page. Only the novel's title and the pen name: never chapter text.
+ * A novel's cover on a link card (Phase 23b): the drawn cover (the title and
+ * pen name on the paper tone of the author's hue, with a spine, like
+ * NovelCover on the page), or since Phase 25 the uploaded cover when `image`
+ * holds its JPEG (read from storage by coverDataUri, never fetched from our
+ * own URL; unreadable means drawn). Never chapter text.
  */
-export function OgCover({ title, penName, hue }: CoverSpec) {
+export function OgCover({ title, penName, hue, image }: CoverSpec) {
+  if (image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- Satori draws <img>, not next/image
+      <img
+        src={image}
+        alt=""
+        width={240}
+        height={360}
+        style={{ width: 240, height: 360, flexShrink: 0, objectFit: "cover", borderRadius: "6px 14px 14px 6px", boxShadow: "0 2px 6px rgba(0,0,0,0.18)" }}
+      />
+    );
+  }
   const ink = coverHex("ink", hue);
   const shown = truncate(title, 60);
   const author = penName.toUpperCase();

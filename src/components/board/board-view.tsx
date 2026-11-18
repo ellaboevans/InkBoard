@@ -23,6 +23,7 @@ import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { SiteLinks } from "@/components/site-links";
 import { BoardCanvas, worksCount } from "./board-canvas";
 import { novelFacts } from "@/components/novel/book-card-face";
+import { NovelCover } from "@/components/novel/novel-cover";
 import { novelPath } from "@/lib/novel-seo";
 import { CollectionBadgeLine } from "./poem-card-face";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
@@ -150,8 +151,20 @@ function BoardList({
                       <li key={n.id}>
                         <Link
                           href={novelPath(s.slug, n.slug)}
-                          className="group block rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring"
+                          className="group grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3 rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring"
                         >
+                          {/* Drawn or uploaded (Phase 25), like the book card's; decorative. */}
+                          <NovelCover
+                            title={n.title}
+                            penName={s.penName}
+                            hue={sectionHue(s.editorId)}
+                            lang={n.language}
+                            coverKey={n.coverKey}
+                            width={40}
+                            loading="lazy"
+                            className="mt-1 w-10 text-[7px]"
+                          />
+                          <span className="min-w-0">
                           <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
                             <span lang={n.language ?? undefined}>{n.title}</span>
                             {n.visibility === "private" && (
@@ -169,6 +182,7 @@ function BoardList({
                               {n.blurb}
                             </span>
                           )}
+                          </span>
                         </Link>
                       </li>
                     ))}

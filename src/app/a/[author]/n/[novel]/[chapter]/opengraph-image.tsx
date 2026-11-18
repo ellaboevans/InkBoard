@@ -4,6 +4,7 @@ import { ogFonts } from "@/components/brand/og-fonts";
 import { sectionHue } from "@/lib/board-layout";
 import { SITE_NAME } from "@/lib/site";
 import { getReaderChapter } from "@/server/board-cache";
+import { coverDataUri } from "@/server/novel-covers";
 
 export const alt = `A chapter of a novel on ${SITE_NAME}`;
 export const size = OG_SIZE;
@@ -21,7 +22,7 @@ export default async function Image({ params }: { params: Promise<{ author: stri
   const titled = c.title.trim() !== "";
   return new ImageResponse(
     <OgCard
-      cover={{ title: c.novel.title, penName: c.penName, hue: sectionHue(c.editorId) }}
+      cover={{ title: c.novel.title, penName: c.penName, hue: sectionHue(c.editorId), image: await coverDataUri(c.novel.coverKey) }}
       kicker={titled ? `Chapter ${c.number}` : c.novel.title}
       title={c.displayTitle}
       quote={titled ? c.novel.title : null}

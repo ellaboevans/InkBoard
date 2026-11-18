@@ -176,6 +176,7 @@ describe("novels on the board and the author page", () => {
         language: "en",
         status: "ongoing",
         visibility: "public",
+        coverKey: null,
         blurb: "Every Thursday the ferry crosses the lake.",
         chapterCount: 3,
         wordCount: 2860,

@@ -247,6 +247,17 @@ export default function PrivacyPage() {
               delete it or your account. While you write a chapter, your browser also keeps a copy of it on your device
               (see “On your device”).
             </p>
+            <p>
+              If you upload a cover for a novel, it’s handled like a profile photo: we keep only copies we make from it,
+              cropped to the book-shaped part you chose, in a few sizes, with everything else in the file removed (the
+              camera’s details, the date, where it was taken, any other metadata), and not the file you uploaded. They’re
+              stored with Cloudflare R2 under a random name that has nothing to do with you or the novel, served from{" "}
+              {SITE_NAME} itself, shown to readers wherever the novel appears (even when it’s private, like its title and
+              blurb), and they’re in your JSON download. Remove cover, deleting the novel and deleting your account all
+              delete the copies from storage at once; a browser that showed one may keep it for up to{" "}
+              {F.coverCacheLife}, then shows the drawn cover. Unused copies from an interrupted save are deleted by the
+              daily clean-up once they’re {F.coverOrphanCleanup} old.
+            </p>
           </Sub>
           <Sub heading="Signing in">
             <ul className={list}>
@@ -305,7 +316,7 @@ export default function PrivacyPage() {
             <p>
               Delete account, in Settings, removes all of this at once: your profile, poems with their earlier versions,
               collections, novels with their chapters and their earlier versions, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
-              email, attempt counters that name you or your poems, your poems’ visit counts, your profile photo’s files,
+              email, attempt counters that name you or your poems, your poems’ visit counts, your profile photo’s and novel covers’ files,
               and readers’ follows of you.
               We keep only your old author address and your poems’ short addresses on a list, so they’re never given to
               someone else.
@@ -369,8 +380,8 @@ export default function PrivacyPage() {
               there.
             </li>
             <li>
-              <strong className="font-medium">Cloudflare R2</strong> stores writers’ profile photos (the processed copies
-              described above). Readers’ browsers never contact it: photos are served through {SITE_NAME}.
+              <strong className="font-medium">Cloudflare R2</strong> stores writers’ profile photos and novel covers (the
+              processed copies described above). Readers’ browsers never contact it: they’re served through {SITE_NAME}.
             </li>
             <li>
               <strong className="font-medium">Resend</strong> sends our emails, so it receives your email address and
@@ -404,7 +415,7 @@ export default function PrivacyPage() {
           </Sub>
           <Sub heading="Writers">
             <ul className={list}>
-              <li>Edit or delete your poems and profile whenever you like, and remove your profile photo.</li>
+              <li>Edit or delete your poems and profile whenever you like, and remove your profile photo or a novel’s cover.</li>
               <li>Download everything you’ve written, as Markdown or JSON, under Settings, then Download your poems.</li>
               <li>Delete your account, under Settings.</li>
               <li>Sign out other devices, remove passkeys and replace recovery codes, on your profile.</li>

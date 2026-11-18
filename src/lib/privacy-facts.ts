@@ -40,6 +40,10 @@ export const PRIVACY_FACTS = {
   photoCacheLife: "an hour",
   /** PHOTO_ORPHAN_GRACE_HOURS (src/server/profile-photos.ts): unlinked photo files older than this go in the daily clean-up. */
   photoOrphanCleanup: "6 hours",
+  /** COVER_CACHE_SECONDS (src/lib/photo-limits.ts): how long a browser may keep a served novel cover (Phase 25). */
+  coverCacheLife: "an hour",
+  /** COVER_ORPHAN_GRACE_HOURS (src/server/novel-covers.ts): unlinked cover files older than this go in the daily clean-up. */
+  coverOrphanCleanup: "6 hours",
   /** REVISIONS_KEPT (src/server/poem-history.ts) */
   revisionsKept: "20",
   /** CHAPTER_REVISIONS_KEPT (src/lib/novel-limits.ts): versions kept per chapter, the current one included. */

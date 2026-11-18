@@ -1,7 +1,12 @@
 import "server-only";
 import sharp from "sharp";
-import { cropToPixels, type PhotoCrop } from "@/lib/photo-crop";
+import { cropRectToPixels, type PhotoCrop } from "@/lib/photo-crop";
 import {
+  COVER_ASPECT,
+  COVER_JPEG_WIDTH,
+  COVER_MIN_WIDTH,
+  COVER_WEBP_WIDTHS,
+  type CoverWebpWidth,
   PHOTO_JPEG_SIZE,
   PHOTO_MAX_BYTES,
   PHOTO_MAX_PIXELS,
@@ -13,7 +18,9 @@ import {
 import { isAcceptedType, sniffImageType, type SniffedType } from "@/lib/photo-sniff";
 
 /*
- * Profile photo processing (docs/PLAN.md, Phase 22), framework-free.
+ * Image processing for profile photos (docs/PLAN.md, Phase 22: square) and
+ * novel covers (Phase 25: 2:3), framework-free. One pipeline, two specs
+ * (PHOTO_SPEC, COVER_SPEC): only the crop's shape and the output sizes differ.
  *
  * Order matters, and each step refuses before the next costs anything:
  * 1. byte size (PHOTO_MAX_BYTES);
@@ -32,12 +39,40 @@ import { isAcceptedType, sniffImageType, type SniffedType } from "@/lib/photo-sn
 /** Paper, behind transparent PNG/WebP pixels (the avatars' tile, --secondary). */
 const TILE = { r: 0xf3, g: 0xee, b: 0xe6 };
 
-export type ProcessedPhoto = {
-  webp: Record<PhotoWebpSize, Uint8Array>;
+/** What one kind of image is cut and encoded to. */
+export type ImageSpec<W extends number = number> = {
+  /** The crop's width / height (1 = square). */
+  aspect: number;
+  /** The WebP copies' widths (each `width / aspect` tall). */
+  webpWidths: readonly W[];
+  /** The JPEG copy's width (Satori, the JSON download). */
+  jpegWidth: number;
+  /** The crop must keep at least this many source pixels across. */
+  minWidth: number;
+};
+
+export const PHOTO_SPEC: ImageSpec<PhotoWebpSize> = {
+  aspect: 1,
+  webpWidths: PHOTO_WEBP_SIZES,
+  jpegWidth: PHOTO_JPEG_SIZE,
+  minWidth: PHOTO_MIN_SIDE,
+};
+
+export const COVER_SPEC: ImageSpec<CoverWebpWidth> = {
+  aspect: COVER_ASPECT,
+  webpWidths: COVER_WEBP_WIDTHS,
+  jpegWidth: COVER_JPEG_WIDTH,
+  minWidth: COVER_MIN_WIDTH,
+};
+
+export type ProcessedImage<W extends number = number> = {
+  webp: Record<W, Uint8Array>;
   jpeg: Uint8Array;
-  /** Of the photo as seen (after orientation), before cropping. */
+  /** Of the picture as seen (after orientation), before cropping. */
   source: { type: "jpeg" | "png" | "webp"; width: number; height: number };
 };
+export type ProcessedPhoto = ProcessedImage<PhotoWebpSize>;
+export type ProcessedCover = ProcessedImage<CoverWebpWidth>;
 
 export type PhotoError =
   | { error: "too_large" }
@@ -88,33 +123,43 @@ export async function readPhotoHeader(bytes: Uint8Array): Promise<
   };
 }
 
-export async function processPhoto(
+/** A square profile photo (Phase 22). */
+export const processPhoto = (bytes: Uint8Array, crop: PhotoCrop) => processImage(bytes, crop, PHOTO_SPEC);
+
+/** A 2:3 novel cover (Phase 25): the same checks and steps, a book's shape. */
+export const processCover = (bytes: Uint8Array, crop: PhotoCrop) => processImage(bytes, crop, COVER_SPEC);
+
+export async function processImage<W extends number>(
   bytes: Uint8Array,
   crop: PhotoCrop,
-): Promise<({ ok: true } & ProcessedPhoto) | ({ ok: false } & PhotoError)> {
+  spec: ImageSpec<W>,
+): Promise<({ ok: true } & ProcessedImage<W>) | ({ ok: false } & PhotoError)> {
   const header = await readPhotoHeader(bytes);
   if (!header.ok) return header;
-  const box = cropToPixels(crop, header.orientedWidth, header.orientedHeight, Math.min(PHOTO_MIN_SIDE, header.orientedWidth, header.orientedHeight));
+  const { orientedWidth: w, orientedHeight: h } = header;
+  // A picture smaller than the minimum can still be used whole.
+  const minWidth = Math.min(spec.minWidth, Math.floor(Math.min(w, h * spec.aspect)));
+  const box = cropRectToPixels(crop, w, h, minWidth, spec.aspect);
   if (!box) return { ok: false, error: "crop" };
 
   try {
     const base = sharp(bytes, SHARP_OPTIONS)
       .autoOrient()
-      .extract({ left: box.left, top: box.top, width: box.side, height: box.side })
+      .extract(box)
       .toColourspace("srgb")
-      // Transparent pixels on paper, in every copy: the avatar sits behind a photo as its fallback.
+      // Transparent pixels on paper, in every copy: the avatar (or drawn cover) sits behind as its fallback.
       .flatten({ background: TILE });
-    const square = (size: number) => base.clone().resize(size, size, { fit: "fill" });
+    const sized = (width: number) => base.clone().resize(width, Math.round(width / spec.aspect), { fit: "fill" });
     const webps = await Promise.all(
-      PHOTO_WEBP_SIZES.map((size) => square(size).webp({ quality: 82, effort: 4 }).toBuffer()),
+      spec.webpWidths.map((width) => sized(width).webp({ quality: 82, effort: 4 }).toBuffer()),
     );
-    const jpeg = await square(PHOTO_JPEG_SIZE).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
-    const webp = Object.fromEntries(PHOTO_WEBP_SIZES.map((s, i) => [s, new Uint8Array(webps[i])])) as Record<PhotoWebpSize, Uint8Array>;
+    const jpeg = await sized(spec.jpegWidth).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+    const webp = Object.fromEntries(spec.webpWidths.map((width, i) => [width, new Uint8Array(webps[i])])) as Record<W, Uint8Array>;
     return {
       ok: true,
       webp,
       jpeg: new Uint8Array(jpeg),
-      source: { type: header.type, width: header.orientedWidth, height: header.orientedHeight },
+      source: { type: header.type, width: w, height: h },
     };
   } catch {
     return { ok: false, error: "unreadable" };

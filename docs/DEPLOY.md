@@ -47,7 +47,7 @@ There is no fallback, locally or in production: without `RESEND_API_KEY` the app
 
 ## 4. Cloudflare R2 (profile photos)
 
-Writers' profile photos (docs/PLAN.md, Phase 22) are stored in an R2 bucket. Browsers never talk to R2: the app reads photos server-side and serves them from its own origin (`/photos/<key>/<size>.webp`), so there is **no public bucket, no custom domain and no CORS** to set up. Until these four variables are set, everything else works and uploads fail with "Your photo couldn't be stored just now" (the log says which variables are missing).
+Writers' profile photos (docs/PLAN.md, Phase 22) and novel covers (Phase 25) are stored in an R2 bucket (under `photos/` and `covers/`). Browsers never talk to R2: the app reads them server-side and serves them from its own origin (`/photos/<key>/<size>.webp`, `/covers/<key>/<width>.webp`), so there is **no public bucket, no custom domain and no CORS** to set up. Until these four variables are set, everything else works and uploads fail with "Your photo couldn't be stored just now" (the log says which variables are missing).
 
 1. **Create the bucket.** Cloudflare dashboard → R2 Object Storage → Create bucket. Name it e.g. `inkboard-photos`; location *Automatic*; storage class *Standard*. Leave **Public access off** (no r2.dev subdomain, no custom domain).
 2. **Create an API token with the narrowest permissions.** R2 → Manage R2 API Tokens (*API* on the R2 overview) → Create API token:

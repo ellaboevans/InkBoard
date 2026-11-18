@@ -45,6 +45,8 @@ export type BoardNovel = {
   status: "ongoing" | "complete";
   /** Private (Phase 25): title, cover, blurb and chapter list are shown; chapter text only after unlocking. */
   visibility: "public" | "private";
+  /** The uploaded cover's key (Phase 25), or null: the drawn cover. Public even for a private novel. */
+  coverKey: string | null;
   /** The blurb's first paragraph, cut short for the card; null = none. */
   blurb: string | null;
   /** Published chapters. Always at least 1: a novel with none isn't shown. */
@@ -97,6 +99,8 @@ export type ReaderChapter = ReaderChapterSummary & {
     visibility: "public" | "private";
     /** Private novels: the author's one password opens it. */
     sharedPassword: boolean;
+    /** For the chapter's link card. */
+    coverKey: string | null;
   };
   penName: string;
   authorSlug: string;

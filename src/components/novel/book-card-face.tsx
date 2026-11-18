@@ -49,7 +49,16 @@ export function BookCardFace({
       )}
       style={style}
     >
-      <NovelCover title={novel.title} penName={penName} hue={hue} lang={lang} className="w-[84px] self-start text-[13px]" />
+      <NovelCover
+        title={novel.title}
+        penName={penName}
+        hue={hue}
+        lang={lang}
+        coverKey={novel.coverKey}
+        width={84}
+        loading="lazy"
+        className="w-[84px] self-start text-[13px]"
+      />
       <div className="flex min-w-0 flex-col">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-primary uppercase">
           Novel

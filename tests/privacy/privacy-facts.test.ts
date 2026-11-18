@@ -14,7 +14,8 @@ import { CLEANUP_DAYS } from "@/server/maintenance";
 import { REVISIONS_KEPT } from "@/server/poem-history";
 import { UNLOCK_TTL_SECONDS } from "@/server/unlock";
 import { SHARE_VISIT_WINDOW_SECONDS } from "@/lib/share-image/visits";
-import { PHOTO_CACHE_SECONDS } from "@/lib/photo-limits";
+import { COVER_CACHE_SECONDS, PHOTO_CACHE_SECONDS } from "@/lib/photo-limits";
+import { COVER_ORPHAN_GRACE_HOURS } from "@/server/novel-covers";
 import { CHAPTER_REVISIONS_KEPT } from "@/lib/novel-limits";
 import { PHOTO_ORPHAN_GRACE_HOURS } from "@/server/profile-photos";
 import { READING_PLACES_MAX } from "@/lib/reading-place";
@@ -44,6 +45,8 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   unusedSubscription: UNUSED_SUBSCRIPTION_DAYS * DAY,
   photoCacheLife: PHOTO_CACHE_SECONDS,
   photoOrphanCleanup: PHOTO_ORPHAN_GRACE_HOURS * 3600,
+  coverCacheLife: COVER_CACHE_SECONDS,
+  coverOrphanCleanup: COVER_ORPHAN_GRACE_HOURS * 3600,
   revisionsKept: REVISIONS_KEPT,
   chapterVersionsKept: CHAPTER_REVISIONS_KEPT,
   readingPlacesKept: READING_PLACES_MAX,

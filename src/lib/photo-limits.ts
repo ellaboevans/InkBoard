@@ -59,3 +59,37 @@ export const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 export function formatMegabytes(bytes: number): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
+
+/*
+ * Uploaded novel covers (docs/PLAN.md, Phase 25): the same pipeline as
+ * profile photos (the byte, side and pixel limits above apply as they are),
+ * cropped to a book's 2:3 instead of a square.
+ */
+
+/** A cover's width over its height (a book's proportion). */
+export const COVER_ASPECT = 2 / 3;
+
+/**
+ * The WebP copies browsers get, by width (each 3/2 as tall). The largest
+ * place a cover shows is the novel page (220 CSS px wide from 640 px, 112
+ * on phones): 512 covers it at 2× and the phone's at 3×; 256 the board's
+ * and author page's 84 px book cards at 3×; 128 the list view's at 3×.
+ */
+export const COVER_WEBP_WIDTHS = [128, 256, 512] as const;
+export type CoverWebpWidth = (typeof COVER_WEBP_WIDTHS)[number];
+
+/** The JPEG copy's width, for Satori (link cards draw the cover 240 × 360) and the JSON download. */
+export const COVER_JPEG_WIDTH = 480;
+
+/** The height of a cover copy `width` wide. */
+export const coverHeight = (width: number) => Math.round(width / COVER_ASPECT);
+
+/** The crop must keep at least this many source pixels across (smaller is a blur on the novel page). */
+export const COVER_MIN_WIDTH = 64;
+
+/** Cover uploads per editor per window, all their novels together (rate_limits key `cover:upload:<editorId>`). */
+export const COVER_UPLOAD_LIMIT = 20;
+export const COVER_UPLOAD_WINDOW_SECONDS = 60 * 60;
+
+/** How long a browser may keep a served cover: the photos' hour, for the same reason. */
+export const COVER_CACHE_SECONDS = PHOTO_CACHE_SECONDS;

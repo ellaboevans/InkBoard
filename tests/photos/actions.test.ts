@@ -112,3 +112,62 @@ describe("the owner's takedown route (Phase 22)", () => {
     }
   });
 });
+
+const { removeCoverAction, saveCoverAction } = await import("@/app/admin/(dashboard)/novels/cover-actions");
+const { createNovel } = await import("@/server/novels");
+const { novels } = await import("@/db/schema");
+
+describe("cover actions (Phase 25)", () => {
+  const coverForm = async (bytes?: Uint8Array) => {
+    const f = new FormData();
+    f.set("cover", fileOf(bytes ?? (await png())));
+    f.set("crop", "0,0,1");
+    return f;
+  };
+
+  it("save and remove: for the DAL editor's own novel only, BOARD_TAG refreshed; a foreign novel changes and refreshes nothing", async () => {
+    const [ada] = await db.insert(editors).values({ email: "a@x.com", penName: "Ada", slug: "ada" }).returning();
+    const [bo] = await db.insert(editors).values({ email: "b@x.com", penName: "Bo", slug: "bo" }).returning();
+    const book = await createNovel(ada.id, { title: "Ada's Book" });
+    if (!book.ok) throw new Error();
+
+    who.id = bo.id;
+    expect(await saveCoverAction(book.novel.id, await coverForm())).toEqual({ ok: false, error: "This novel no longer exists or isn't yours." });
+    expect(cache.updateTag).not.toHaveBeenCalled();
+
+    who.id = ada.id;
+    expect(await saveCoverAction(book.novel.id, await coverForm())).toEqual({ ok: true });
+    expect(cache.updateTag).toHaveBeenCalledWith(BOARD_TAG);
+    const [row] = await db.select({ k: novels.coverKey }).from(novels);
+    expect(row.k).toMatch(/^[A-Za-z0-9_-]{22}$/);
+
+    cache.updateTag.mockClear();
+    who.id = bo.id;
+    await removeCoverAction(book.novel.id);
+    expect(cache.updateTag).not.toHaveBeenCalled();
+    expect((await db.select({ k: novels.coverKey }).from(novels))[0].k).toBe(row.k);
+
+    who.id = ada.id;
+    expect(await removeCoverAction(book.novel.id)).toEqual({ ok: true });
+    expect(cache.updateTag).toHaveBeenCalledWith(BOARD_TAG);
+    expect((await db.select({ k: novels.coverKey }).from(novels))[0].k).toBeNull();
+    expect(await photoStorage().list("covers/")).toEqual([]);
+  });
+
+  it("a refused picture: the cover's own wording for the toast, nothing refreshed", async () => {
+    const [ada] = await db.insert(editors).values({ email: "a@x.com", penName: "Ada", slug: "ada" }).returning();
+    const book = await createNovel(ada.id, { title: "Ada's Book" });
+    if (!book.ok) throw new Error();
+    who.id = ada.id;
+    expect(await saveCoverAction(book.novel.id, await coverForm(new TextEncoder().encode("hello")))).toEqual({
+      ok: false,
+      error: "That file isn't a photo we can use. Choose a JPEG, PNG or WebP photo.",
+    });
+    expect(cache.updateTag).not.toHaveBeenCalled();
+  });
+
+  it("signed out: refused before anything happens", async () => {
+    who.id = "";
+    await expect(saveCoverAction("00000000-0000-0000-0000-000000000000", await coverForm())).rejects.toThrow(/sign-in/);
+  });
+});

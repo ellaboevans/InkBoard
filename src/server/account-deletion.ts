@@ -1,13 +1,14 @@
 import "server-only";
-import { eq, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/db";
-import { editors, emailOtps, poems, rateLimits, retiredSlugs, sessions } from "@/db/schema";
+import { editors, emailOtps, novels, poems, rateLimits, retiredSlugs, sessions } from "@/db/schema";
 import { toNfc } from "@/lib/letters";
 import { describeUserAgent } from "@/lib/user-agent";
 import { isSessionFresh } from "./auth/step-up";
 import { sha256 } from "./crypto";
 import { sendAccountDeletedEmail } from "./email";
+import { deleteCoverFiles } from "./novel-covers";
 import { deletePhotoFiles } from "./profile-photos";
 
 /*
@@ -30,7 +31,8 @@ import { deletePhotoFiles } from "./profile-photos";
  *    tests/account/deletion.test.ts walks every table that references
  *    editors (directly or through those) and checks nothing is left.
  *
- * 5. After the commit, deletes the profile photo's files from storage.
+ * 5. After the commit, deletes the profile photo's and the novels' uploaded
+ *    covers' files from storage (Phase 25).
  *
  * The caller then invalidates the readers' cache, clears the cookie and sends
  * the browser to the board. Saved offline copies in readers' browsers are out
@@ -69,6 +71,11 @@ export async function deleteAccount(input: {
 
     const ownPoems = await tx.select({ id: poems.id }).from(poems).where(eq(poems.editorId, editorId));
     const ownSessions = await tx.select({ id: sessions.id }).from(sessions).where(eq(sessions.editorId, editorId));
+    // Read before the cascade: their files are deleted after the commit.
+    const covers = await tx
+      .select({ key: novels.coverKey })
+      .from(novels)
+      .where(and(eq(novels.editorId, editorId), isNotNull(novels.coverKey)));
 
     if (editor.slug) await tx.insert(retiredSlugs).values({ slug: editor.slug }).onConflictDoNothing();
 
@@ -81,14 +88,16 @@ export async function deleteAccount(input: {
 
     // Everything else follows by ON DELETE CASCADE (see the header).
     await tx.delete(editors).where(eq(editors.id, editorId));
-    return { ok: true as const, editor, poemIds: ownPoems.map((p) => p.id) };
+    return { ok: true as const, editor, poemIds: ownPoems.map((p) => p.id), coverKeys: covers.flatMap((c) => (c.key ? [c.key] : [])) };
   });
   if (!result.ok) return result;
 
-  const { editor, poemIds } = result;
-  // The profile photo's files (Phase 22): deleted now, not just unlinked. A
-  // failure is logged and the daily sweep deletes them (no row points at them).
+  const { editor, poemIds, coverKeys } = result;
+  // The profile photo's files (Phase 22) and the novels' covers (Phase 25):
+  // deleted now, not just unlinked. A failure is logged and the daily sweep
+  // deletes them (no row points at them).
   if (editor.photoKey) await deletePhotoFiles(editor.photoKey);
+  for (const key of coverKeys) await deleteCoverFiles(key);
   const details = { penName: editor.penName, device: describeUserAgent(input.userAgent), at: new Date() };
   after(async () => {
     try {

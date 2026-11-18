@@ -98,8 +98,13 @@ describe("which request gets which strategy", () => {
     }
   });
 
-  it("never caches profile photos: removing one must not leave it in a reader's worker (Phase 22)", () => {
-    for (const path of ["/photos/AbCdEfGhIjKlMnOpQrStUv/96.webp", "/photos/AbCdEfGhIjKlMnOpQrStUv/384.webp"]) {
+  it("never caches profile photos or novel covers: removing one must not leave it in a reader's worker (Phases 22, 25)", () => {
+    for (const path of [
+      "/photos/AbCdEfGhIjKlMnOpQrStUv/96.webp",
+      "/photos/AbCdEfGhIjKlMnOpQrStUv/384.webp",
+      "/covers/AbCdEfGhIjKlMnOpQrStUv/128.webp",
+      "/covers/AbCdEfGhIjKlMnOpQrStUv/512.webp",
+    ]) {
       expect(req(path, { mode: "no-cors" }), path).toBe("passthrough");
       expect(R.isStatic(new URL(path, ORIGIN).pathname), path).toBe(false);
       expect(R.readerKind(new URL(path, ORIGIN).pathname), path).toBeNull();

@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import sharp from "sharp";
 import { expect, test, type Page } from "@playwright/test";
 import {
   createRecoveryCodes,
@@ -396,6 +397,40 @@ test("private novels: the writer's details form, the novel page and a locked cha
   await expect(reader.locator("[data-chapter-text]")).toBeVisible({ timeout: 45_000 });
   await scan(reader, "chapter page: unlocked");
   await context.close();
+});
+
+test("novel covers: the details' cover panel, the 2:3 crop step and a saved cover, phone and desktop", async ({ page }) => {
+  const id = unique();
+  const email = `a11y-cover-${id}@example.com`;
+  await signUpAs(page, email, `Cover Novelist ${id}`);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb)
+      VALUES ('${rows[0].id}', 'Ɔdɔ ne Nsuo', 'covered', 'A blurb.') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published'::poem_status, now(), 4 FROM n RETURNING novel_id`);
+  const adminUrl = `/admin/novels/${made[0].novel_id}`;
+  const picture = await sharp({ create: { width: 900, height: 1200, channels: 3, background: { r: 30, g: 90, b: 160 } } }).jpeg().toBuffer();
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(adminUrl);
+    await expect(page.locator('[data-cover-panel][data-ready="true"]')).toBeAttached();
+    await scan(page, `novel details: drawn cover, ${width}px`);
+    await page.locator("[data-cover-input]").setInputFiles({ name: "cover.jpg", mimeType: "image/jpeg", buffer: picture });
+    await expect(page.getByRole("dialog", { name: "Crop the cover" })).toBeVisible();
+    await scan(page, `cover crop step, ${width}px`);
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  }
+  await page.locator("[data-cover-input]").setInputFiles({ name: "cover.jpg", mimeType: "image/jpeg", buffer: picture });
+  await page.getByRole("dialog", { name: "Crop the cover" }).getByRole("button", { name: "Save cover" }).click();
+  await expect(page.getByRole("button", { name: "Change cover" })).toBeVisible({ timeout: 45_000 });
+  await scan(page, "novel details: an uploaded cover");
+  await page.getByRole("button", { name: "Remove cover" }).click();
+  await expect(page.getByRole("alertdialog", { name: "Remove this cover?" })).toBeVisible();
+  await scan(page, "remove cover dialog");
+  await page.getByRole("button", { name: "Keep cover" }).click();
+  await page.goto(`/a/${rows[0].slug}/n/covered`);
+  await expect(page.getByRole("main").locator('[data-novel-cover="uploaded"]')).toBeVisible();
+  await scan(page, "novel page: an uploaded cover");
 });
 
 test("admin screens", async ({ page }) => {

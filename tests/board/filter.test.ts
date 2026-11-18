@@ -33,6 +33,7 @@ const novel = (id: string, language: string | null): BoardNovel => ({
   language,
   status: "ongoing",
   visibility: "public",
+  coverKey: null,
   blurb: null,
   chapterCount: 1,
   wordCount: 10,

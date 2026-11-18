@@ -1,7 +1,11 @@
+import { COVER_WEBP_WIDTHS, type CoverWebpWidth } from "./photo-limits";
+
 /**
  * The drawn cover's colours (docs/PLAN.md, Phase 23b): paper, ink and spine
  * tones of the author's section hue (sectionHue). One source for the page's
  * NovelCover (CSS oklch) and the link cards (Satori, which needs hex).
+ * Since Phase 25, also the uploaded cover's addresses (like author-picture.ts
+ * for photos): pure and client-safe, only keys and URLs.
  */
 
 export const COVER_TONES = {
@@ -46,5 +50,24 @@ export function coverHex(tone: Tone, hue: number): string {
   return oklchToHex(l, c, hue);
 }
 
-/** What a link card draws as the cover (no text of the chapters, ever). */
-export type CoverSpec = { title: string; penName: string; hue: number };
+/**
+ * What a link card draws as the cover (no text of the chapters, ever): the
+ * drawn cover, or the uploaded one when `image` (its JPEG as a data URI,
+ * coverDataUri in src/server/novel-covers.ts) is set.
+ */
+export type CoverSpec = { title: string; penName: string; hue: number; image?: string | null };
+
+export const coverUrl = (key: string, width: CoverWebpWidth) => `/covers/${key}/${width}.webp`;
+
+/** The smallest copy at least `cssWidth × 2` wide (a phone's density), as the plain `src`. */
+export function coverWidthFor(cssWidth: number): CoverWebpWidth {
+  return COVER_WEBP_WIDTHS.find((w) => w >= cssWidth * 2) ?? COVER_WEBP_WIDTHS[COVER_WEBP_WIDTHS.length - 1];
+}
+
+/** An uploaded cover's `src` and `srcSet` (every WebP width), for a cover drawn `cssWidth` wide. */
+export function coverSources(key: string, cssWidth: number) {
+  return {
+    src: coverUrl(key, coverWidthFor(cssWidth)),
+    srcSet: COVER_WEBP_WIDTHS.map((w) => `${coverUrl(key, w)} ${w}w`).join(", "),
+  };
+}

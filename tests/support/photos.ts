@@ -79,3 +79,24 @@ export const isBlueish = (c: Colour) => c.b > 150 && c.r < 100;
 
 /** A Blob as the Server Action receives it from FormData. */
 export const fileOf = (bytes: Uint8Array, name = "photo.jpg", type = "image/jpeg") => new File([bytes as BlobPart], name, { type });
+
+/** Every metadata marker a JPEG or WebP could carry it in. */
+export function metadataMarkers(file: Uint8Array): string[] {
+  const buf = Buffer.from(file);
+  const found: string[] = [];
+  for (const s of ["Exif", "EXIF", "GPS", "PhoneMaker", "Phone 15 Pro", "Ada Verse", "2026:05:01", "XMP-SECRET-CREATOR", "http://ns.adobe.com/xap", "x:xmpmeta", "ICC_PROFILE", "ICCP", "XMP ", "Display P3", "iptc", "Photoshop"]) {
+    if (buf.includes(s)) found.push(s);
+  }
+  // JPEG APPn segments other than JFIF's APP0 (APP1 = EXIF/XMP, APP2 = ICC, APP13 = IPTC).
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 4 <= buf.length && buf[i] === 0xff) {
+      const marker = buf[i + 1];
+      if (marker === 0xda) break; // start of scan: no more headers
+      if (marker >= 0xe1 && marker <= 0xef) found.push(`APP${marker - 0xe0}`);
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return found;
+}
+

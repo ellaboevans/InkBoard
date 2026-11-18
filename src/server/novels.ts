@@ -19,6 +19,7 @@ import { countWords, normalizeProse } from "@/lib/prose";
 import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/lib/slug";
 import { hashPassword } from "./passwords";
 import { PASSWORD_SETTINGS_CHANGED } from "./poems";
+import { deleteCoverFiles } from "./novel-covers";
 import { compact, endPosition, moveItem, reorderItems, type Direction, type PositionSpec, type Tx } from "./positions";
 import { recordVersion, type RevisionSpec } from "./revisions";
 
@@ -307,6 +308,8 @@ export type EditorChapterSummary = {
 
 export type EditorNovel = Omit<NovelSummary, "chapterCount" | "publishedCount"> & {
   blurb: string | null;
+  /** The uploaded cover's key (public, like the novel's URLs), or null: the drawn cover. */
+  coverKey: string | null;
   /** Whether the novel has a password of its own (never the hash). */
   hasPassword: boolean;
   createdAt: Date;
@@ -359,6 +362,7 @@ export async function getNovel(editorId: string, novelId: string): Promise<Edito
     .select({
       ...novelColumns,
       blurb: novels.blurb,
+      coverKey: novels.coverKey,
       hasPassword: sql<boolean>`${novels.passwordHash} IS NOT NULL`,
       createdAt: novels.createdAt,
     })
@@ -480,18 +484,25 @@ export async function updateNovel(editorId: string, novelId: string, raw: unknow
   ));
 }
 
-/** Delete a novel with all its chapters and their versions (ON DELETE CASCADE). */
+/**
+ * Delete a novel with all its chapters and their versions (ON DELETE
+ * CASCADE), and its uploaded cover's files after the commit (Phase 25: the
+ * files, not just the link; a failed delete is left to the daily sweep).
+ */
 export async function deleteNovel(editorId: string, novelId: string): Promise<boolean> {
   if (!isId(novelId)) return false;
-  return getDb().transaction(async (tx) => {
+  const deleted = await getDb().transaction(async (tx) => {
     await lockEditor(tx, editorId);
-    if (!(await lockNovel(tx, editorId, novelId))) return false;
-    const rows = await tx
+    if (!(await lockNovel(tx, editorId, novelId))) return null;
+    const [row] = await tx
       .delete(novels)
       .where(and(eq(novels.id, novelId), eq(novels.editorId, editorId)))
-      .returning({ id: novels.id });
-    return rows.length > 0;
+      .returning({ id: novels.id, coverKey: novels.coverKey });
+    return row ?? null;
   });
+  if (!deleted) return false;
+  if (deleted.coverKey) await deleteCoverFiles(deleted.coverKey);
+  return true;
 }
 
 // ---- chapter writes ------------------------------------------------------------------
@@ -762,6 +773,8 @@ export type NovelForExport = {
   status: "ongoing" | "complete";
   /** Never the password's hash or version. */
   visibility: "public" | "private";
+  /** For export.ts to read the cover's JPEG; never written into the download itself. */
+  coverKey: string | null;
   createdAt: Date;
   updatedAt: Date;
   chapters: {
@@ -796,6 +809,7 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
       language: novels.language,
       status: novels.status,
       visibility: novels.visibility,
+      coverKey: novels.coverKey,
       createdAt: novels.createdAt,
       updatedAt: novels.updatedAt,
     })

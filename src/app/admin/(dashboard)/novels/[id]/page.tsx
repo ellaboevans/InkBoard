@@ -9,6 +9,8 @@ import { requireOnboardedEditor } from "@/server/auth/dal";
 import { getNovel } from "@/server/novels";
 import { getPasswordMode } from "@/server/password-settings";
 import { ChapterOrder, DeleteNovel } from "../chapter-order";
+import { sectionHue } from "@/lib/board-layout";
+import { CoverPanel } from "../cover-panel";
 import { NovelDetailsForm } from "../novel-forms";
 
 export const metadata: Metadata = { title: "Edit novel" };
@@ -68,6 +70,16 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
         slug={novel.slug}
         initial={{ title: novel.title, blurb: novel.blurb ?? "", language: novel.language ?? "", status: novel.status }}
         access={{ isPrivate: novel.visibility === "private", hasPassword: novel.hasPassword, passwordMode }}
+        cover={
+          <CoverPanel
+            novelId={novel.id}
+            title={novel.title}
+            penName={editor.penName}
+            hue={sectionHue(editor.id)}
+            lang={novel.language}
+            coverKey={novel.coverKey}
+          />
+        }
       />
       <DeleteNovel title={novel.title} novelId={novel.id} chapterCount={novel.chapters.length} />
     </>

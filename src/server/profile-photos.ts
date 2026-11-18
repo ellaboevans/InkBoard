@@ -1,5 +1,4 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
@@ -16,8 +15,24 @@ import {
 import type { PhotoProblem } from "@/lib/photo-messages";
 import type { SniffedType } from "@/lib/photo-sniff";
 import { processPhoto } from "./photos/process";
+import {
+  deleteImageFiles,
+  deleteObjects,
+  describeStorageError,
+  IMAGE_KEY,
+  jpegObjectOf,
+  newImageKey,
+  objectsOf,
+  ORPHAN_GRACE_HOURS,
+  readImageJpeg,
+  storageFor,
+  storeImageFiles,
+  sweepOrphanImages,
+  webpObjectOf,
+  type StoredImageKind,
+} from "./photos/stored-images";
 import { rateLimit } from "./rate-limit";
-import { photoStorage, StorageError, type ObjectStorage } from "./storage";
+import { photoStorage, type ObjectStorage } from "./storage";
 
 /*
  * Profile photos (docs/PLAN.md, Phase 22). Framework-free like poems.ts:
@@ -33,26 +48,33 @@ import { photoStorage, StorageError, type ObjectStorage } from "./storage";
  * A crash between 2 and 3 (or a failed delete in 4) leaves files no row
  * points at: the daily cleanup (sweepOrphanPhotos) deletes those once they
  * are PHOTO_ORPHAN_GRACE_HOURS old, so an upload in progress is never touched.
+ * Steps 2 and 4 and the sweep are shared with novel covers
+ * (src/server/photos/stored-images.ts); the row and its lock are ours.
  */
 
+/** The photos' place in storage and their sizes (src/server/photos/stored-images.ts holds the shared rules). */
+export const PHOTO_KIND: StoredImageKind = {
+  name: "photos",
+  prefix: "photos/",
+  webpWidths: PHOTO_WEBP_SIZES,
+  jpegWidth: PHOTO_JPEG_SIZE,
+};
+
 /** 128 random bits, base64url: never the email, id or slug. */
-export const PHOTO_KEY = /^[A-Za-z0-9_-]{22}$/;
-export const PHOTO_PREFIX = "photos/";
+export const PHOTO_KEY = IMAGE_KEY;
+export const PHOTO_PREFIX = PHOTO_KIND.prefix;
 
 /** Files nothing points at are deleted by the daily cleanup once this old. */
-export const PHOTO_ORPHAN_GRACE_HOURS = 6;
+export const PHOTO_ORPHAN_GRACE_HOURS = ORPHAN_GRACE_HOURS;
 
-export function newPhotoKey(): string {
-  return randomBytes(16).toString("base64url");
-}
-
-export const webpObject = (key: string, size: PhotoWebpSize) => `${PHOTO_PREFIX}${key}/${size}.webp`;
-export const jpegObject = (key: string) => `${PHOTO_PREFIX}${key}/${PHOTO_JPEG_SIZE}.jpg`;
+export const newPhotoKey = newImageKey;
+export const webpObject = (key: string, size: PhotoWebpSize) => webpObjectOf(PHOTO_KIND, key, size);
+export const jpegObject = (key: string) => jpegObjectOf(PHOTO_KIND, key);
 
 /** Every object one photo is stored as. */
-export function photoObjects(key: string): string[] {
-  return [...PHOTO_WEBP_SIZES.map((s) => webpObject(key, s)), jpegObject(key)];
-}
+export const photoObjects = (key: string): string[] => objectsOf(PHOTO_KIND, key);
+
+export { describeStorageError };
 
 const idSchema = z.uuid();
 
@@ -84,27 +106,11 @@ export async function savePhoto(
     return { ok: false, problem: processed.error, ...(processed.error === "type" ? { type: processed.type } : {}) };
   }
 
-  let storage: ObjectStorage;
-  try {
-    storage = injected ?? photoStorage();
-  } catch (err) {
-    // Production without R2: a clear log line for the owner, a clear toast for the writer.
-    console.error("[photos] photo storage is not available", describeStorageError(err));
-    return { ok: false, problem: "storage" };
-  }
-
-  const key = newPhotoKey();
-  const files: [string, Uint8Array, string][] = [
-    ...PHOTO_WEBP_SIZES.map((s) => [webpObject(key, s), processed.webp[s], "image/webp"] as [string, Uint8Array, string]),
-    [jpegObject(key), processed.jpeg, "image/jpeg"],
-  ];
-  const puts = await Promise.allSettled(files.map(([k, body, type]) => storage.put(k, body, type)));
-  const failed = puts.find((p) => p.status === "rejected");
-  if (failed) {
-    console.error("[photos] storing a photo failed", describeStorageError(failed.reason));
-    await deleteObjects(storage, photoObjects(key));
-    return { ok: false, problem: "storage" };
-  }
+  // Production without R2: a clear log line for the owner, a clear toast for the writer.
+  const storage = storageFor(PHOTO_KIND, injected);
+  if (!storage) return { ok: false, problem: "storage" };
+  const key = await storeImageFiles(PHOTO_KIND, processed, storage);
+  if (!key) return { ok: false, problem: "storage" };
 
   const old = await getDb().transaction(async (tx) => {
     const [row] = await tx
@@ -116,11 +122,11 @@ export async function savePhoto(
     await tx.update(editors).set({ photoKey: key }).where(eq(editors.id, editorId));
     return { found: true as const, photoKey: row.photoKey };
   }).catch(async (err) => {
-    await deleteObjects(storage, photoObjects(key));
+    await deleteObjects(PHOTO_KIND, storage, photoObjects(key));
     throw err;
   });
   if (!old.found) {
-    await deleteObjects(storage, photoObjects(key));
+    await deleteObjects(PHOTO_KIND, storage, photoObjects(key));
     return { ok: false, problem: "no_file" };
   }
   if (old.photoKey) await deletePhotoFiles(old.photoKey, storage);
@@ -169,19 +175,7 @@ async function unlink(who: ReturnType<typeof eq>, key: string, storage?: ObjectS
  * Delete one photo's files. Never throws: a failure is logged and the
  * daily sweep deletes them later (no row points at them any more).
  */
-export async function deletePhotoFiles(key: string, storage?: ObjectStorage): Promise<void> {
-  try {
-    await deleteObjects(storage ?? photoStorage(), photoObjects(key));
-  } catch (err) {
-    console.error("[photos] deleting a photo's files failed; the daily cleanup will retry", describeStorageError(err));
-  }
-}
-
-async function deleteObjects(storage: ObjectStorage, keys: string[]) {
-  const results = await Promise.allSettled(keys.map((k) => storage.delete(k)));
-  const failed = results.find((r) => r.status === "rejected");
-  if (failed) console.error("[photos] delete failed", describeStorageError(failed.reason));
-}
+export const deletePhotoFiles = (key: string, storage?: ObjectStorage) => deleteImageFiles(PHOTO_KIND, key, storage);
 
 /** Whether `key` is someone's current photo (the serving route checks before reading storage). */
 export async function isCurrentPhoto(key: string): Promise<boolean> {
@@ -191,54 +185,21 @@ export async function isCurrentPhoto(key: string): Promise<boolean> {
 }
 
 /** The JPEG copy (Satori, the JSON download), or null if it can't be read. */
-export async function readPhotoJpeg(key: string, storage?: ObjectStorage): Promise<Uint8Array | null> {
-  if (!PHOTO_KEY.test(key)) return null;
-  try {
-    return await (storage ?? photoStorage()).get(jpegObject(key));
-  } catch (err) {
-    console.error("[photos] reading a photo failed", describeStorageError(err));
-    return null;
-  }
-}
+export const readPhotoJpeg = (key: string, storage?: ObjectStorage) => readImageJpeg(PHOTO_KIND, key, storage);
 
 /**
  * The daily cleanup's part (src/server/maintenance.ts): delete files under
  * photos/ that no editor points at and that are older than the grace period.
  * Returns how many photos (keys) were deleted.
  */
-export async function sweepOrphanPhotos(storage: ObjectStorage = photoStorage(), now = new Date()): Promise<number> {
-  const objects = await storage.list(PHOTO_PREFIX);
-  const cutoff = now.getTime() - PHOTO_ORPHAN_GRACE_HOURS * 3600 * 1000;
-  const byKey = new Map<string, { objects: string[]; newest: number }>();
-  for (const o of objects) {
-    const key = o.key.slice(PHOTO_PREFIX.length).split("/")[0];
-    if (!PHOTO_KEY.test(key)) continue; // not ours: leave it alone
-    const entry = byKey.get(key) ?? { objects: [], newest: 0 };
-    entry.objects.push(o.key);
-    entry.newest = Math.max(entry.newest, o.lastModified.getTime());
-    byKey.set(key, entry);
-  }
-  const old = [...byKey].filter(([, e]) => e.newest < cutoff).map(([k]) => k);
-  if (old.length === 0) return 0;
-  const live = new Set<string>();
-  for (let i = 0; i < old.length; i += 500) {
-    const rows = await getDb()
-      .select({ photoKey: editors.photoKey })
-      .from(editors)
-      .where(inArray(editors.photoKey, old.slice(i, i + 500)));
-    for (const r of rows) if (r.photoKey) live.add(r.photoKey);
-  }
-  let deleted = 0;
-  for (const key of old) {
-    if (live.has(key)) continue;
-    await deleteObjects(storage, byKey.get(key)!.objects);
-    deleted++;
-  }
-  return deleted;
-}
-
-/** For logs: the code and message (StorageError messages never hold a secret), or the error's name. */
-export function describeStorageError(err: unknown): string {
-  if (err instanceof StorageError) return `${err.code}: ${err.message}`;
-  return err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+export function sweepOrphanPhotos(storage: ObjectStorage = photoStorage(), now = new Date()): Promise<number> {
+  return sweepOrphanImages(
+    PHOTO_KIND,
+    async (keys) => {
+      const rows = await getDb().select({ photoKey: editors.photoKey }).from(editors).where(inArray(editors.photoKey, keys));
+      return rows.flatMap((r) => (r.photoKey ? [r.photoKey] : []));
+    },
+    storage,
+    now,
+  );
 }

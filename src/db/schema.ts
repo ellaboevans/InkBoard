@@ -425,7 +425,7 @@ export const poemRevisions = pgTable(
  * books, each with ordered chapters published one at a time. Their own
  * tables, not poems in a collection; src/server/novels.ts scopes every query
  * by the DAL editor id (chapters through their novel). Private novels
- * (visibility, password) since Phase 25; uploaded covers come later.
+ * (visibility, password) and uploaded covers since Phase 25.
  */
 export const novelStatus = pgEnum("novel_status", ["ongoing", "complete"]);
 
@@ -462,6 +462,13 @@ export const novels = pgTable(
      * its last published chapter, so earlier unlocks stop working.
      */
     passwordVersion: integer("password_version").notNull().default(0),
+    /**
+     * The uploaded cover's random storage key (Phase 25; src/server/novel-covers.ts,
+     * files under covers/<key>/), or null: the drawn cover. A new key for every
+     * upload, never the novel's id, slug or title. Public even for a private
+     * novel, like its title and blurb.
+     */
+    coverKey: text("cover_key").unique(),
     ...timestamps,
   },
   (t) => [uniqueIndex("novels_editor_slug_key").on(t.editorId, t.slug)],

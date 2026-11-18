@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
     // Failed soft navigations, prefetches and Server Actions wait for the
     // connection instead of throwing; `useOffline()` drives the offline indicator.
     useOffline: true,
-    // Profile photos are posted to a Server Action (docs/PLAN.md, Phase 22):
+    // Profile photos and novel covers are posted to Server Actions (docs/PLAN.md, Phases 22, 25):
     // the largest file plus room for the multipart overhead and the crop field.
     // PHOTO_MAX_BYTES stays below Vercel's 4.5 MB function body limit.
     serverActions: { bodySizeLimit: PHOTO_MAX_BYTES + 64 * 1024 },

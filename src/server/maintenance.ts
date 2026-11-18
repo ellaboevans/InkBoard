@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { UNUSED_SUBSCRIPTION_DAYS } from "@/lib/push-rules";
 import { safeEqual, sha256 } from "./crypto";
+import { sweepOrphanCovers } from "./novel-covers";
 import { describeStorageError, sweepOrphanPhotos } from "./profile-photos";
 
 /*
@@ -44,6 +45,8 @@ export type CleanupResult = {
   pushDeliveries: number;
   /** Profile photos whose files no editor points at (Phase 22); null when photo storage isn't available. */
   orphanPhotos: number | null;
+  /** Novel covers' files no novel points at (Phase 25); null when storage isn't available. */
+  orphanCovers: number | null;
 };
 
 export async function cleanupExpiredRows(): Promise<CleanupResult> {
@@ -108,6 +111,13 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   } catch (err) {
     console.error("[cron] photo sweep failed", describeStorageError(err));
   }
+  // The same for uploaded novel covers (covers/), with the same grace period.
+  let orphanCovers: number | null = null;
+  try {
+    orphanCovers = await sweepOrphanCovers();
+  } catch (err) {
+    console.error("[cron] cover sweep failed", describeStorageError(err));
+  }
   return {
     otps: count(otps),
     stepUpCodes: count(stepUpCodes),
@@ -119,6 +129,7 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
     pushSubscriptions: count(pushSubscriptions),
     pushDeliveries: count(pushDeliveries),
     orphanPhotos,
+    orphanCovers,
   };
 }
 

@@ -1,10 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import sharp from "sharp";
 import { signUpAs, sql } from "./helpers";
 
 /*
  * Novels in the dashboard (docs/PLAN.md, Phase 23a), on a phone-sized
  * viewport: create a novel, add and order chapters, the device draft,
- * publishing, History, deleting.
+ * publishing, History, deleting; and (Phase 25) uploading a cover, cropping
+ * it to 2:3, seeing it for readers, and removing it.
  */
 
 test.use({ viewport: { width: 375, height: 812 } });
@@ -149,4 +151,100 @@ test("a writer creates a novel, orders chapters, restores a device draft, publis
   await expect(page.getByRole("main")).toContainText("No novels yet");
   const { rows } = await sql(`SELECT count(*)::int AS n FROM novels n JOIN editors e ON e.id = n.editor_id WHERE e.email = 'novelist-${id}@example.com'`);
   expect((rows[0] as { n: number }).n).toBe(0);
+});
+
+/** A phone-sized picture made here (nothing binary is committed): red top half, blue bottom. */
+async function coverPicture(width = 900, height = 1200) {
+  const top = await sharp({ create: { width, height: Math.floor(height / 2), channels: 3, background: { r: 230, g: 10, b: 10 } } }).png().toBuffer();
+  return sharp({ create: { width, height, channels: 3, background: { r: 10, g: 20, b: 230 } } })
+    .composite([{ input: top, left: 0, top: 0 }])
+    .jpeg({ quality: 90 })
+    .toBuffer();
+}
+
+test("a writer uploads a cover, crops it to 2:3, readers see it on the novel page and the board, and removing it brings the drawn cover back", async ({ page }) => {
+  test.slow();
+  const id = unique();
+  const email = `cover-${id}@example.com`;
+  await signUpAs(page, email, `Cover Writer ${id}`);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  const author = rows[0].slug as string;
+  // A novel with a published chapter, straight to the database; the cover's save refreshes the readers' cache.
+  const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb)
+      VALUES ('${rows[0].id}', 'The Red Ferry', 'red-ferry', 'A ferry.') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published', now(), 4 FROM n RETURNING novel_id`);
+  const adminUrl = `/admin/novels/${made[0].novel_id}`;
+
+  // The drawn cover first, in the details.
+  await page.goto(adminUrl);
+  const panel = page.locator('[data-cover-panel][data-ready="true"]');
+  await expect(panel).toBeAttached();
+  await expect(panel.locator('[data-novel-cover="drawn"]')).toBeVisible();
+  const upload = page.getByRole("button", { name: "Upload cover" });
+  await expect(upload).toBeVisible();
+  expect((await upload.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+
+  // Choose a picture: the 2:3 crop step, by keyboard (the sliders) as well as by dragging.
+  await page.locator("[data-cover-input]").setInputFiles({ name: "IMG_0002.jpg", mimeType: "image/jpeg", buffer: await coverPicture() });
+  const crop = page.getByRole("dialog", { name: "Crop the cover" });
+  await expect(crop).toBeVisible();
+  const box = (await crop.locator("[data-crop-box]").boundingBox())!;
+  expect(box.width / box.height).toBeCloseTo(2 / 3, 1);
+  await crop.getByRole("slider", { name: "Zoom" }).focus();
+  for (let i = 0; i < 20; i++) await page.keyboard.press("ArrowRight");
+  // Zoomed in, all the way up: the red top of the picture.
+  await crop.getByRole("slider", { name: "Top to bottom" }).fill("0");
+  await expect(crop.getByText("Preview")).toBeVisible();
+  await noSidewaysScroll(page);
+  const save = crop.getByRole("button", { name: "Save cover" });
+  expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await save.click();
+  await expect(toast(page, "Cover saved")).toBeVisible({ timeout: 45_000 });
+  await expect(crop).toHaveCount(0);
+  await expect(panel.locator('[data-novel-cover="uploaded"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Change cover" })).toBeFocused();
+  const { rows: keyRows } = await sql(`SELECT cover_key FROM novels WHERE id = '${made[0].novel_id}'`);
+  const key = keyRows[0].cover_key as string;
+  expect(key).toMatch(/^[A-Za-z0-9_-]{22}$/);
+
+  // Readers: the novel page draws it (our own WebP, red at the top), over the drawn cover.
+  const novelUrl = `/a/${author}/n/red-ferry`;
+  await page.goto(novelUrl);
+  const cover = page.getByRole("main").locator('[data-novel-cover="uploaded"]');
+  await expect(cover).toBeVisible();
+  const img = cover.locator("img[data-cover-image]");
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+  const src = await img.evaluate((el: HTMLImageElement) => el.currentSrc);
+  expect(new URL(src).pathname).toMatch(new RegExp(`^/covers/${key}/(128|256|512)\\.webp$`));
+  const served = await page.request.get(src);
+  expect(served.status()).toBe(200);
+  expect(served.headers()["content-type"]).toBe("image/webp");
+  const { data, info } = await sharp(Buffer.from(await served.body())).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  expect(info.height / info.width).toBeCloseTo(1.5, 2);
+  expect(data[0]).toBeGreaterThan(150); // the top-left pixel is red
+  expect(data[2]).toBeLessThan(100);
+  await noSidewaysScroll(page);
+
+  // The board's book card.
+  await page.goto("/");
+  await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+  await expect(page.locator('[data-book-card] [data-novel-cover="uploaded"]')).toBeAttached();
+
+  // Remove it: the drawn cover is back everywhere and the files are gone.
+  await page.goto(adminUrl);
+  await expect(panel).toBeAttached();
+  await page.getByRole("button", { name: "Remove cover" }).click();
+  const confirm = page.getByRole("alertdialog", { name: "Remove this cover?" });
+  await confirm.getByRole("button", { name: "Remove cover" }).click();
+  await expect(toast(page, "Cover removed")).toBeVisible({ timeout: 45_000 });
+  await expect(panel.locator('[data-novel-cover="drawn"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Upload cover" })).toBeFocused();
+  expect((await page.request.get(src)).status()).toBe(404);
+  await page.goto(novelUrl);
+  await expect(page.getByRole("main").locator('[data-novel-cover="drawn"]')).toBeVisible();
+  await expect(page.getByRole("main").locator("img[data-cover-image]")).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+  await expect(page.locator('[data-book-card] [data-novel-cover="drawn"]')).toBeAttached();
 });

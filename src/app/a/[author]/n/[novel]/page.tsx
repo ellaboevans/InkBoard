@@ -122,6 +122,10 @@ async function Novel({ params }: Pick<Props, "params">) {
           penName={n.penName}
           hue={sectionHue(n.editorId)}
           lang={n.language}
+          coverKey={n.coverKey}
+          width={220}
+          sizes="(min-width: 640px) 220px, 112px"
+          loading="eager"
           className="w-[112px] text-base sm:row-span-3 sm:w-[220px] sm:text-[30px]"
         />
         <div className="min-w-0">

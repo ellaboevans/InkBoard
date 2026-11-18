@@ -3,7 +3,8 @@ import { asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { collections, editors, poems, shortLinks } from "@/db/schema";
 import { EXPORT_FORMAT_VERSION, type EditorExport } from "@/lib/export-format";
-import { PHOTO_JPEG_SIZE } from "@/lib/photo-limits";
+import { COVER_JPEG_WIDTH, coverHeight, PHOTO_JPEG_SIZE } from "@/lib/photo-limits";
+import { readCoverJpeg } from "./novel-covers";
 import { readPhotoJpeg } from "./profile-photos";
 import { novelsForExport } from "./novels";
 import { revisionsForExport } from "./poem-history";
@@ -95,6 +96,8 @@ export async function loadEditorExport(
     novelsForExport(editorId),
   ]);
 
+  // Each uploaded cover's own JPEG copy (Phase 25), like the photo: never its storage key.
+  const coverJpegs = await Promise.all(novelRows.map((n) => (n.coverKey ? readCoverJpeg(n.coverKey) : Promise.resolve(null))));
   const titles = new Map(collectionRows.map((c) => [c.id, c.title]));
   return {
     format: "inkboard-export",
@@ -146,7 +149,7 @@ export async function loadEditorExport(
         .filter((r) => r.poemId === p.id)
         .map((r) => ({ savedAt: r.savedAt.toISOString(), title: r.title, text: r.body, language: r.language })),
     })),
-    novels: novelRows.map((n) => ({
+    novels: novelRows.map((n, i) => ({
       id: n.id,
       title: n.title,
       slug: n.slug,
@@ -154,6 +157,14 @@ export async function loadEditorExport(
       language: n.language,
       status: n.status,
       visibility: n.visibility,
+      cover: coverJpegs[i]
+        ? {
+            type: "image/jpeg" as const,
+            width: COVER_JPEG_WIDTH,
+            height: coverHeight(COVER_JPEG_WIDTH),
+            base64: Buffer.from(coverJpegs[i]!).toString("base64"),
+          }
+        : null,
       createdAt: n.createdAt.toISOString(),
       updatedAt: n.updatedAt.toISOString(),
       chapters: n.chapters.map((c) => ({

@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type BrowserContextOptions, type Locator, type Page } from "@playwright/test";
-import { accountButton, signUpAs, sql, expectBackOnList } from "./helpers";
+import { accountButton, signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 /*
  * The "install InkBoard" nudge (docs/PLAN.md, Phase 15). Chromium's
@@ -406,7 +406,7 @@ test("wide screens: with a language filter and the Authors list open, the card c
   await editor.goto("/admin/poems/new");
   await editor.getByRole("textbox", { name: "Title" }).fill(`Ŋdi ${id}`);
   await editor.getByRole("textbox", { name: "Poem" }).fill("ŋdi nyuie");
-  await editor.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
+  await chooseOption(editor.getByRole("combobox", { name: "Language" }), "Ewe");
   await editor.getByRole("button", { name: "Publish to board" }).click();
   await expectBackOnList(editor);
   await setup.close();

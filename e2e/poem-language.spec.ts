@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql, expectBackOnList } from "./helpers";
+import { signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 // A poem's language (docs/PLAN.md, Phase 11c): chosen in the editor, shown as
 // a label, and set as `lang` on the poem's title and text (never on UI).
@@ -11,7 +11,7 @@ async function publish(page: Page, title: string, body: string, language: string
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "Poem" }).fill(body);
-  await page.getByRole("combobox", { name: "Language" }).selectOption({ label: language });
+  await chooseOption(page.getByRole("combobox", { name: "Language" }), language);
   if (password) {
     await page.getByRole("switch", { name: "Password protected" }).click();
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
@@ -28,7 +28,7 @@ test("the editor's language reaches the board, the reading page and search engin
   // The card preview follows the choice before saving.
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Poem" }).fill("Ŋutifafa na wò");
-  await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
+  await chooseOption(page.getByRole("combobox", { name: "Language" }), "Ewe");
   const preview = page.getByRole("region", { name: "Card preview" });
   await expect(preview.getByText("Ewe", { exact: true })).toBeVisible();
   await expect(preview.locator('p[lang="ee"]')).toContainText("Ŋutifafa");
@@ -39,7 +39,7 @@ test("the editor's language reaches the board, the reading page and search engin
   // Editing shows the saved choice.
   await page.goto("/admin");
   await page.getByRole("link", { name: `Ŋutifafa ${id}` }).first().click();
-  await expect(page.getByRole("combobox", { name: "Language" })).toHaveValue("ee");
+  await expect(page.getByRole("combobox", { name: "Language" })).toHaveText("Ewe");
 
   // Board: a label, and lang on the card's title and text.
   await page.goto("/");

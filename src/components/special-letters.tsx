@@ -218,7 +218,9 @@ export function SpecialLetters({ fields, className }: { fields: string[]; classN
           </TabsContent>
         </Tabs>
       </div>
-      <p aria-live="polite" className="min-h-4 text-xs text-muted-foreground">
+      {/* Out of the layout while empty (sr-only is absolutely positioned, so it's no grid row and adds
+          no gap under the button), but always in the DOM so the live region announces. */}
+      <p aria-live="polite" className={cn("text-xs text-muted-foreground", !status && "sr-only")}>
         {status}
       </p>
     </div>

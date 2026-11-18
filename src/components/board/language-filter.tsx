@@ -3,7 +3,7 @@
 import { XIcon } from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { SelectControl } from "@/components/form-controls";
 import type { BoardFilter } from "./board-view";
 import { plural } from "@/lib/plural";
 
@@ -15,20 +15,14 @@ export function LanguageFilter({ id, filter, className }: { id: string; filter: 
       <label htmlFor={id} className="sr-only">
         Language
       </label>
-      <NativeSelect
+      <SelectControl
         id={id}
         size="sm"
         value={filter.active ?? ""}
-        onChange={(e) => filter.onChange(e.target.value || null)}
+        onValueChange={(v) => filter.onChange(v || null)}
+        options={[{ value: "", label: "All languages" }, ...filter.options.map((o) => ({ value: o.code, label: o.name }))]}
         className={cn("rounded-lg bg-background/85 backdrop-blur", className)}
-      >
-        <NativeSelectOption value="">All languages</NativeSelectOption>
-        {filter.options.map((o) => (
-          <NativeSelectOption key={o.code} value={o.code}>
-            {o.name}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
+      />
     </>
   );
 }

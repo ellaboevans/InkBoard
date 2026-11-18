@@ -5,7 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { FormSelect } from "@/components/form-controls";
 import { Textarea } from "@/components/ui/textarea";
 import { AVATARS, avatarUrl, type AvatarId } from "@/lib/avatars";
 import { notify, withErrorToast } from "@/lib/notify";
@@ -193,7 +193,7 @@ export function ProfileForm({
       <FieldSet>
         <FieldLegend>Links</FieldLegend>
         <FieldDescription>Your website or social profiles. Secure (https) links only.</FieldDescription>
-        <FieldGroup className="grid gap-3 sm:grid-cols-2">
+        <FieldGroup className="grid items-start gap-3 sm:grid-cols-2">
           {values.links.map((link, i) => (
             <Field key={i}>
               <FieldLabel htmlFor={`link-${i}`} className="text-xs text-muted-foreground">
@@ -223,21 +223,17 @@ export function ProfileForm({
           <FieldLabel htmlFor="pinnedPoemId" className="sr-only">
             Pinned poem
           </FieldLabel>
-          <NativeSelect
+          <FormSelect
             id="pinnedPoemId"
-            name="pinnedPoemId"
             value={values.pinnedPoemId}
-            onChange={(e) => set("pinnedPoemId", e.target.value)}
+            onValueChange={(v) => set("pinnedPoemId", v)}
+            options={[{ value: "", label: "None" }, ...publishedPoems.map((p) => ({ value: p.id, label: p.title }))]}
             disabled={publishedPoems.length === 0}
             aria-describedby="pinned-help"
-          >
-            <NativeSelectOption value="">None</NativeSelectOption>
-            {publishedPoems.map((p) => (
-              <NativeSelectOption key={p.id} value={p.id}>
-                {p.title}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+            aria-invalid={errorFor("pinnedPoemId") ? true : undefined}
+            className="w-full sm:max-w-md"
+          />
+          <input type="hidden" name="pinnedPoemId" value={values.pinnedPoemId} />
           <FieldDescription id="pinned-help">
             {publishedPoems.length === 0
               ? "Publish a poem to pin it here."

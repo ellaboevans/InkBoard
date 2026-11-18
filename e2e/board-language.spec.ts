@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { renderedToastTitle, signOut, signUpAs, sql, expectBackOnList } from "./helpers";
+import { renderedToastTitle, signOut, signUpAs, sql, expectBackOnList, chooseOption, optionNames } from "./helpers";
 
 // Browsing the board by language (docs/PLAN.md, Phase 11c): a filter in the
 // toolbar, kept in the URL (?lang=ee), followed by the list view and the
@@ -12,7 +12,7 @@ async function publish(page: Page, title: string, body: string, language: string
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "Poem" }).fill(body);
-  await page.getByRole("combobox", { name: "Language" }).selectOption({ label: language });
+  await chooseOption(page.getByRole("combobox", { name: "Language" }), language);
   if (password) {
     await page.getByRole("switch", { name: "Password protected" }).click();
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(password);
@@ -35,6 +35,7 @@ const card = (page: Page, title: string) =>
   page.locator("[data-card]").filter({ has: page.getByRole("link", { name: title, exact: true }) });
 
 test("filtering the board by language, in the URL, the list view and the Authors index", async ({ page }) => {
+  test.slow(); // two writers, four poems, each language chosen in the Select
   const id = unique();
   const ewePoet = `Ewe Poet ${id}`;
   const englishPoet = `English Poet ${id}`;
@@ -48,14 +49,14 @@ test("filtering the board by language, in the URL, the list view and the Authors
 
   await openBoard(page);
   // Only languages with poems are offered (nothing is tagged Ga).
-  const offered = await filter(page).locator("option").allTextContents();
+  const offered = await optionNames(filter(page));
   expect(offered).toEqual(expect.arrayContaining(["All languages", "Ewe", "English"]));
   expect(offered).not.toContain("Ga");
-  await expect(filter(page)).toHaveValue("");
+  await expect(filter(page)).toHaveText("All languages");
   await expect(status(page)).toHaveCount(0);
 
   // Pick Ewe: the URL follows, other languages and emptied authors drop out.
-  await filter(page).selectOption({ label: "Ewe" });
+  await chooseOption(filter(page), "Ewe");
   await expect(page).toHaveURL(/\/\?lang=ee$/);
   await expect(status(page)).toContainText("Showing Ewe poems ·");
   await expect(card(page, `Ŋutifafa ${id}`)).toBeVisible();
@@ -93,7 +94,7 @@ test("filtering the board by language, in the URL, the list view and the Authors
   // Reload keeps it; back returns to all.
   await page.reload();
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
-  await expect(filter(page)).toHaveValue("ee");
+  await expect(filter(page)).toHaveText("Ewe");
   await expect(card(page, `Morning ${id}`)).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
@@ -106,7 +107,7 @@ test("filtering the board by language, in the URL, the list view and the Authors
   await expect(main.getByRole("link", { name: new RegExp(`^Ŋutifafa ${id}`) })).toBeVisible();
   await expect(main.getByRole("link", { name: new RegExp(`^Morning ${id}`) })).toHaveCount(0);
   await expect(main.getByRole("heading", { name: new RegExp(englishPoet) })).toHaveCount(0);
-  await filter(page).selectOption({ label: "English" });
+  await chooseOption(filter(page), "English");
   await expect(page).toHaveURL(/\/\?lang=en$/);
   await expect(main.getByRole("link", { name: new RegExp(`^Evening ${id}`) })).toBeVisible();
   await expect(main.getByRole("link", { name: new RegExp(`^Ŋutifafa ${id}`) })).toHaveCount(0);
@@ -122,7 +123,7 @@ test("filtering the board by language, in the URL, the list view and the Authors
 test("an unknown or unused language behaves like All", async ({ page }) => {
   for (const url of ["/?lang=zz", "/?lang=gaa", "/?lang="]) {
     await openBoard(page, url);
-    await expect(filter(page)).toHaveValue("");
+    await expect(filter(page)).toHaveText("All languages");
     await expect(status(page)).toHaveCount(0);
   }
 });
@@ -133,10 +134,16 @@ test("the filter works from the keyboard", async ({ page }) => {
   await publish(page, `Akwaaba ${id}`, "Akwaaba", "Akan (Twi, Fante, Nzema)");
   await openBoard(page, "/?lang=ak");
   await expect(status(page)).toContainText(/Showing Akan poems? ·/);
-  // The filter is a native <select> (keyboard-operable by the browser);
-  // check it's focusable and that "Show all" works with Enter.
+  // The filter (a Radix Select) opens from the keyboard and Esc closes only
+  // its list; "Show all" works with Enter.
   await filter(page).focus();
   await expect(filter(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toBeHidden();
+  await expect(filter(page)).toBeFocused();
+  await expect(page).toHaveURL(/\/\?lang=ak$/);
   const showAll = page.getByRole("button", { name: "Show all languages" });
   await showAll.focus();
   await page.keyboard.press("Enter");

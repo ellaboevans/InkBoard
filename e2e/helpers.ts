@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, type CDPSession, type Page } from "@playwright/test";
+import { expect, type CDPSession, type Locator, type Page } from "@playwright/test";
 import pg from "pg";
 import { E2E_DATABASE_URL, OTP_OUTBOX, PUSH_OUTBOX } from "../playwright.config";
 
@@ -311,4 +311,27 @@ export async function pushesFor(subscriptionId: string): Promise<{ title: string
     .map((l) => JSON.parse(l) as { subscriptionId: string; payload: { title: string; author: string; url: string; tag: string; count: number } })
     .filter((r) => r.subscriptionId === subscriptionId)
     .map((r) => r.payload);
+}
+
+/**
+ * Choose an option in one of our dropdowns (the shadcn/Radix Select: a
+ * "combobox" button whose listbox is portalled to <body>). Replaces
+ * Playwright's selectOption, which only drives a native <select>.
+ */
+export async function chooseOption(trigger: Locator, name: string | RegExp) {
+  await trigger.click();
+  const list = trigger.page().getByRole("listbox");
+  await list.getByRole("option", { name, exact: typeof name === "string" }).click();
+  await expect(list).toBeHidden();
+}
+
+/** The options a dropdown offers, by name (opens it, then closes it with Esc). */
+export async function optionNames(trigger: Locator): Promise<string[]> {
+  await trigger.click();
+  const list = trigger.page().getByRole("listbox");
+  await expect(list).toBeVisible();
+  const names = (await list.getByRole("option").allTextContents()).map((t) => t.trim());
+  await trigger.page().keyboard.press("Escape");
+  await expect(list).toBeHidden();
+  return names;
 }

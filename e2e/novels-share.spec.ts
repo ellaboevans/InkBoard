@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { sql } from "./helpers";
+import { sql, chooseOption } from "./helpers";
 
 /*
  * "Share a passage" (docs/PLAN.md, Phase 25 round 3), on a phone-sized
@@ -86,7 +86,7 @@ test("a reader picks two paragraphs, trims the first, downloads the picture; its
   await p3.click({ force: true });
   await expect(p3).not.toBeChecked();
   // Trim the first paragraph to its second sentence.
-  await s.getByLabel("Start at").selectOption("2");
+  await chooseOption(s.getByLabel("Start at"), /^Sentence 2:/);
   const count = "Akua waited at the landing with her basket.".length + 1 + "Kwabena did not come back. The radio stayed on the shelf.".length;
   await expect(s.locator("[data-passage-count]")).toHaveText(`${count} of 600 characters.`);
 

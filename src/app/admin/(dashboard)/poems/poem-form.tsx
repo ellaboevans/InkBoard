@@ -13,9 +13,8 @@ import Link from "next/link";
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { StatusBadge } from "@/components/poem-badges";
-import { FormSwitch } from "@/components/form-controls";
+import { FormSelect, FormSwitch } from "@/components/form-controls";
 import { SpecialLetters } from "@/components/special-letters";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -335,21 +334,16 @@ export function PoemForm({
             <Label htmlFor="language" className="text-sm font-medium">
               Language
             </Label>
-            <NativeSelect
+            <FormSelect
               id="language"
-              name="language"
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onValueChange={(v) => setLanguage(v as typeof language)}
+              options={[{ value: "", label: "Not set" }, ...POEM_LANGUAGES.map((l) => ({ value: l.code, label: l.label }))]}
               aria-describedby={errors.language ? "language-error language-help" : "language-help"}
               aria-invalid={errors.language ? true : undefined}
-            >
-              <NativeSelectOption value="">Not set</NativeSelectOption>
-              {POEM_LANGUAGES.map((l) => (
-                <NativeSelectOption key={l.code} value={l.code}>
-                  {l.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              className="w-full"
+            />
+            <input type="hidden" name="language" value={language} />
             <p id="language-help" className="text-xs text-muted-foreground">
               Shown on the poem, and tells screen readers how to read it.
             </p>
@@ -358,21 +352,16 @@ export function PoemForm({
             <Label htmlFor="collection" className="mt-2 text-sm font-medium">
               Collection
             </Label>
-            <NativeSelect
+            <FormSelect
               id="collection"
-              name="collection"
               value={collection}
-              onChange={(e) => setCollection(e.target.value)}
+              onValueChange={setCollection}
+              options={[{ value: "", label: "None" }, ...collections.map((c) => ({ value: c.id, label: c.title }))]}
               aria-describedby={errors.collection ? "collection-error collection-help" : "collection-help"}
               aria-invalid={errors.collection ? true : undefined}
-            >
-              <NativeSelectOption value="">None</NativeSelectOption>
-              {collections.map((c) => (
-                <NativeSelectOption key={c.id} value={c.id}>
-                  {c.title}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+              className="w-full"
+            />
+            <input type="hidden" name="collection" value={collection} />
             <p id="collection-help" className="text-xs text-muted-foreground">
               {collection && collection !== saved.collection
                 ? "Saving adds it at the end. "

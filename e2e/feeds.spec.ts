@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { signUpAs, sql, expectBackOnList } from "./helpers";
+import { signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 // Atom feeds (docs/PLAN.md, Phase 12): one for the board, one per author,
 // found by autodiscovery and linked from the author page.
@@ -11,7 +11,7 @@ async function publish(page: Page, title: string, body: string, opts: { language
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "Poem" }).fill(body);
-  if (opts.language) await page.getByRole("combobox", { name: "Language" }).selectOption({ label: opts.language });
+  if (opts.language) await chooseOption(page.getByRole("combobox", { name: "Language" }), opts.language);
   if (opts.password) {
     await page.getByRole("switch", { name: "Password protected" }).click();
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(opts.password);

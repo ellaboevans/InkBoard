@@ -4,6 +4,7 @@ import { QuoteIcon, Loader2Icon, RotateCwIcon } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { cn } from "cn";
 import { ShareDialogContent, ShareSheetShell, TOUCH } from "@/components/poem/share-image-button";
+import { SelectControl } from "@/components/form-controls";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
 import { encodePassage, PASSAGE_MAX_CHARS, passageLength, type PassagePick } from "@/lib/share-image/passage";
@@ -259,49 +260,41 @@ function PassagePicker({
         })}
       </ul>
       {pick && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-1">
           <div className="grid gap-1.5">
             <label htmlFor={startId} className="text-sm font-medium">
               Start at
             </label>
-            <select
+            <SelectControl
               id={startId}
-              className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-sm"
-              value={pick.from.s}
-              onChange={(e) => onChange({ ...pick, from: { p: pick.from.p, s: Number(e.target.value) } })}
-            >
-              {firstSentences.map((text, i) => {
+              className="h-11 w-full"
+              contentClassName="max-w-[calc(100vw-2rem)]"
+              value={String(pick.from.s)}
+              onValueChange={(v) => onChange({ ...pick, from: { p: pick.from.p, s: Number(v) } })}
+              options={firstSentences.map((text, i) => {
                 const s = i + 1;
                 // In one paragraph, the start can't come after the end.
                 const late = pick.from.p === pick.to.p && s > pick.to.s;
-                return (
-                  <option key={s} value={s} disabled={late} lang={language ?? undefined}>
-                    {`Sentence ${s}: ${sentenceLabel(text)}`}
-                  </option>
-                );
+                return { value: String(s), disabled: late, lang: language ?? undefined, label: `Sentence ${s}: ${sentenceLabel(text)}` };
               })}
-            </select>
+            />
           </div>
           <div className="grid gap-1.5">
             <label htmlFor={endId} className="text-sm font-medium">
               End after
             </label>
-            <select
+            <SelectControl
               id={endId}
-              className="h-11 w-full min-w-0 rounded-md border bg-background px-2 text-sm"
-              value={pick.to.s}
-              onChange={(e) => onChange({ ...pick, to: { p: pick.to.p, s: Number(e.target.value) } })}
-            >
-              {lastSentences.map((text, i) => {
+              className="h-11 w-full"
+              contentClassName="max-w-[calc(100vw-2rem)]"
+              value={String(pick.to.s)}
+              onValueChange={(v) => onChange({ ...pick, to: { p: pick.to.p, s: Number(v) } })}
+              options={lastSentences.map((text, i) => {
                 const s = i + 1;
                 const early = pick.from.p === pick.to.p && s < pick.from.s;
-                return (
-                  <option key={s} value={s} disabled={early} lang={language ?? undefined}>
-                    {`Sentence ${s}: ${sentenceLabel(text)}`}
-                  </option>
-                );
+                return { value: String(s), disabled: early, lang: language ?? undefined, label: `Sentence ${s}: ${sentenceLabel(text)}` };
               })}
-            </select>
+            />
           </div>
         </div>
       )}

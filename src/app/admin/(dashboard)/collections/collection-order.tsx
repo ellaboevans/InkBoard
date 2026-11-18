@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { SelectControl } from "@/components/form-controls";
 import { COLLECTION_POEMS_MAX } from "@/lib/collection-limits";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
@@ -274,23 +274,18 @@ export function CollectionOrder({
       <div className="grid gap-1.5">
         <Label htmlFor="add-poem">Add a poem</Label>
         <div className="flex flex-wrap gap-2">
-          <NativeSelect
+          <SelectControl
             id="add-poem"
             value={adding}
-            onChange={(e) => setAdding(e.target.value)}
+            onValueChange={setAdding}
+            options={[
+              { value: "", label: available.length ? "Choose one of your poems…" : "All your poems are in collections" },
+              ...available.map((p) => ({ value: p.id, label: p.title })),
+            ]}
             aria-describedby="add-help"
             // Wraps above the button on phones instead of truncating.
             className="min-w-56 flex-1"
-          >
-            <NativeSelectOption value="">
-              {available.length ? "Choose one of your poems…" : "All your poems are in collections"}
-            </NativeSelectOption>
-            {available.map((p) => (
-              <NativeSelectOption key={p.id} value={p.id}>
-                {p.title}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
           <Button
             type="button"
             variant="outline"

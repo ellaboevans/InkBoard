@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { accountButton, latestCode, requestCode, signUpAs, sql, typeCode, expectBackOnList } from "./helpers";
+import { accountButton, latestCode, requestCode, signUpAs, sql, typeCode, expectBackOnList, chooseOption } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -106,7 +106,7 @@ test("rich profile: avatar, tagline, links and a pinned poem", async ({ page }) 
 
   // Profile shows it, plus stats; pick an avatar, tagline and links.
   await page.goto("/admin/profile");
-  await expect(page.getByRole("combobox", { name: "Pinned poem" })).toHaveValue(/.+/);
+  await expect(page.getByRole("combobox", { name: "Pinned poem" })).toHaveText(`Pin Me ${id}`);
   await expect(page.getByRole("main")).toContainText(`Pinned: “Pin Me ${id}”`);
   await page.getByRole("radio", { name: "Avatar 7" }).check({ force: true });
   await page.getByRole("textbox", { name: /Tagline/ }).fill("Poems about   rivers");
@@ -118,7 +118,7 @@ test("rich profile: avatar, tagline, links and a pinned poem", async ({ page }) 
   await expect(page.getByRole("textbox", { name: /Tagline/ })).toHaveValue("Poems about   rivers");
 
   await page.getByRole("textbox", { name: "Link 2" }).fill("");
-  await page.getByRole("combobox", { name: "Pinned poem" }).selectOption({ label: `Other ${id}` });
+  await chooseOption(page.getByRole("combobox", { name: "Pinned poem" }), `Other ${id}`);
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.locator("[data-sileo-toast]").getByText("Profile saved")).toBeVisible();
   // The stored, normalised values come back.

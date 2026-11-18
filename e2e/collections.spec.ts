@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql, expectBackOnList } from "./helpers";
+import { signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 // Collections (docs/PLAN.md, Phase 14): an editor groups poems into an ordered
 // sequence; readers step through the published ones with previous/next.
@@ -88,7 +88,7 @@ test("an editor builds an ordered collection; a reader steps through it", async 
   const list = main.getByRole("list").filter({ has: page.getByRole("button", { name: /^Move / }) });
   const status = main.getByRole("status").filter({ hasText: /Moved|Added|Removed/ });
   for (const title of [one, three, draft]) {
-    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: title });
+    await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), title);
     await page.getByRole("button", { name: "Add to collection" }).click();
     await expect(status).toHaveText(new RegExp(`Added “${title}”`));
   }
@@ -139,7 +139,7 @@ test("an editor builds an ordered collection; a reader steps through it", async 
   const byTitle = (t: string) => rows.find((r) => r.slug === t.toLowerCase().replace(/ /g, "-"))!;
   const author = rows[0].author as string;
   await page.goto(`/admin/poems/${byTitle(two).id}`);
-  await page.getByRole("combobox", { name: "Collection" }).selectOption({ label: cycle });
+  await chooseOption(page.getByRole("combobox", { name: "Collection" }), cycle);
   await expect(page.getByText("Saving adds it at the end.")).toBeVisible();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator("[data-sileo-toast]").filter({ hasText: "Saved and published" })).toBeVisible();
@@ -238,7 +238,7 @@ test("a dropped order that can't be saved rolls back with an error", async ({ pa
   await page.getByRole("dialog").getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   for (const t of ["A", "B", "C"]) {
-    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: `${t} ${id}` });
+    await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), `${t} ${id}`);
     await page.getByRole("button", { name: "Add to collection" }).click();
     await expect(page.getByRole("button", { name: `Remove “${t} ${id}” from the collection` })).toBeVisible();
   }
@@ -274,7 +274,7 @@ test("stepping through a collection in the overlay keeps the same dialog open an
   await page.getByRole("dialog").getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   for (const t of [one, three, two]) {
-    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: t });
+    await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), t);
     await page.getByRole("button", { name: "Add to collection" }).click();
     await expect(page.getByRole("button", { name: `Remove “${t}” from the collection` })).toBeVisible();
   }

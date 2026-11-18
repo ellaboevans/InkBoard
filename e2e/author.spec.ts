@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signUpAs, sql, expectBackOnList } from "./helpers";
+import { signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
@@ -25,7 +25,7 @@ test("an author's public page shows their profile and poems, pinned first", asyn
   await page.goto("/admin/profile");
   await page.getByRole("textbox", { name: /Tagline/ }).fill("Poems for slow mornings");
   await page.getByRole("textbox", { name: "Website" }).fill("example.com/poet");
-  await page.getByRole("combobox", { name: "Pinned poem" }).selectOption({ label: `First ${id}` });
+  await chooseOption(page.getByRole("combobox", { name: "Pinned poem" }), `First ${id}`);
   await page.getByRole("button", { name: "Save profile" }).click();
   await expect(page.locator("[data-sileo-toast]").getByText("Profile saved")).toBeVisible();
 

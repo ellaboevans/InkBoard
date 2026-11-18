@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUpAs, sql, expectBackOnList } from "./helpers";
+import { signUpAs, sql, expectBackOnList, chooseOption } from "./helpers";
 
 // Collections, round 2 (docs/PLAN.md, Phase 14): the public collection page,
 // links to it, the board badge, share card and sitemap.
@@ -11,7 +11,7 @@ async function publish(page: Page, title: string, body: string, opts: { password
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(title);
   await page.getByRole("textbox", { name: "Poem" }).fill(body);
-  if (opts.language) await page.getByRole("combobox", { name: "Language" }).selectOption({ label: opts.language });
+  if (opts.language) await chooseOption(page.getByRole("combobox", { name: "Language" }), opts.language);
   if (opts.password) {
     await page.getByRole("switch", { name: "Password protected" }).click();
     await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill(opts.password);
@@ -30,7 +30,7 @@ async function createCollection(page: Page, title: string, intro: string, poems:
   await dialog.getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   for (const t of poems) {
-    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: t });
+    await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), t);
     await page.getByRole("button", { name: "Add to collection" }).click();
     await expect(page.getByRole("button", { name: `Remove “${t}” from the collection` })).toBeVisible();
   }

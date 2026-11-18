@@ -13,6 +13,7 @@ import {
   toastContrast,
   expectBackOnList,
   virtualAuthenticator,
+  chooseOption,
 } from "./helpers";
 import { fakePush, type FakePush } from "./push-stub";
 
@@ -248,6 +249,13 @@ test("novels in the dashboard: the list, a novel's page, the chapter editor (wri
   await page.getByRole("button", { name: "New novel" }).click();
   await expect(page.getByRole("dialog", { name: "New novel" })).toBeVisible();
   await scan(page, "novels: new novel dialog");
+  // A Select's list open inside the dialog (it portals); Esc closes only the list.
+  await page.getByRole("dialog").getByRole("combobox", { name: "Language" }).click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await scan(page, "novels: new novel dialog, Language list open");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "New novel" })).toBeVisible();
   await page.getByRole("dialog").getByRole("textbox", { name: "Title" }).fill("Asuo ne Ɔdɔ");
   await page.getByRole("dialog").getByRole("button", { name: "Create novel" }).click();
   await expect(page).toHaveURL(/\/admin\/novels\/[0-9a-f-]{36}/, { timeout: 45_000 });
@@ -457,9 +465,15 @@ test("share a passage: the sheet with its passage picker (empty, picked and trim
     await scan(page, `share a passage: empty picker, ${width}px`);
     await sheet.getByRole("checkbox", { name: /^Paragraph 1:/ }).check();
     await sheet.getByRole("checkbox", { name: /^Paragraph 2:/ }).check();
-    await sheet.getByLabel("Start at").selectOption("2");
+    await chooseOption(sheet.getByLabel("Start at"), /^Sentence 2:/);
     await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible({ timeout: 45_000 });
     await scan(page, `share a passage: picked and trimmed, ${width}px`);
+    await sheet.getByLabel("End after").click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await scan(page, `share a passage: End after list open, ${width}px`);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Clear" }).click();
     await sheet.getByRole("checkbox", { name: /^Paragraph 3:/ }).check();
     await expect(sheet.locator("[data-passage-count]")).toContainText("too long");
@@ -589,7 +603,7 @@ test("collections: admin pages and the reading page's navigation", async ({ page
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
   await scan(page, "collection: empty");
   for (const t of [`First ${id}`, `Second ${id}`, `Third ${id}`]) {
-    await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: t });
+    await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), t);
     await page.getByRole("button", { name: "Add to collection" }).click();
     await expect(page.getByRole("button", { name: `Remove “${t}” from the collection` })).toBeVisible();
   }
@@ -650,7 +664,7 @@ test("board filtered by language", async ({ page }) => {
   await page.goto("/admin/poems/new");
   await page.getByRole("textbox", { name: "Title" }).fill(`Ŋutifafa ${id}`);
   await page.getByRole("textbox", { name: "Poem" }).fill("Ŋutifafa na wò");
-  await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Ewe" });
+  await chooseOption(page.getByRole("combobox", { name: "Language" }), "Ewe");
   await page.getByRole("button", { name: "Publish to board" }).click();
   await expectBackOnList(page);
 
@@ -658,6 +672,13 @@ test("board filtered by language", async ({ page }) => {
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
   await expect(page.getByRole("button", { name: "Show all languages" })).toBeVisible();
   await scan(page, "board: filtered by language");
+  await page.getByRole("combobox", { name: "Language" }).click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  // Scoped to the list: while it's open Radix aria-hides the rest of the page and traps focus in the
+  // list, and axe then flags the (focusable, but unreachable) board canvas. The board itself is scanned above.
+  await scan(page, "board: language filter list open", '[role="listbox"]');
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toBeHidden();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Follow new poems" })).toBeVisible();
   await scan(page, "board: subscribe popover");

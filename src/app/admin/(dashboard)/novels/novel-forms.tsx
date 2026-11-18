@@ -3,7 +3,7 @@
 import { EyeIcon, EyeOffIcon, KeyRoundIcon, Loader2Icon, LockIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { FormSwitch } from "@/components/form-controls";
+import { FormSelect, FormSwitch } from "@/components/form-controls";
 import { SpecialLetters } from "@/components/special-letters";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { BLURB_MAX, NOVEL_TITLE_MAX } from "@/lib/novel-limits";
 import { notify, withErrorToast } from "@/lib/notify";
@@ -41,8 +40,12 @@ export type NovelDetails = { title: string; blurb: string; language: string; sta
 
 /** On phones every control is at least 44 px tall. */
 export const TOUCH = "max-sm:h-11";
-/** NativeSelect puts its className on a wrapper: reach the <select> inside it. */
-const SELECT = "w-full max-sm:[&_select]:h-11";
+const SELECT = "w-full";
+const LANGUAGE_OPTIONS = [{ value: "", label: "Not set" }, ...POEM_LANGUAGES.map((l) => ({ value: l.code, label: l.label }))];
+const STATUS_OPTIONS = [
+  { value: "ongoing", label: "Ongoing" },
+  { value: "complete", label: "Complete" },
+];
 
 function Fields({
   prefix,
@@ -94,44 +97,41 @@ function Fields({
           className="font-serif text-base leading-relaxed"
         />
         <p id={`${prefix}-blurb-help`} className="text-xs text-muted-foreground tabular-nums">
-          What the back cover would say. {values.blurb.length.toLocaleString("en")} / {BLURB_MAX.toLocaleString("en")}
+          A short description of your novel, like the words on a book’s back cover. Readers see it on the
+          novel’s page and its book card. {values.blurb.length.toLocaleString("en")} / {BLURB_MAX.toLocaleString("en")}
         </p>
         <FieldError id={`${prefix}-blurb-error`} message={err("blurb")} />
         <SpecialLetters fields={[`${prefix}-blurb`, `${prefix}-title`]} />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* items-start: each column is as tall as its own content. Stretched to the row's height, a
+          column with fewer rows (no help text) spread the extra space between its label and box,
+          so they sat lower than the other column's. */}
+      <div className="grid items-start gap-4 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor={`${prefix}-language`}>Language</Label>
-          <NativeSelect
+          <FormSelect
             id={`${prefix}-language`}
-            name="language"
             value={values.language}
-            onChange={(e) => set("language", e.target.value)}
+            onValueChange={(v) => set("language", v)}
+            options={LANGUAGE_OPTIONS}
             aria-invalid={err("language") ? true : undefined}
+            aria-describedby={err("language") ? `${prefix}-language-error` : undefined}
             className={SELECT}
-          >
-            <NativeSelectOption value="">Not set</NativeSelectOption>
-            {POEM_LANGUAGES.map((l) => (
-              <NativeSelectOption key={l.code} value={l.code}>
-                {l.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
+          <input type="hidden" name="language" value={values.language} />
           <FieldError id={`${prefix}-language-error`} message={err("language")} />
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor={`${prefix}-status`}>Status</Label>
-          <NativeSelect
+          <FormSelect
             id={`${prefix}-status`}
-            name="status"
             value={values.status}
-            onChange={(e) => set("status", e.target.value as NovelDetails["status"])}
+            onValueChange={(v) => set("status", v as NovelDetails["status"])}
+            options={STATUS_OPTIONS}
             aria-describedby={`${prefix}-status-help`}
             className={SELECT}
-          >
-            <NativeSelectOption value="ongoing">Ongoing</NativeSelectOption>
-            <NativeSelectOption value="complete">Complete</NativeSelectOption>
-          </NativeSelect>
+          />
+          <input type="hidden" name="status" value={values.status} />
           <p id={`${prefix}-status-help`} className="text-xs text-muted-foreground">
             Tells readers whether more chapters are coming.
           </p>

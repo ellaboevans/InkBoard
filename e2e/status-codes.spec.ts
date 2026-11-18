@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectBackOnList, poemIdByTitle, signUpAs, sql } from "./helpers";
+import { expectBackOnList, poemIdByTitle, signUpAs, sql, chooseOption } from "./helpers";
 
 /*
  * Real 404s for reader pages (docs/PLAN.md, Phase 19). The pages stream under
@@ -81,7 +81,7 @@ test("a collection and a poem become 404s when their last published poem is unpu
   await dialog.getByRole("textbox", { name: "Title" }).fill(`Set ${id}`);
   await dialog.getByRole("button", { name: "Create collection" }).click();
   await expect(page).toHaveURL(/\/admin\/collections\/[0-9a-f-]{36}/, { timeout: 45_000 });
-  await page.getByRole("combobox", { name: "Add a poem" }).selectOption({ label: `Open ${id}` });
+  await chooseOption(page.getByRole("combobox", { name: "Add a poem" }), `Open ${id}`);
   await page.getByRole("button", { name: "Add to collection" }).click();
   await expect(page.getByRole("button", { name: `Remove “Open ${id}” from the collection` })).toBeVisible();
   const { rows } = await sql(

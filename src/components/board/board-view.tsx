@@ -154,6 +154,9 @@ function BoardList({
                         >
                           <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
                             <span lang={n.language ?? undefined}>{n.title}</span>
+                            {n.visibility === "private" && (
+                              <LockIcon className="size-3.5 text-muted-foreground" aria-label="password protected" />
+                            )}
                             {languageName(n.language) && (
                               <span className="rounded-full border px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
                                 {languageName(n.language)}

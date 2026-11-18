@@ -40,7 +40,7 @@ const editor = async () => (await db.select().from(editors).where(eq(editors.id,
 
 describe("defaults", () => {
   it("new editors use a password per poem", async () => {
-    expect(await getPasswordSettings(ed)).toEqual({ mode: "per_poem", privatePoemCount: 0 });
+    expect(await getPasswordSettings(ed)).toEqual({ mode: "per_poem", privatePoemCount: 0, privateNovelCount: 0 });
   });
 });
 
@@ -62,7 +62,7 @@ describe("switching to one shared password", () => {
     expect(e.passwordMode).toBe("shared");
     expect(await verifyPassword("one-for-all", e.sharedPasswordHash)).toBe(true);
     for (const id of [a, b, pub]) expect((await poem(id)).passwordHash).toBeNull();
-    expect(await getPasswordSettings(ed)).toEqual({ mode: "shared", privatePoemCount: 2 });
+    expect(await getPasswordSettings(ed)).toEqual({ mode: "shared", privatePoemCount: 2, privateNovelCount: 0 });
   });
 
   it("new and edited private poems need no password of their own", async () => {

@@ -111,8 +111,10 @@ function parse(raw: unknown) {
 
 const PRIVATE_NEEDS_PASSWORD = "Private poems need a password readers can use";
 const NO_SUCH_COLLECTION = "Choose a collection from the list";
-const SETTINGS_CHANGED =
+/** The form error when the DB's password invariant refuses a save (novels.ts shares it). */
+export const PASSWORD_SETTINGS_CHANGED =
   "Your password settings changed while saving. Please review and save again.";
+const SETTINGS_CHANGED = PASSWORD_SETTINGS_CHANGED;
 
 /**
  * Run a write; if the DB's password invariant rejects it (an editor switched

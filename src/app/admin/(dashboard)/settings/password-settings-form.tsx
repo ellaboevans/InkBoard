@@ -16,9 +16,12 @@ import { pluralCount } from "@/lib/plural";
 export function PasswordSettingsForm({
   mode: savedMode,
   privatePoemCount,
+  privateNovelCount = 0,
 }: {
   mode: PasswordMode;
   privatePoemCount: number;
+  /** Private novels follow the same mode (Phase 25). */
+  privateNovelCount?: number;
 }) {
   const [state, action, pending] = useActionState(
     withErrorToast(async (prev: PasswordSettingsState, formData: FormData) => {
@@ -45,7 +48,10 @@ export function PasswordSettingsForm({
   const switchingToPerPoem = mode === "per_poem" && savedMode === "shared";
   const changingShared = mode === "shared" && savedMode === "shared";
   const canSave = switchingToPerPoem || switchingToShared || (changingShared && password !== "");
-  const poems = pluralCount(privatePoemCount, "private poem");
+  // "2 private poems", or "2 private poems and 1 private novel" once there are private novels.
+  const poems =
+    pluralCount(privatePoemCount, "private poem") +
+    (privateNovelCount > 0 ? ` and ${pluralCount(privateNovelCount, "private novel")}` : "");
   const error = clientError ?? state.error;
 
   return (
@@ -65,21 +71,21 @@ export function PasswordSettingsForm({
       noValidate
     >
       <fieldset className="grid gap-3">
-        <legend className="mb-3 font-medium">Private poem passwords</legend>
+        <legend className="mb-3 font-medium">Passwords for private poems and novels</legend>
         <RadioGroup name="mode" value={mode} onValueChange={(v) => setMode(v as PasswordMode)} className="gap-3">
           <ModeOption
             value="per_poem"
             current={savedMode === "per_poem"}
             icon={<KeySquareIcon className="size-4" aria-hidden />}
-            title="A different password for each poem"
-            description="You set a password on each private poem. Unlocking one poem doesn't unlock the others."
+            title="A different password for each poem and novel"
+            description="You set a password on each private poem and each private novel. Unlocking one doesn't unlock the others; a novel's password opens all its chapters."
           />
           <ModeOption
             value="shared"
             current={savedMode === "shared"}
             icon={<KeyRoundIcon className="size-4" aria-hidden />}
-            title="One password for all my private poems"
-            description="Set it once here. A reader who enters it can read every private poem of yours, including ones you add or make private later, until you change the password."
+            title="One password for all my private poems and novels"
+            description="Set it once here. A reader who enters it can read every private poem and novel of yours, including ones you add or make private later, until you change the password."
           />
         </RadioGroup>
       </fieldset>

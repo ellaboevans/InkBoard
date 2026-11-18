@@ -1,4 +1,4 @@
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, LockIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -35,6 +35,11 @@ import { getNovelPage } from "@/server/board-cache";
  * page is the same for everyone and is saved for offline reading (kind
  * "novel"). Its link card is opengraph-image.tsx; JSON-LD is a Book with its
  * published chapters (src/lib/novel-seo.ts).
+ *
+ * A private novel (Phase 25) shows all of this too (the owner's decision:
+ * title, cover, blurb and chapter list are public), marked "Password
+ * protected"; its chapter pages ask for the password. "Save this novel for
+ * offline" is hidden for it (its chapters are never saved).
  */
 
 type Props = PageProps<"/a/[author]/n/[novel]">;
@@ -147,6 +152,19 @@ async function Novel({ params }: Pick<Props, "params">) {
               </span>
             ))}
           </p>
+          {n.visibility === "private" && (
+            <p data-novel-private className="mt-2.5 flex items-start gap-1.5 text-sm">
+              <LockIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <span>
+                <span className="font-medium">Password protected.</span>{" "}
+                <span className="text-muted-foreground">
+                  {n.sharedPassword
+                    ? `${n.penName}’s one password opens every chapter.`
+                    : "One password opens every chapter."}
+                </span>
+              </span>
+            </p>
+          )}
         </div>
         {n.fullBlurb && (
           <p
@@ -166,8 +184,10 @@ async function Novel({ params }: Pick<Props, "params">) {
           <h2 id="chapters-heading" className="font-serif text-[28px] leading-tight">
             Chapters
           </h2>
-          {/* Phase 24: the whole novel for a journey without data. */}
-          <SaveNovelOffline novelId={n.id} novelPath={base} chapters={n.chapters.map((c) => ({ number: c.number, slug: c.slug }))} />
+          {/* Phase 24: the whole novel for a journey without data. Never a private novel's (Phase 25). */}
+          {n.visibility === "public" && (
+            <SaveNovelOffline novelId={n.id} novelPath={base} chapters={n.chapters.map((c) => ({ number: c.number, slug: c.slug }))} />
+          )}
         </div>
         <ChapterList novelId={n.id} base={base} chapters={chapters} />
       </section>

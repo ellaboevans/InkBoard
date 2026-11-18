@@ -116,11 +116,11 @@ export default function PrivacyPage() {
           <Sub heading="Search">
             <p>What you type into search is used to find matching writers and titles, and isn’t stored.</p>
           </Sub>
-          <Sub heading="Private poems">
+          <Sub heading="Private poems and novels">
             <p>
-              When you enter a poem’s password correctly, your browser keeps a cookie for {F.unlockLife} that lists which
-              poems (or which writer’s poems) you’ve unlocked and until when. It’s signed so it can’t be forged, and it
-              never contains the password. If the writer changes the password, it stops working sooner.
+              When you enter a poem’s or a novel’s password correctly, your browser keeps a cookie for {F.unlockLife} that
+              lists which poems and novels (or which writer’s) you’ve unlocked and until when. It’s signed so it can’t be
+              forged, and it never contains the password. If the writer changes the password, it stops working sooner.
             </p>
           </Sub>
           <Sub heading="Notifications about new poems">
@@ -134,8 +134,9 @@ export default function PrivacyPage() {
             <p>
               To keep to our limits on how often we notify you, we note which notifications went to each address, and a
               daily clean-up deletes those notes after {F.pushDeliveryCleanup}. Each notification carries only a poem’s
-              title (or a novel’s title and the chapter’s number), its writer’s name and a link, never a private poem or
-              any of a chapter’s text, and it’s encrypted on its way through the push service.
+              title (or a novel’s title and the chapter’s number), its writer’s name and a link, never a private poem, a
+              chapter of a private novel or any of a chapter’s text, and it’s encrypted on its way through the push
+              service.
             </p>
             <p>
               Turning notifications off deletes the address and the writers it follows. So does the push service telling
@@ -171,8 +172,8 @@ export default function PrivacyPage() {
               copies of the public pages you open (the board, public poems, writers’, collection and novel pages, the
               chapters you read, the About page and this one) so they work without a connection, and drops the oldest as
               you open more. “Save this novel for offline” asks it to keep a novel’s chapters the same way. It fetches them
-              fresh, without your cookies, so a copy never holds a private poem, even one you unlocked, or anything about
-              an account.
+              fresh, without your cookies, so a copy never holds a private poem or a private novel’s chapter, even one you
+              unlocked, or anything about an account.
             </li>
             <li>
               <strong className="font-medium">Local storage.</strong> <code className={code}>inkboard-install</code>{" "}
@@ -235,11 +236,14 @@ export default function PrivacyPage() {
           </Sub>
           <Sub heading="Your novels">
             <p>
-              Each novel’s title, blurb, language and whether it’s ongoing or complete, and each of its chapters: its
+              Each novel’s title, blurb, language, whether it’s ongoing or complete, and whether it’s public or private
+              (a private novel’s password, unless it uses your one shared password, is stored only as an scrypt hash, never
+              as written), and each of its chapters: its
               title, text, place in the book, word count, and whether it’s a draft or published and when. We keep the{" "}
               {F.chapterVersionsKept} most recent versions of each chapter, which only you can see. Readers see a novel once
               one of its chapters is published, and then only its published chapters: drafts, their titles and their number
-              stay with you. Everything stays until you
+              stay with you. For a private novel they see its title, blurb and chapter list, and its chapters’ text only
+              with the password. Everything stays until you
               delete it or your account. While you write a chapter, your browser also keeps a copy of it on your device
               (see “On your device”).
             </p>

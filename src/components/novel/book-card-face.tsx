@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { LockIcon } from "lucide-react";
 import type { BoardNovel } from "@/lib/board-types";
 import { languageName } from "@/lib/poem-languages";
 import { pluralCount } from "@/lib/plural";
@@ -9,11 +10,18 @@ export function novelFacts(novel: Pick<BoardNovel, "chapterCount" | "status">) {
   return `${pluralCount(novel.chapterCount, "chapter")} · ${novel.status}`;
 }
 
+/** What screen readers hear after a book card's title: " (novel)", " (novel, password protected)". */
+export function novelLinkSuffix(novel: Pick<BoardNovel, "visibility">) {
+  return novel.visibility === "private" ? " (novel, password protected)" : " (novel)";
+}
+
 /**
  * A novel as a card (docs/PLAN.md, Phase 23b; docs/mockups/novels/board.html):
  * one ordinary card slot (CARD_W × CARD_H) on the board, the same on the
  * author page. Like PoemCardFace, `title` is the interactive element: give it
- * `cardTitleClass` so it stretches over the whole card and names it.
+ * `cardTitleClass` so it stretches over the whole card and names it (with
+ * novelLinkSuffix). A private novel (Phase 25) shows the poems' lock badge;
+ * its cover, title and blurb stay visible (the owner's decision).
  */
 export function BookCardFace({
   novel,
@@ -48,6 +56,17 @@ export function BookCardFace({
           {languageName(lang) && (
             <span className="rounded-full border px-2 py-0.5 font-normal tracking-normal text-muted-foreground normal-case">
               {languageName(lang)}
+            </span>
+          )}
+          {novel.visibility === "private" && (
+            // Icon only, like a private poem card's: the title's link already says "password protected".
+            <span
+              data-lock-badge=""
+              title="Password protected"
+              className="flex size-5 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+              aria-hidden
+            >
+              <LockIcon className="size-3" />
             </span>
           )}
         </p>

@@ -1,4 +1,4 @@
-import { ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon, LockOpenIcon } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -7,6 +7,8 @@ import { RememberChapter } from "@/components/novel/novel-reading";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
+import { unlockNovelAction } from "@/components/poem/unlock-actions";
+import { UnlockForm } from "@/components/poem/unlock-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { feedAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
@@ -15,6 +17,7 @@ import { pluralCount } from "@/lib/plural";
 import { chapterDescription, chapterJsonLd, chapterPath, novelPath } from "@/lib/novel-seo";
 import { BASE_OPEN_GRAPH } from "@/lib/site";
 import { getReaderChapter } from "@/server/board-cache";
+import { getUnlockedChapterBody } from "@/server/unlock-cookie";
 
 /*
  * A published chapter (docs/PLAN.md, Phase 23b; docs/mockups/novels/
@@ -33,6 +36,13 @@ import { getReaderChapter } from "@/server/board-cache";
  * (kind "chapter", 60 kept); its link card (opengraph-image.tsx) shows the
  * novel's cover and the chapter's title, never its text. JSON-LD: a Chapter
  * that isPartOf the Book (src/lib/novel-seo.ts).
+ *
+ * A private novel (Phase 25, N1): the cached loader holds no text (body is
+ * null), so the bar, title, reading time and chapter links render as usual
+ * and the text's place holds the unlock form, behind its own Suspense
+ * boundary (it reads the unlock cookie). The text comes only from
+ * getUnlockedChapterBody after the grant check, and the page is never saved
+ * for offline reading (save={false}), unlocked or not.
  */
 
 type Props = PageProps<"/a/[author]/n/[novel]/[chapter]">;
@@ -97,19 +107,27 @@ async function Chapter({ params }: Pick<Props, "params">) {
   if (!c) notFound();
   const base = novelUrl(c);
   const lang = c.novel.language ?? undefined;
+  const isPrivate = c.novel.visibility === "private";
 
   return (
     <>
-      {/* Saved for offline reading (only rendered for a published chapter: drafts and 404s never are). */}
-      <OfflineMarker
-        save
-        kind="chapter"
-        title={hasOwnTitle(c) ? `${c.novel.title} · Chapter ${c.number}: ${c.displayTitle}` : `${c.novel.title} · Chapter ${c.number}`}
-        author={c.penName}
-      />
-      <SaveForOffline path={chapterPath(c.authorSlug, c.novel.slug, c.slug)} />
+      {/* Saved for offline reading (only rendered for a published chapter: drafts and 404s never are);
+          a private novel's chapter never, even once unlocked. */}
+      {isPrivate ? (
+        <OfflineMarker save={false} />
+      ) : (
+        <>
+          <OfflineMarker
+            save
+            kind="chapter"
+            title={hasOwnTitle(c) ? `${c.novel.title} · Chapter ${c.number}: ${c.displayTitle}` : `${c.novel.title} · Chapter ${c.number}`}
+            author={c.penName}
+          />
+          <SaveForOffline path={chapterPath(c.authorSlug, c.novel.slug, c.slug)} />
+          <RememberChapter novelId={c.novel.id} chapterSlug={c.slug} />
+        </>
+      )}
       <JsonLd data={chapterJsonLd(c)} />
-      <RememberChapter novelId={c.novel.id} chapterSlug={c.slug} />
 
       <div className="sticky top-[env(safe-area-inset-top,0px)] z-20 border-b bg-background/92 backdrop-blur-md">
         <nav aria-label="Novel" className="mx-auto flex min-h-[52px] max-w-[calc(34*21px)] items-center gap-2.5 px-4 py-1">
@@ -144,9 +162,16 @@ async function Chapter({ params }: Pick<Props, "params">) {
             {c.penName} · about {pluralCount(Math.max(1, c.readingMinutes), "minute")}
           </p>
         </header>
-        <div lang={lang} data-chapter-text className="chapter-prose">
-          <ProseText text={c.body} />
-        </div>
+        {isPrivate || c.body === null ? (
+          // Per-reader: reads the unlock cookie, so it streams in separately.
+          <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-muted" />}>
+            <PrivateChapter chapter={c} lang={lang} />
+          </Suspense>
+        ) : (
+          <div lang={lang} data-chapter-text className="chapter-prose">
+            <ProseText text={c.body} />
+          </div>
+        )}
       </article>
 
       <nav aria-label="Chapters" className="mx-auto max-w-[calc(34*21px)] px-5 pt-2 pb-12 sm:px-6 sm:pb-16">
@@ -186,5 +211,34 @@ async function Chapter({ params }: Pick<Props, "params">) {
         </div>
       </nav>
     </>
+  );
+}
+
+/** A private novel's chapter text after unlocking, else the unlock form (English UI: `lang` goes on the text only). */
+async function PrivateChapter({ chapter: c, lang }: { chapter: ReaderChapter; lang: string | undefined }) {
+  const body = await getUnlockedChapterBody(c.authorSlug, c.novel.slug, c.slug);
+  if (body !== null) {
+    return (
+      <>
+        <p className="mb-6 flex items-center gap-1.5 font-sans text-xs text-muted-foreground">
+          <LockOpenIcon className="size-3.5" aria-hidden />
+          Unlocked on this device
+        </p>
+        <div lang={lang} data-chapter-text className="chapter-prose">
+          <ProseText text={body} />
+        </div>
+        <RememberChapter novelId={c.novel.id} chapterSlug={c.slug} />
+      </>
+    );
+  }
+  return (
+    <div data-chapter-locked className="font-sans text-base leading-normal">
+      <UnlockForm
+        kind="novel"
+        action={unlockNovelAction.bind(null, c.authorSlug, c.novel.slug)}
+        penName={c.penName}
+        sharedPassword={c.novel.sharedPassword}
+      />
+    </div>
   );
 }

@@ -32,6 +32,7 @@ const novel = (id: string, language: string | null): BoardNovel => ({
   slug: id,
   language,
   status: "ongoing",
+  visibility: "public",
   blurb: null,
   chapterCount: 1,
   wordCount: 10,

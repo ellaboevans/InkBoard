@@ -288,7 +288,7 @@ export async function announceChapter(
           WHERE o.novel_id = c.novel_id AND o.status = 'published' AND o.position <= c.position) AS number
       FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
       WHERE c.id = ${chapterId} AND c.notified_at IS NOT NULL AND c.status = 'published'
-        AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+        AND n.visibility = 'public' AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
     `)) as unknown as {
       rows: {
         id: string;

@@ -51,6 +51,10 @@ const novelInput = (formData: FormData) => ({
   blurb: str(formData, "blurb"),
   language: str(formData, "language"),
   status: str(formData, "status"),
+  // The details form only (Phase 25); absent from "New novel" = public. The
+  // password is hashed in novels.ts and never comes back to the client.
+  visibility: str(formData, "visibility"),
+  password: str(formData, "password"),
 });
 
 export async function createNovelAction(_prev: NovelFormState, formData: FormData): Promise<NovelFormState> {

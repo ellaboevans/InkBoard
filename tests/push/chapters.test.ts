@@ -5,7 +5,7 @@ import { getDb } from "@/db";
 import { chapters, editors, pushDeliveries } from "@/db/schema";
 import { resetEnvCache } from "@/env";
 import { DEVICE_DAILY_LIMIT, newChapterPayload, newPoemPayload } from "@/lib/push-rules";
-import { createChapter, createNovel, publishChapter, saveChapter, unpublishChapter } from "@/server/novels";
+import { createChapter, createNovel, publishChapter, saveChapter, unpublishChapter, updateNovel } from "@/server/novels";
 import { createPoem } from "@/server/poems";
 import { announceChapter, announcePoem, saveSubscription } from "@/server/push";
 
@@ -186,5 +186,44 @@ describe("the same limits and grouping as poems, shared with them", () => {
     const k = await createPoem(kofi, { title: "K", body: "x", visibility: "public", status: "published" });
     if (!k.ok) throw new Error("poem");
     expect(await announcePoem(k.poem.id)).toMatchObject({ sent: 0, limited: 1 });
+  });
+});
+
+describe("private novels (Phase 25): a chapter first published while its novel is private is never announced", () => {
+  const makePrivate = () => updateNovel(ama, novelId, { title: "The Ferry at Yeji", visibility: "private", password: "novel-pass" });
+  const makePublic = () => updateNovel(ama, novelId, { title: "The Ferry at Yeji", visibility: "public" });
+
+  it("not when published private, not when the novel goes public later, not after republishing; a chapter first published once it's public is", async () => {
+    await device(fcm(1), { mode: "followed", follows: ["ama-sewaa"] });
+    expect(await makePrivate()).toMatchObject({ ok: true });
+    const created = await chapter("Thursday");
+    expect(created.announce).toBe(false);
+    expect(await notifiedAt(created.chapter.id)).toBeNull();
+    const draft = await chapter("The Landing", "draft");
+    expect(await publishChapter(ama, draft.chapter.id)).toMatchObject({ ok: true, announce: false });
+    expect(await announceChapter(created.chapter.id)).toMatchObject({ skipped: "not-announceable", sent: 0 });
+
+    expect(await makePublic()).toMatchObject({ ok: true });
+    expect(await unpublishChapter(ama, created.chapter.id)).toMatchObject({ announce: false });
+    expect(await publishChapter(ama, created.chapter.id)).toMatchObject({ announce: false });
+    expect(await saveChapter(ama, draft.chapter.id, { title: "The Landing", body: "x", status: "draft" })).toMatchObject({ announce: false });
+    expect(await saveChapter(ama, draft.chapter.id, { title: "The Landing", body: "x", status: "published" })).toMatchObject({ announce: false });
+    expect(await notifiedAt(created.chapter.id)).toBeNull();
+    expect(await notifiedAt(draft.chapter.id)).toBeNull();
+    expect(await announceChapter(created.chapter.id)).toMatchObject({ skipped: "not-announceable", sent: 0 });
+    expect(send).not.toHaveBeenCalled();
+
+    const later = await chapter("The Return");
+    expect(later.announce).toBe(true);
+    expect(await announceChapter(later.chapter.id)).toMatchObject({ sent: 1 });
+  });
+
+  it("re-checks before sending: a claimed chapter whose novel went private since isn't sent", async () => {
+    await device(fcm(1), { mode: "followed", follows: ["ama-sewaa"] });
+    const { chapter: c, announce } = await chapter("Thursday");
+    expect(announce).toBe(true);
+    await makePrivate();
+    expect(await announceChapter(c.id)).toMatchObject({ skipped: "not-announceable", sent: 0 });
+    expect(send).not.toHaveBeenCalled();
   });
 });

@@ -27,9 +27,13 @@ export function novelDescription(n: Pick<NovelPage, "fullBlurb" | "penName" | "c
   return `A novel by ${n.penName} on ${SITE_NAME}, ${pluralCount(n.chapterCount, "chapter")} so far.`;
 }
 
-/** The chapter's first lines as plain text (no emphasis markers, no scene breaks). */
+/**
+ * The chapter's first lines as plain text (no emphasis markers, no scene
+ * breaks). A private novel's chapter has no text here (its body is null, N1):
+ * the generic line instead, never anything from behind the password.
+ */
 export function chapterDescription(c: Pick<ReaderChapter, "body" | "number" | "novel" | "penName">): string {
-  const text = stripProse(c.body).replace(/\s+/g, " ").trim();
+  const text = c.body === null || c.novel.visibility === "private" ? "" : stripProse(c.body).replace(/\s+/g, " ").trim();
   if (text) return truncate(text, DESCRIPTION_MAX);
   return `Chapter ${c.number} of ${c.novel.title}, a novel by ${c.penName}.`;
 }

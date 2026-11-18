@@ -149,9 +149,13 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
 // published chapters: every query below joins chapters with
 // status = 'published', and counts, numbers and reading times are computed
 // over those rows alone, so a draft never shows, not even as a gap in the
-// numbering or a word in the total. Novels are all public for now; when
-// private novels come, chapter text must be selected with CASE WHEN like
-// poems' (N1).
+// numbering or a word in the total.
+//
+// Private novels (Phase 25, N1): readers see a private novel's title, cover,
+// blurb and chapter list (numbers, titles, reading times), never its chapter
+// text. The text is selected only with CASE WHEN the novel is public, so a
+// private chapter's text isn't even loaded into the server process here; it
+// comes only from unlock.ts (readUnlockedChapterBody), after the grant check.
 
 /** How long the board's and author page's blurb may be: about three lines of the card. */
 const CARD_BLURB_CHARS = 280;
@@ -166,6 +170,7 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
       slug: novels.slug,
       language: novels.language,
       status: novels.status,
+      visibility: novels.visibility,
       blurb: sql<string | null>`NULLIF(left(split_part(${novels.blurb}, E'\n', 1), ${CARD_BLURB_CHARS}), '')`,
       chapterCount: sql<number>`count(${chapters.id})::int`,
       wordCount: sql<number>`coalesce(sum(${chapters.wordCount}), 0)::int`,
@@ -193,7 +198,9 @@ async function loadNovelWithChapters(authorSlug: string, novelSlug: string) {
       slug: novels.slug,
       language: novels.language,
       status: novels.status,
+      visibility: novels.visibility,
       blurb: novels.blurb,
+      sharedPassword: sql<boolean>`${editors.passwordMode} = 'shared'`,
       editorId: editors.id,
       penName: editors.penName,
       authorSlug: editors.slug,
@@ -254,6 +261,8 @@ export async function loadNovelPage(authorSlug: string, novelSlug: string): Prom
     slug: n.slug,
     language: n.language,
     status: n.status,
+    visibility: n.visibility,
+    sharedPassword: n.sharedPassword,
     blurb: firstParagraph,
     fullBlurb: n.blurb,
     chapterCount: list.length,
@@ -284,9 +293,11 @@ export async function loadReaderChapter(
   const { novel: n, chapters: list } = found;
   const i = list.findIndex((c) => c.slug === chapterSlug);
   if (i < 0) return null;
+  // N1: a private novel's text stays in the database (unlock.ts reads it after the grant check).
   const [row] = await getDb()
-    .select({ body: chapters.body })
+    .select({ body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END` })
     .from(chapters)
+    .innerJoin(novels, eq(novels.id, chapters.novelId))
     .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), eq(chapters.status, "published")))
     .limit(1);
   // Unpublished between the two queries: not found, like any draft.
@@ -297,7 +308,15 @@ export async function loadReaderChapter(
     ...withoutId(list[i]),
     body: row.body,
     of: list.length,
-    novel: { id: n.id, title: n.title, slug: n.slug, language: n.language, status: n.status },
+    novel: {
+      id: n.id,
+      title: n.title,
+      slug: n.slug,
+      language: n.language,
+      status: n.status,
+      visibility: n.visibility,
+      sharedPassword: n.sharedPassword,
+    },
     penName: n.penName!,
     authorSlug: n.authorSlug!,
     editorId: n.editorId,
@@ -311,7 +330,14 @@ export async function loadReaderChapter(
  * author, novel and chapter slugs in reading order, plus when each was first
  * published. Drafts and novels with nothing published never appear; no text.
  */
-export type SitemapChapter = { authorSlug: string; novelSlug: string; chapterSlug: string; publishedAt: string | null };
+export type SitemapChapter = {
+  authorSlug: string;
+  novelSlug: string;
+  chapterSlug: string;
+  publishedAt: string | null;
+  /** A private novel's chapter pages are listed too (their page is public; the text is locked), with a lower priority. */
+  visibility: "public" | "private";
+};
 
 export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
   const rows = await getDb()
@@ -320,6 +346,7 @@ export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
       novelSlug: novels.slug,
       chapterSlug: chapters.slug,
       publishedAt: chapters.publishedAt,
+      visibility: novels.visibility,
     })
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
@@ -331,6 +358,7 @@ export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
     novelSlug: r.novelSlug,
     chapterSlug: r.chapterSlug,
     publishedAt: r.publishedAt?.toISOString() ?? null,
+    visibility: r.visibility,
   }));
 }
 

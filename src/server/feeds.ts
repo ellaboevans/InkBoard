@@ -22,8 +22,9 @@ import { absoluteUrl, SITE_NAME, SITE_TAGLINE } from "@/lib/site";
  * novel's first chapter ("New novel by …"), so a long serial doesn't flood
  * it, and each novel has its own feed (/a/[author]/n/[novel]/feed.xml).
  * Published chapters only, numbered among published chapters like the
- * pages; the text through proseToHtml. Novels are all public for now; when
- * private ones come, the chapter body needs CASE WHEN here too (N1).
+ * pages; the text through proseToHtml. A private novel's chapters (Phase 25)
+ * are title-only entries: the body is cut in SQL with CASE WHEN the novel is
+ * public (N1), and the builder writes PRIVATE_CHAPTER_TEXT instead.
  */
 
 /** Newest entries per feed. Readers keep older entries they've already seen. */
@@ -90,7 +91,9 @@ async function loadChapterEntries({ scope, firstOnly = false }: { scope?: SQL; f
         id: chapters.id,
         title: sql<string>`${chapters.title}`.as("chapter_title"),
         slug: sql<string>`${chapters.slug}`.as("chapter_slug"),
-        body: chapters.body,
+        // N1: a private novel's text never leaves the database here.
+        body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END`.as("chapter_body"),
+        visibility: novels.visibility,
         publishedAt: chapters.publishedAt,
         updatedAt: chapters.updatedAt,
         novelTitle: sql<string>`${novels.title}`.as("novel_title"),
@@ -136,7 +139,7 @@ async function loadChapterEntries({ scope, firstOnly = false }: { scope?: SQL; f
       url: absoluteUrl(chapterPath(r.authorSlug, r.novelSlug, r.slug)),
       penName: r.penName!,
       authorUrl: absoluteUrl(`/a/${r.authorSlug}`),
-      visibility: "public" as const,
+      visibility: r.visibility,
       language: r.language,
       body: r.body,
       published,

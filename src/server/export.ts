@@ -153,6 +153,7 @@ export async function loadEditorExport(
       blurb: n.blurb,
       language: n.language,
       status: n.status,
+      visibility: n.visibility,
       createdAt: n.createdAt.toISOString(),
       updatedAt: n.updatedAt.toISOString(),
       chapters: n.chapters.map((c) => ({

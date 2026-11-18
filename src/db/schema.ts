@@ -424,8 +424,8 @@ export const poemRevisions = pgTable(
  * Novels (docs/PLAN.md, Phase 23; docs/research/novels.md): an editor's
  * books, each with ordered chapters published one at a time. Their own
  * tables, not poems in a collection; src/server/novels.ts scopes every query
- * by the DAL editor id (chapters through their novel). Private novels,
- * covers and notifications come in later phases, with their own columns.
+ * by the DAL editor id (chapters through their novel). Private novels
+ * (visibility, password) since Phase 25; uploaded covers come later.
  */
 export const novelStatus = pgEnum("novel_status", ["ongoing", "complete"]);
 
@@ -444,6 +444,24 @@ export const novels = pgTable(
     /** BCP 47 tag from src/lib/poem-languages.ts, like poems; chapters inherit it. */
     language: text("language"),
     status: novelStatus("status").notNull().default("ongoing"),
+    /**
+     * The whole book is public or private, behind one password (Phase 25):
+     * readers always see the title, cover, blurb and chapter list; chapter
+     * text only after unlocking (src/server/unlock.ts).
+     */
+    visibility: poemVisibility("visibility").notNull().default("public"),
+    /**
+     * scrypt hash, like poems': required for a private novel whose author is
+     * in per_poem mode, null in shared mode (the author's one password).
+     * Enforced by triggers (drizzle/0029_novel_password_triggers.sql).
+     */
+    passwordHash: text("password_hash"),
+    /**
+     * In reader unlock grants (n:<novelId>:<version>): bumped by every
+     * password change or removal, making the novel public, and unpublishing
+     * its last published chapter, so earlier unlocks stop working.
+     */
+    passwordVersion: integer("password_version").notNull().default(0),
     ...timestamps,
   },
   (t) => [uniqueIndex("novels_editor_slug_key").on(t.editorId, t.slug)],

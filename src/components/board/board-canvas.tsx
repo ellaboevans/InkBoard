@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cardTitleClass, PoemCardFace } from "./poem-card-face";
-import { BookCardFace } from "@/components/novel/book-card-face";
+import { BookCardFace, novelLinkSuffix } from "@/components/novel/book-card-face";
 import { novelPath } from "@/lib/novel-seo";
 import { useRouter } from "next/navigation";
 import {
@@ -738,7 +738,7 @@ function BookCard({ novel, section, hue, rect }: { novel: BoardNovel; section: B
           className={cardTitleClass}
         >
           {novel.title}
-          <span className="sr-only"> (novel)</span>
+          <span className="sr-only">{novelLinkSuffix(novel)}</span>
         </Link>
       }
     />

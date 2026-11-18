@@ -58,6 +58,12 @@ async function Novels({ searchParams }: Pick<PageProps<"/admin/novels">, "search
                     <span className="block truncate font-serif text-lg">{n.title}</span>
                     <span className="mt-0.5 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
                       <span>{n.status === "complete" ? "Complete" : "Ongoing"}</span>
+                      {n.visibility === "private" && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span>Password protected</span>
+                        </>
+                      )}
                       <span aria-hidden>·</span>
                       <span className="tabular-nums">
                         {n.publishedCount} of {n.chapterCount} {n.chapterCount === 1 ? "chapter" : "chapters"} published

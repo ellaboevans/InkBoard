@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SiteLinks } from "@/components/site-links";
 import { AuthorPicture } from "@/components/author/author-picture";
 import { CARD_H, sectionHue } from "@/lib/board-layout";
-import { BookCardFace } from "@/components/novel/book-card-face";
+import { BookCardFace, novelLinkSuffix } from "@/components/novel/book-card-face";
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { FollowAuthorToggle } from "@/components/notifications/notifications-setting";
@@ -170,7 +170,7 @@ async function Author({ params }: Pick<Props, "params">) {
                   title={
                     <Link href={`/a/${a.slug}/n/${n.slug}`} className={cardTitleClass}>
                       {n.title}
-                      <span className="sr-only"> (novel)</span>
+                      <span className="sr-only">{novelLinkSuffix(n)}</span>
                     </Link>
                   }
                 />

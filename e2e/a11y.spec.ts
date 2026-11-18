@@ -348,6 +348,56 @@ With a second paragraph.', 'ak') RETURNING id)
   await scan(page, "chapter not found");
 });
 
+test("private novels: the writer's details form, the novel page and a locked chapter (wrong password, unlocked), phone and desktop", async ({ page, browser }) => {
+  const id = unique();
+  const email = `a11y-private-novel-${id}@example.com`;
+  await signUpAs(page, email, `Private Novelist ${id}`);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  const author = rows[0].slug as string;
+  // Two published chapters, written straight to the database; the details form then makes it private (and refreshes the cache).
+  const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
+      VALUES ('${rows[0].id}', 'Ɔdɔ a Ɛyɛ Kumaa', 'locked', 'A public blurb.', 'ak') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, t.title, t.slug, t.body, t.pos, 'published'::poem_status, now(), 40 FROM n,
+      (VALUES ('Thursday', 'thursday', E'The ferry came *late*.', 1), ('', 'chapter', 'Second chapter text.', 2)) AS t(title, slug, body, pos)
+    RETURNING novel_id`);
+  const adminUrl = `/admin/novels/${made[0].novel_id}`;
+  await page.goto(adminUrl);
+  await page.getByRole("switch", { name: "Password protected" }).click();
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page.getByRole("main").getByText("Private novels need a password readers can use")).toBeVisible();
+  await scan(page, "writer's details: private, missing password");
+  await page.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("a11y-novel-pass");
+  await page.getByRole("button", { name: "Save details" }).click();
+  await expect(page.getByLabel("New password", { exact: true }).filter({ visible: true })).toBeVisible({ timeout: 45_000 });
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await scan(page, `writer's details: private with a password, ${width}px`);
+  }
+
+  const context = await browser.newContext();
+  const reader = await context.newPage();
+  const novelUrl = `/a/${author}/n/locked`;
+  for (const width of [375, 1280]) {
+    await reader.setViewportSize({ width, height: 800 });
+    await reader.goto(novelUrl);
+    await expect(reader.locator("[data-novel-private]")).toBeVisible();
+    await scan(reader, `novel page: private, ${width}px`);
+    await reader.goto(`${novelUrl}/thursday`);
+    await expect(reader.getByRole("button", { name: "Unlock novel" })).toBeVisible();
+    await scan(reader, `chapter page: locked, ${width}px`);
+  }
+  await reader.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("wrong-password");
+  await reader.getByRole("button", { name: "Unlock novel" }).click();
+  await expect(reader.getByRole("alert").filter({ hasText: "That password isn't right." })).toBeVisible({ timeout: 45_000 });
+  await scan(reader, "chapter page: locked, wrong password");
+  await reader.getByLabel("Password", { exact: true }).filter({ visible: true }).fill("a11y-novel-pass");
+  await reader.getByRole("button", { name: "Unlock novel" }).click();
+  await expect(reader.locator("[data-chapter-text]")).toBeVisible({ timeout: 45_000 });
+  await scan(reader, "chapter page: unlocked");
+  await context.close();
+});
+
 test("admin screens", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-admin-${id}@example.com`, `Access Poet ${id}`);

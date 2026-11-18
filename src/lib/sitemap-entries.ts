@@ -8,12 +8,18 @@ import { absoluteUrl } from "./site";
  * the board, About and Privacy (Phase 19), every author page, collection page
  * (Phase 14), every published poem (private poems too: their page is public,
  * only the text is locked), and (Phase 23b) every novel page and published
- * chapter. Built from the cached reader loaders, which never hold a draft or
+ * chapter (a private novel's too, Phase 25, for the same reason). Built from the cached reader loaders, which never hold a draft or
  * a novel with nothing published.
  */
 export function sitemapEntries(
   sections: BoardSection[],
-  chapters: { authorSlug: string; novelSlug: string; chapterSlug: string; publishedAt: string | null }[],
+  chapters: {
+    authorSlug: string;
+    novelSlug: string;
+    chapterSlug: string;
+    publishedAt: string | null;
+    visibility?: "public" | "private";
+  }[],
 ): MetadataRoute.Sitemap {
   return [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
@@ -43,7 +49,8 @@ export function sitemapEntries(
     ...chapters.map((c) => ({
       url: absoluteUrl(chapterPath(c.authorSlug, c.novelSlug, c.chapterSlug)),
       changeFrequency: "monthly" as const,
-      priority: 0.7,
+      // A private novel's chapter page is public, its text locked (like private poems).
+      priority: c.visibility === "private" ? 0.4 : 0.7,
     })),
   ];
 }

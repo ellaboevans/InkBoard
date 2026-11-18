@@ -18,8 +18,9 @@ import { parseProse } from "./prose";
  * 2: poems carry `shareVisits` (Phase 21 round 3).
  * 3: `profile.photo`, the profile photo itself (Phase 22).
  * 4: `novels`, each with its chapters in order and their versions (Phase 23).
+ * 5: novels carry `visibility` (Phase 25; never a password hash or version).
  */
-export const EXPORT_FORMAT_VERSION = 4;
+export const EXPORT_FORMAT_VERSION = 5;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -72,6 +73,8 @@ export type ExportedNovel = {
   blurb: string | null;
   language: string | null;
   status: "ongoing" | "complete";
+  /** Private: readers need the novel's password (or the shared one), which isn't in the file. */
+  visibility: "public" | "private";
   createdAt: string;
   updatedAt: string;
   /** In reading order, drafts included. */
@@ -253,6 +256,7 @@ function novelSection(n: ExportedNovel): string {
     "",
     `- Novel, ${n.status === "complete" ? "complete" : "ongoing"}: ${count(n.chapters.length, "chapter")} (${published} published)`,
     `- Language: ${language}`,
+    `- Visibility: ${n.visibility === "public" ? "Public" : "Private (readers need a password; the password isn't in this file)"}`,
     `- Created ${day(n.createdAt)} · last edited ${day(n.updatedAt)}`,
     "",
   ];

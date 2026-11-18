@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { editors, poems } from "@/db/schema";
+import { chapters, editors, novels, poems } from "@/db/schema";
 import { hmac, safeEqual } from "./crypto";
 import { verifyPassword } from "./passwords";
 import { ipBucket } from "./auth/ip";
@@ -13,10 +13,20 @@ import { rateLimit } from "./rate-limit";
  *
  * A successful unlock grants a *scope*, which depends on the author's mode:
  *   per_poem: "p:<poemId>:<poem.password_version>"   -> that poem only
- *   shared:   "a:<editorId>:<shared_password_version>" -> all their private poems
+ *             "n:<novelId>:<novel.password_version>" -> every chapter of that novel
+ *   shared:   "a:<editorId>:<shared_password_version>" -> all their private
+ *             poems and novels
  * Grants are kept in one HMAC-signed cookie. Because the version is part of
  * the scope, changing a password or switching modes bumps it and every
  * existing grant silently stops matching.
+ *
+ * Private novels (Phase 25): one password for the whole book. Readers see a
+ * private novel's title, blurb and chapter list from the cached loaders;
+ * chapter text comes only from readUnlockedChapterBody, after the grant check.
+ * Rate-limit keys are shaped like the poems': unlock:n:<id>:ip:<bucket>,
+ * unlock:ip:<bucket> (shared with poems) and unlock:n:<id>:all; in shared
+ * mode the author's a:<editorId> bucket, so guesses across their poems and
+ * novels count together.
  */
 
 export const UNLOCK_TTL_SECONDS = 12 * 60 * 60;
@@ -31,7 +41,8 @@ const GUESSES_PER_TARGET_ALL_IPS = 300; // per hour, all clients combined
 export type Grant = { s: string; e: number };
 
 type Lock = {
-  poemId: string;
+  /** The poem's or the novel's id. */
+  id: string;
   editorId: string;
   mode: "per_poem" | "shared";
   /** Current scope a grant must match. */
@@ -66,9 +77,24 @@ async function loadLock(authorSlug: string, poemSlug: string): Promise<Lock | nu
     )
     .limit(1);
   if (!row) return null;
+  return toLock("p", { id: row.poemId, ...row, hash: row.poemHash, version: row.poemVersion });
+}
+
+function toLock(
+  kind: "p" | "n",
+  row: {
+    id: string;
+    editorId: string;
+    mode: "per_poem" | "shared";
+    hash: string | null;
+    version: number;
+    sharedHash: string | null;
+    sharedVersion: number;
+  },
+): Lock {
   return row.mode === "shared"
     ? {
-        poemId: row.poemId,
+        id: row.id,
         editorId: row.editorId,
         mode: "shared",
         scope: `a:${row.editorId}:${row.sharedVersion}`,
@@ -76,13 +102,48 @@ async function loadLock(authorSlug: string, poemSlug: string): Promise<Lock | nu
         hash: row.sharedHash,
       }
     : {
-        poemId: row.poemId,
+        id: row.id,
         editorId: row.editorId,
         mode: "per_poem",
-        scope: `p:${row.poemId}:${row.poemVersion}`,
-        target: `p:${row.poemId}`,
-        hash: row.poemHash,
+        scope: `${kind}:${row.id}:${row.version}`,
+        target: `${kind}:${row.id}`,
+        hash: row.hash,
       };
+}
+
+/**
+ * A private novel readers can see (onboarded author, at least one published
+ * chapter): its lock details; null if not found, not visible or public.
+ */
+async function loadNovelLock(authorSlug: string, novelSlug: string): Promise<Lock | null> {
+  const [row] = await getDb()
+    .select({
+      id: novels.id,
+      editorId: editors.id,
+      mode: editors.passwordMode,
+      hash: novels.passwordHash,
+      version: novels.passwordVersion,
+      sharedHash: editors.sharedPasswordHash,
+      sharedVersion: editors.sharedPasswordVersion,
+    })
+    .from(novels)
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .where(
+      and(
+        eq(editors.slug, authorSlug),
+        eq(novels.slug, novelSlug),
+        eq(novels.visibility, "private"),
+        isNotNull(editors.penName),
+        exists(
+          getDb()
+            .select({ one: sql`1` })
+            .from(chapters)
+            .where(and(eq(chapters.novelId, novels.id), eq(chapters.status, "published"))),
+        ),
+      ),
+    )
+    .limit(1);
+  return row ? toLock("n", row) : null;
 }
 
 export type UnlockResult =
@@ -90,14 +151,18 @@ export type UnlockResult =
   | { ok: false; error: "wrong_password" | "not_found" }
   | { ok: false; error: "rate_limited"; retryAfter: number };
 
-export async function attemptUnlock(input: {
-  authorSlug: string;
-  poemSlug: string;
-  password: unknown;
-  ip: string | null;
-  grants: Grant[];
-}): Promise<UnlockResult> {
-  const lock = await loadLock(input.authorSlug, input.poemSlug);
+type Attempt = { password: unknown; ip: string | null; grants: Grant[] };
+
+export async function attemptUnlock(input: Attempt & { authorSlug: string; poemSlug: string }): Promise<UnlockResult> {
+  return attempt(await loadLock(input.authorSlug, input.poemSlug), input);
+}
+
+/** Unlock a private novel: one password opens every published chapter. */
+export async function attemptNovelUnlock(input: Attempt & { authorSlug: string; novelSlug: string }): Promise<UnlockResult> {
+  return attempt(await loadNovelLock(input.authorSlug, input.novelSlug), input);
+}
+
+async function attempt(lock: Lock | null, input: Attempt): Promise<UnlockResult> {
   if (!lock) return { ok: false, error: "not_found" };
 
   const ip = ipBucket(input.ip);
@@ -142,7 +207,31 @@ export async function readUnlockedBody(
   const [row] = await getDb()
     .select({ body: poems.body })
     .from(poems)
-    .where(eq(poems.id, lock.poemId))
+    .where(eq(poems.id, lock.id))
+    .limit(1);
+  return row?.body ?? null;
+}
+
+/**
+ * A published chapter's text of a private novel, only if `grants` holds a
+ * live grant for the novel's current scope (n:<novelId>:<version>, or the
+ * author's shared grant). Uncached like readUnlockedBody. Null for a public
+ * novel too: its text comes from the cached loader.
+ */
+export async function readUnlockedChapterBody(
+  authorSlug: string,
+  novelSlug: string,
+  chapterSlug: string,
+  grants: Grant[],
+): Promise<string | null> {
+  const lock = await loadNovelLock(authorSlug, novelSlug);
+  if (!lock) return null;
+  const now = Date.now();
+  if (!grants.some((g) => g.s === lock.scope && g.e > now)) return null;
+  const [row] = await getDb()
+    .select({ body: chapters.body })
+    .from(chapters)
+    .where(and(eq(chapters.novelId, lock.id), eq(chapters.slug, chapterSlug), eq(chapters.status, "published")))
     .limit(1);
   return row?.body ?? null;
 }

@@ -43,6 +43,8 @@ export type BoardNovel = {
   /** BCP 47 tag (src/lib/poem-languages.ts) for `lang` on the title and blurb; null = not set. */
   language: string | null;
   status: "ongoing" | "complete";
+  /** Private (Phase 25): title, cover, blurb and chapter list are shown; chapter text only after unlocking. */
+  visibility: "public" | "private";
   /** The blurb's first paragraph, cut short for the card; null = none. */
   blurb: string | null;
   /** Published chapters. Always at least 1: a novel with none isn't shown. */
@@ -70,6 +72,8 @@ export type ReaderChapterSummary = {
 export type NovelPage = BoardNovel & {
   /** The whole blurb (the card's `blurb` is only its start). */
   fullBlurb: string | null;
+  /** Private novels: true when the author uses one password for all their private poems and novels. */
+  sharedPassword: boolean;
   penName: string;
   authorSlug: string;
   editorId: string;
@@ -80,11 +84,20 @@ export type NovelPage = BoardNovel & {
 
 /** A published chapter's page (/a/[author]/n/[novel]/[chapter]). */
 export type ReaderChapter = ReaderChapterSummary & {
-  /** The chapter's text (prose, src/lib/prose.ts). Novels are all public for now. */
-  body: string;
+  /** The chapter's text (prose, src/lib/prose.ts); always null for a private novel (N1: unlock.ts reads it). */
+  body: string | null;
   /** Published chapters in the novel ("Chapter n of m"). */
   of: number;
-  novel: { id: string; title: string; slug: string; language: string | null; status: "ongoing" | "complete" };
+  novel: {
+    id: string;
+    title: string;
+    slug: string;
+    language: string | null;
+    status: "ongoing" | "complete";
+    visibility: "public" | "private";
+    /** Private novels: the author's one password opens it. */
+    sharedPassword: boolean;
+  };
   penName: string;
   authorSlug: string;
   editorId: string;

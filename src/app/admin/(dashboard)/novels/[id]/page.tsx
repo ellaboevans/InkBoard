@@ -7,6 +7,7 @@ import { FlashToast } from "@/components/flash-toast";
 import { Button } from "@/components/ui/button";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { getNovel } from "@/server/novels";
+import { getPasswordMode } from "@/server/password-settings";
 import { ChapterOrder, DeleteNovel } from "../chapter-order";
 import { NovelDetailsForm } from "../novel-forms";
 
@@ -34,7 +35,7 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
   const editor = await requireOnboardedEditor();
   const { id } = await params;
   // Scoped to the signed-in editor: someone else's novel is simply "not found".
-  const [novel, flags] = await Promise.all([getNovel(editor.id, id), searchParams]);
+  const [novel, flags, passwordMode] = await Promise.all([getNovel(editor.id, id), searchParams, getPasswordMode(editor.id)]);
   if (!novel) notFound();
   return (
     <>
@@ -45,8 +46,10 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
       <div className="min-w-0">
         <h1 className="font-serif text-3xl break-words">{novel.title}</h1>
         <p className="mt-1 text-muted-foreground">
-          {novel.status === "complete" ? "Complete" : "Ongoing"} · Readers can&apos;t see novels yet: they come to the board
-          soon. Until then, write and publish chapters here.
+          {novel.status === "complete" ? "Complete" : "Ongoing"} ·{" "}
+          {novel.visibility === "private"
+            ? "Password protected: readers see its cover, blurb and chapter list, and need the password to read a chapter."
+            : "Readers see it on the board once a chapter is published."}
         </p>
       </div>
       <ChapterOrder
@@ -64,6 +67,7 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
         novelId={novel.id}
         slug={novel.slug}
         initial={{ title: novel.title, blurb: novel.blurb ?? "", language: novel.language ?? "", status: novel.status }}
+        access={{ isPrivate: novel.visibility === "private", hasPassword: novel.hasPassword, passwordMode }}
       />
       <DeleteNovel title={novel.title} novelId={novel.id} chapterCount={novel.chapters.length} />
     </>

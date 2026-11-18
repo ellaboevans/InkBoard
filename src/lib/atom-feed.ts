@@ -52,6 +52,8 @@ export type Feed = {
 };
 
 export const PRIVATE_ENTRY_TEXT = "This poem is password protected. Open it on InkBoard to read it with the password.";
+/** The same, for a chapter of a private novel (Phase 25): the entry keeps its title, never its text. */
+export const PRIVATE_CHAPTER_TEXT = "This novel is password protected. Open it on InkBoard to read it with the password.";
 
 // Characters XML 1.0 doesn't allow at all (C0 controls except tab, LF, CR;
 // lone surrogates; U+FFFE/U+FFFF). Dropped rather than escaped.
@@ -125,7 +127,7 @@ function entryXml(e: FeedEntry): string {
     e.visibility === "public" && e.body !== null
       ? `<content type="html"${lang}>${escapeXml(e.format === "prose" ? proseToHtml(e.body) : poemToHtml(e.body))}</content>`
       : // English UI text, even for a poem in another language.
-        `<content type="text" xml:lang="en">${escapeXml(PRIVATE_ENTRY_TEXT)}</content>`;
+        `<content type="text" xml:lang="en">${escapeXml(e.format === "prose" ? PRIVATE_CHAPTER_TEXT : PRIVATE_ENTRY_TEXT)}</content>`;
   return [
     "  <entry>",
     `    <id>urn:uuid:${escapeXml(e.id)}</id>`,

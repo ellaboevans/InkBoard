@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { chapterRevisions, chapters, editors, novels } from "@/db/schema";
@@ -13,9 +13,12 @@ import {
   NOVEL_TITLE_MAX,
   NOVELS_MAX,
 } from "@/lib/novel-limits";
+import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/poem-limits";
 import { POEM_LANGUAGE_CODES, type PoemLanguage } from "@/lib/poem-languages";
 import { countWords, normalizeProse } from "@/lib/prose";
-import { firstFreeSlug, isUniqueViolation, slugify } from "@/lib/slug";
+import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/lib/slug";
+import { hashPassword } from "./passwords";
+import { PASSWORD_SETTINGS_CHANGED } from "./poems";
 import { compact, endPosition, moveItem, reorderItems, type Direction, type PositionSpec, type Tx } from "./positions";
 import { recordVersion, type RevisionSpec } from "./revisions";
 
@@ -42,8 +45,18 @@ import { recordVersion, type RevisionSpec } from "./revisions";
  *   chapter_revisions in the same transaction (src/server/revisions.ts),
  *   pruned to CHAPTER_REVISIONS_KEPT. Only this module reads that table.
  *
- * No reader queries here: those will live in board.ts with the same rules as
- * poems (published chapters only, numbered over published chapters).
+ * - Private novels (Phase 25): one password for the whole book, following
+ *   the author's password mode like poems: in per_poem mode the novel's own
+ *   scrypt hash, in shared mode the author's one password (the novel's hash
+ *   is then null). The DB enforces "a private novel is always readable with
+ *   some password" (drizzle/0029_novel_password_triggers.sql). Readers'
+ *   unlocks are scoped by `password_version`, bumped by every password change
+ *   or removal, making the novel public, and unpublishing (or deleting) its
+ *   last published chapter. Hashes never leave this module: reads return
+ *   `hasPassword`.
+ *
+ * No reader queries here: those live in board.ts (published chapters only,
+ * numbered over published chapters, chapter text through CASE WHEN).
  */
 
 export { BLURB_MAX, CHAPTER_BODY_MAX, CHAPTER_REVISIONS_KEPT, CHAPTER_TITLE_MAX, CHAPTERS_MAX, NOVEL_TITLE_MAX, NOVELS_MAX };
@@ -86,6 +99,20 @@ const novelSchema = z.object({
     .transform((l) => (l ? l : null))
     .pipe(z.enum(POEM_LANGUAGE_CODES, "Choose a language from the list").nullable()),
   status: z.enum(["ongoing", "complete"], "Choose ongoing or complete").optional().default("ongoing"),
+  /** Absent = keep the current visibility (a new novel is public). */
+  visibility: z.enum(["public", "private"], "Choose who can read this novel").optional(),
+  /** Empty = keep the current password (or none, for a public novel). Ignored in shared mode. */
+  password: z
+    .string()
+    .optional()
+    .transform((p) => (p ? p : undefined))
+    .pipe(
+      z
+        .string()
+        .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`)
+        .max(PASSWORD_MAX, `Use at most ${PASSWORD_MAX} characters`)
+        .optional(),
+    ),
 });
 
 const chapterSchema = z.object({
@@ -126,19 +153,31 @@ function parseWith<S extends z.ZodType, E extends Record<string, string | undefi
 }
 
 const EMPTY_CHAPTER = "The chapter is empty: write something before publishing it";
+const PRIVATE_NEEDS_PASSWORD = "Private novels need a password readers can use";
 const TOO_MANY_CHAPTERS = `A novel can have at most ${CHAPTERS_MAX} chapters`;
 
 // ---- locks and slugs -------------------------------------------------------------
 
-async function lockEditor(tx: Tx, editorId: string): Promise<boolean> {
-  const [row] = await tx.select({ id: editors.id }).from(editors).where(eq(editors.id, editorId)).for("no key update");
-  return Boolean(row);
+/** Lock the editor row; its password mode (which can't change until commit), or null if there's no such editor. */
+async function lockEditor(tx: Tx, editorId: string): Promise<"per_poem" | "shared" | null> {
+  const [row] = await tx
+    .select({ mode: editors.passwordMode })
+    .from(editors)
+    .where(eq(editors.id, editorId))
+    .for("no key update");
+  return row?.mode ?? null;
 }
 
 /** The editor's own novel, locked (after the editor lock), or null. */
 async function lockNovel(tx: Tx, editorId: string, novelId: string) {
   const [row] = await tx
-    .select({ id: novels.id, title: novels.title, slug: novels.slug })
+    .select({
+      id: novels.id,
+      title: novels.title,
+      slug: novels.slug,
+      visibility: novels.visibility,
+      passwordHash: novels.passwordHash,
+    })
     .from(novels)
     .where(and(eq(novels.id, novelId), eq(novels.editorId, editorId)))
     .for("no key update");
@@ -213,6 +252,34 @@ async function withSlugRetry<T>(write: () => Promise<T>): Promise<T> {
 const touchNovel = (tx: Tx, novelId: string) =>
   tx.update(novels).set({ updatedAt: sql`now()` }).where(eq(novels.id, novelId));
 
+/**
+ * After unpublishing or deleting a published chapter: if none of the novel's
+ * chapters is published any more, readers can't see it, so revoke their
+ * unlocks (as unpublishing a poem does). Publishing again asks for the
+ * password again. Call under the novel lock.
+ */
+async function revokeIfNothingPublished(tx: Tx, novelId: string) {
+  await tx.execute(sql`
+    UPDATE novels SET password_version = password_version + 1
+    WHERE id = ${novelId}
+      AND NOT EXISTS (SELECT 1 FROM chapters WHERE novel_id = ${novelId} AND status = 'published')
+  `);
+}
+
+/**
+ * Run a novel write; if the DB's password invariant rejects it (the author
+ * switched password mode in another tab mid-save), report it as the poems'
+ * form error instead of crashing.
+ */
+async function guardPasswordInvariant<T>(write: () => Promise<T>): Promise<T | { ok: false; errors: NovelErrors }> {
+  try {
+    return await write();
+  } catch (err) {
+    if (isCheckViolation(err)) return { ok: false, errors: { form: PASSWORD_SETTINGS_CHANGED } };
+    throw err;
+  }
+}
+
 // ---- reads ---------------------------------------------------------------------
 
 export type NovelSummary = {
@@ -220,6 +287,7 @@ export type NovelSummary = {
   title: string;
   slug: string;
   status: "ongoing" | "complete";
+  visibility: "public" | "private";
   language: PoemLanguage | null;
   chapterCount: number;
   publishedCount: number;
@@ -239,6 +307,8 @@ export type EditorChapterSummary = {
 
 export type EditorNovel = Omit<NovelSummary, "chapterCount" | "publishedCount"> & {
   blurb: string | null;
+  /** Whether the novel has a password of its own (never the hash). */
+  hasPassword: boolean;
   createdAt: Date;
   chapters: EditorChapterSummary[];
 };
@@ -250,6 +320,7 @@ const novelColumns = {
   title: novels.title,
   slug: novels.slug,
   status: novels.status,
+  visibility: novels.visibility,
   language: sql<PoemLanguage | null>`${novels.language}`,
   updatedAt: novels.updatedAt,
 };
@@ -285,7 +356,12 @@ export async function getNovel(editorId: string, novelId: string): Promise<Edito
   if (!isId(novelId)) return null;
   const db = getDb();
   const [n] = await db
-    .select({ ...novelColumns, blurb: novels.blurb, createdAt: novels.createdAt })
+    .select({
+      ...novelColumns,
+      blurb: novels.blurb,
+      hasPassword: sql<boolean>`${novels.passwordHash} IS NOT NULL`,
+      createdAt: novels.createdAt,
+    })
     .from(novels)
     .where(and(eq(novels.id, novelId), eq(novels.editorId, editorId)))
     .limit(1);
@@ -320,9 +396,15 @@ export type NovelResult =
 export async function createNovel(editorId: string, raw: unknown): Promise<NovelResult> {
   const { data, errors } = parseWith<typeof novelSchema, NovelErrors>(novelSchema, raw);
   if (errors) return { ok: false, errors };
-  return withSlugRetry(() =>
+  const visibility = data.visibility ?? "public";
+  // Hash outside the transaction (it's slow); discarded in shared mode.
+  const typedHash = visibility === "private" && data.password ? await hashPassword(data.password) : null;
+  return guardPasswordInvariant(() => withSlugRetry(() =>
     getDb().transaction(async (tx): Promise<NovelResult> => {
-      if (!(await lockEditor(tx, editorId))) return { ok: false, notFound: true };
+      const mode = await lockEditor(tx, editorId);
+      if (!mode) return { ok: false, notFound: true };
+      const shared = mode === "shared";
+      if (visibility === "private" && !shared && !typedHash) return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
       const [{ n }] = await tx.select({ n: count() }).from(novels).where(eq(novels.editorId, editorId));
       if (n >= NOVELS_MAX) return { ok: false, errors: { form: `You can have at most ${NOVELS_MAX} novels` } };
       const [novel] = await tx
@@ -334,23 +416,51 @@ export async function createNovel(editorId: string, raw: unknown): Promise<Novel
           blurb: data.blurb,
           language: data.language,
           status: data.status,
+          visibility,
+          passwordHash: visibility === "private" && !shared ? typedHash : null,
         })
         .returning({ id: novels.id, slug: novels.slug });
       return { ok: true, novel };
     }),
-  );
+  ));
 }
 
-/** Title, blurb, language and status. The slug follows the title until a chapter has been published. */
+/**
+ * Title, blurb, language, status, visibility and password. The slug follows
+ * the title until a chapter has been published. Password rules, as poems'
+ * (the novel row is locked, so `current` is authoritative):
+ *   - private in shared mode: no password of its own (the author's covers it);
+ *   - public: drop any password; bump the version if it was private;
+ *   - private + a new password: replace it and bump the version, which
+ *     revokes every reader's unlock;
+ *   - private + blank: keep the current password, if there is one.
+ */
 export async function updateNovel(editorId: string, novelId: string, raw: unknown): Promise<NovelResult> {
   if (!isId(novelId)) return { ok: false, notFound: true };
   const { data, errors } = parseWith<typeof novelSchema, NovelErrors>(novelSchema, raw);
   if (errors) return { ok: false, errors };
-  return withSlugRetry(() =>
+  const typedHash = data.visibility === "private" && data.password ? await hashPassword(data.password) : null;
+  return guardPasswordInvariant(() => withSlugRetry(() =>
     getDb().transaction(async (tx): Promise<NovelResult> => {
-      await lockEditor(tx, editorId);
+      const shared = (await lockEditor(tx, editorId)) === "shared";
       const current = await lockNovel(tx, editorId, novelId);
       if (!current) return { ok: false, notFound: true };
+      const visibility = data.visibility ?? current.visibility;
+      let password: { passwordHash: string | null; passwordVersion?: SQL } | undefined;
+      if (visibility === "private" && shared) {
+        password = { passwordHash: null };
+      } else if (visibility === "public") {
+        password = {
+          passwordHash: null,
+          ...((current.visibility === "private" || current.passwordHash) && {
+            passwordVersion: sql`${novels.passwordVersion} + 1`,
+          }),
+        };
+      } else if (typedHash) {
+        password = { passwordHash: typedHash, passwordVersion: sql`${novels.passwordVersion} + 1` };
+      } else if (!current.passwordHash) {
+        return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
+      }
       const followTitle = data.title !== current.title && !(await everPublished(tx, novelId));
       const [novel] = await tx
         .update(novels)
@@ -359,13 +469,15 @@ export async function updateNovel(editorId: string, novelId: string, raw: unknow
           blurb: data.blurb,
           language: data.language,
           status: data.status,
+          visibility,
+          ...password,
           ...(followTitle && { slug: await uniqueNovelSlug(tx, editorId, data.title, novelId) }),
         })
         .where(and(eq(novels.id, novelId), eq(novels.editorId, editorId)))
         .returning({ id: novels.id, slug: novels.slug });
       return { ok: true, novel };
     }),
-  );
+  ));
 }
 
 /** Delete a novel with all its chapters and their versions (ON DELETE CASCADE). */
@@ -411,14 +523,19 @@ const chapterReturn = {
  * publishing transaction (after the editor → novel → chapter locks). Only
  * once ever: `notified_at` is never cleared, so unpublishing and publishing
  * again claims nothing; a draft, or an author without a pen name, neither.
- * Like claimAnnouncement for poems (poems.ts).
+ * Only on the chapter's *first* publish (`published_at` set by this
+ * transaction, whose now() it is) and only while its novel is public, so a
+ * chapter first published while the novel was private is never announced,
+ * even after the novel goes public (Phase 25). Like claimAnnouncement for
+ * poems (poems.ts).
  */
 async function claimChapterAnnouncement(tx: Tx, chapterId: string): Promise<boolean> {
   const r = await tx.execute(sql`
     UPDATE chapters SET notified_at = now()
     FROM novels n JOIN editors e ON e.id = n.editor_id
     WHERE chapters.id = ${chapterId} AND n.id = chapters.novel_id AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
-      AND chapters.notified_at IS NULL AND chapters.status = 'published'
+      AND n.visibility = 'public'
+      AND chapters.notified_at IS NULL AND chapters.status = 'published' AND chapters.published_at = now()
   `);
   return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
 }
@@ -511,6 +628,7 @@ export async function saveChapter(editorId: string, chapterId: string, raw: unkn
         });
       }
       await touchNovel(tx, novelId);
+      if (current.status === "published" && status === "draft") await revokeIfNothingPublished(tx, novelId);
       const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
       return { ok: true, chapter, publishedNow: status === "published" && !current.publishedAt, announce };
     }),
@@ -525,7 +643,7 @@ async function setChapterStatus(editorId: string, chapterId: string, status: "dr
     const novelId = await novelOfChapter(tx, editorId, chapterId);
     if (!novelId || !(await lockNovel(tx, editorId, novelId))) return { ok: false, notFound: true };
     const [row] = await tx
-      .select({ body: chapters.body, publishedAt: chapters.publishedAt })
+      .select({ body: chapters.body, status: chapters.status, publishedAt: chapters.publishedAt })
       .from(chapters)
       .where(eq(chapters.id, chapterId))
       .for("update");
@@ -537,6 +655,7 @@ async function setChapterStatus(editorId: string, chapterId: string, status: "dr
       .where(eq(chapters.id, chapterId))
       .returning(chapterReturn);
     await touchNovel(tx, novelId);
+    if (row.status === "published" && status === "draft") await revokeIfNothingPublished(tx, novelId);
     const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
     return { ok: true, chapter, publishedNow: status === "published" && !row.publishedAt, announce };
   });
@@ -552,10 +671,14 @@ export async function deleteChapter(editorId: string, chapterId: string): Promis
     await lockEditor(tx, editorId);
     const novelId = await novelOfChapter(tx, editorId, chapterId);
     if (!novelId || !(await lockNovel(tx, editorId, novelId))) return false;
-    const rows = await tx.delete(chapters).where(and(eq(chapters.id, chapterId), eq(chapters.novelId, novelId))).returning({ id: chapters.id });
+    const rows = await tx
+      .delete(chapters)
+      .where(and(eq(chapters.id, chapterId), eq(chapters.novelId, novelId)))
+      .returning({ id: chapters.id, status: chapters.status });
     if (rows.length === 0) return false;
     await compact(tx, CHAPTER_POSITIONS, novelId);
     await touchNovel(tx, novelId);
+    if (rows[0].status === "published") await revokeIfNothingPublished(tx, novelId);
     return true;
   });
 }
@@ -637,6 +760,8 @@ export type NovelForExport = {
   blurb: string | null;
   language: string | null;
   status: "ongoing" | "complete";
+  /** Never the password's hash or version. */
+  visibility: "public" | "private";
   createdAt: Date;
   updatedAt: Date;
   chapters: {
@@ -670,6 +795,7 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
       blurb: novels.blurb,
       language: novels.language,
       status: novels.status,
+      visibility: novels.visibility,
       createdAt: novels.createdAt,
       updatedAt: novels.updatedAt,
     })

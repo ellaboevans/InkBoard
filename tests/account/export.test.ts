@@ -96,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 4, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 5, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -137,7 +137,7 @@ describe("what the export contains", () => {
     await countShareVisit(a.ewe, "198.51.100.2");
     for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(4);
+    expect(data.version).toBe(5);
     expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
       ["Ŋkɔ", 2],
       ["Locked room", 0],
@@ -222,7 +222,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 4,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 5,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });
@@ -365,10 +365,10 @@ describe("novels in the export (Phase 23)", () => {
     await moveChapter(a.ed.id, book.novel.id, two.chapter.id, "first");
 
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(4);
+    expect(data.version).toBe(5);
     expect(data.novels).toHaveLength(1);
     const [n] = data.novels;
-    expect(n).toMatchObject({ title: "Ɔdɔ ne Asuo", slug: "odo-ne-asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing" });
+    expect(n).toMatchObject({ title: "Ɔdɔ ne Asuo", slug: "odo-ne-asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing", visibility: "public" });
     expect(n.chapters.map((c) => [c.position, c.title, c.status])).toEqual([
       [1, "", "draft"],
       [2, "Thursday", "published"],
@@ -379,6 +379,38 @@ describe("novels in the export (Phase 23)", () => {
     expect(JSON.stringify(data)).not.toContain("EVE-");
     // JSON round-trip keeps the text exactly.
     expect(JSON.parse(exportToJson(data)).novels[0].chapters[1].text).toBe(prose);
+  });
+
+  it("a private novel (Phase 25): its visibility, never its password's hash or version", async () => {
+    const { createChapter, createNovel, updateNovel } = await import("@/server/novels");
+    const { novels } = await import("@/db/schema");
+    const ed = await editor("nana@example.com", "Nana Ama");
+    const book = await createNovel(ed.id, { title: "Behind the Door" });
+    if (!book.ok) throw new Error();
+    await createChapter(ed.id, book.novel.id, { title: "One", body: "LOCKED-CHAPTER-TEXT", status: "published" });
+    // Two password changes: the version is 2, and must appear nowhere.
+    expect(await updateNovel(ed.id, book.novel.id, { title: "Behind the Door", visibility: "private", password: "novel-pass-77" })).toMatchObject({ ok: true });
+    expect(await updateNovel(ed.id, book.novel.id, { title: "Behind the Door", visibility: "private", password: "novel-pass-78" })).toMatchObject({ ok: true });
+    const [row] = await db.select({ hash: novels.passwordHash, version: novels.passwordVersion }).from(novels).where(eq(novels.id, book.novel.id));
+    expect(row.hash).toMatch(/^scrypt\$/);
+    expect(row.version).toBe(2);
+
+    const data = await exportOf(ed.id);
+    expect(data.novels[0]).toMatchObject({ title: "Behind the Door", visibility: "private" });
+    expect(Object.keys(data.novels[0]).sort()).toEqual(
+      ["blurb", "chapters", "createdAt", "id", "language", "slug", "status", "title", "updatedAt", "visibility"].sort(),
+    );
+    // The writer's own text is theirs to keep, private or not.
+    expect(data.novels[0].chapters[0].text).toBe("LOCKED-CHAPTER-TEXT");
+    const md = exportToMarkdown(data);
+    expect(md).toContain("- Visibility: Private (readers need a password; the password isn't in this file)");
+    for (const file of [exportToJson(data), md]) {
+      for (const secret of ["scrypt$", row.hash!, "novel-pass-77", "novel-pass-78"]) expect(file, secret).not.toContain(secret);
+    }
+    // No password field anywhere; "version" is only the file format's, at the top.
+    const json = JSON.parse(exportToJson(data));
+    for (const key of keysOf(json)) expect(key).not.toMatch(/password|hash/i);
+    expect(keysOf(json.novels).filter((k) => /version/i.test(k))).toEqual([]);
   });
 
   it("Markdown: a section per novel after the poems, chapters in order, prose rendered as readers see it", async () => {

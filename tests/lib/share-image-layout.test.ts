@@ -40,7 +40,7 @@ const input = (over: Partial<ShareImageInput>): ShareImageInput => ({
 
 /** The rows' text, one string per row ("" for a stanza gap, "…" where a quote skips lines). */
 const text = (rows: PoemRow[]) =>
-  rows.map((r) => (r.kind === "gap" ? "" : r.kind === "omission" ? "…" : r.words.map((w) => w.pieces.map((p) => p.text).join("")).join(" ")));
+  rows.map((r) => (r.kind === "gap" || r.kind === "scene" ? "" : r.kind === "omission" ? "…" : r.words.map((w) => w.pieces.map((p) => p.text).join("")).join(" ")));
 
 /** The widest row, measured the way the layout measures. */
 function widest(layout: ShareImageLayout, measure: Measure) {

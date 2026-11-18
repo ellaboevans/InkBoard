@@ -111,6 +111,8 @@ export const GAPS = {
   linesFrom: 40,
   linesFromLineHeight: 1.3,
   linesFromToTitle: 12,
+  /** A passage's "Chapter 4 · The Radio", under the novel's title (Phase 25). */
+  titleToSubtitle: 8,
 } as const;
 
 /** Byline and address: no smaller than 32 px (about 11 CSS px on a phone), so the address can be read and typed. */
@@ -135,8 +137,11 @@ export type Measure = (text: string, style: TextStyle, fontSize: number) => numb
 export type Piece = { text: string; italic: boolean; bold: boolean };
 /** A word (one or more styled pieces with no space between) and the space before it, in px. */
 export type PlacedWord = { pieces: Piece[]; gap: number };
-/** A row of words, a stanza break, or "…" where a quote skips lines. */
-export type PoemRow = { kind: "row"; indent: number; words: PlacedWord[] } | { kind: "gap" } | { kind: "omission" };
+/**
+ * A row of words, a stanza break (or, in a passage, a paragraph break), "…"
+ * where a quote skips lines, or (a passage, Phase 25) a scene break.
+ */
+export type PoemRow = { kind: "row"; indent: number; words: PlacedWord[] } | { kind: "gap" } | { kind: "omission" } | { kind: "scene" };
 
 export type ShareImageInput = {
   title: string;
@@ -157,16 +162,28 @@ export type ShareImageOptions = {
   picked?: readonly number[];
 };
 
+export type TitleBlock = { size: number; lineHeight: number; rows: string[]; extendedFirst: boolean };
+
 export type ShareImageLayout = {
   format: ShareFormat;
   frame: ShareFrame;
   /** Picked lines: how many were picked and how many fit (rule 3); null for the whole poem. */
   quote: { picked: number; shown: number } | null;
-  title: { size: number; lineHeight: number; rows: string[]; extendedFirst: boolean };
+  /** A passage (Phase 25): its length in characters as picked and as shown; null for a poem. */
+  passage: { picked: number; shown: number } | null;
+  /** Above the title: "Lines from" (a quote), "A passage from" (a passage), or nothing. */
+  kicker: string | null;
+  title: TitleBlock;
+  /** Under the title: a passage's "Chapter 4 · The Radio"; null for a poem. */
+  subtitle: TitleBlock | null;
+  /** After the text when it was cut: "Read the whole poem on InkBoard" / "Read the chapter on InkBoard". */
+  more: string | null;
   poem: {
     size: number;
     rowHeight: number;
     gapHeight: number;
+    /** A scene break's height (passages; poems have none). */
+    breakHeight: number;
     rows: PoemRow[];
     extendedFirst: boolean;
     /** Not the whole poem: "Read the whole poem on InkBoard" follows. */
@@ -186,7 +203,7 @@ export type ShareImageLayout = {
 
 // ---- small helpers ------------------------------------------------------------
 
-const plainStyle = (cut: TextStyle["cut"], extendedFirst: boolean): TextStyle => ({
+export const plainStyle = (cut: TextStyle["cut"], extendedFirst: boolean): TextStyle => ({
   cut,
   italic: false,
   bold: false,
@@ -457,24 +474,25 @@ function withEllipsis(line: Extract<SourceLine, { blank: false }>): SourceLine {
 
 // ---- the whole page -------------------------------------------------------------
 
-export function layoutShareImage(input: ShareImageInput, measure: Measure, options: ShareImageOptions = {}): ShareImageLayout {
-  const format = options.format ?? "story";
-  const picked = options.picked ?? null;
-  // Title.
-  const titleExtended = needsExtendedFont(input.title);
-  const titleStyle = plainStyle("display", titleExtended);
-  let title: ShareImageLayout["title"] | null = null;
-  for (const t of TITLE_SIZES) {
-    const width = (s: string) => measure(s, titleStyle, t.size);
-    const wrapped = wrapText(input.title.trim(), { maxWidth: CONTENT_WIDTH, maxRows: t.rows, width });
-    const last = t === TITLE_SIZES[TITLE_SIZES.length - 1];
-    if (!wrapped.truncated || last) {
-      title = { size: t.size, lineHeight: t.size * TITLE_LINE_HEIGHT, rows: wrapped.rows, extendedFirst: titleExtended };
-      break;
+/** A title at the largest of `sizes` that fits its rows (the last size cuts with "…"). Shared with passages. */
+export function layoutTitle(text: string, sizes: readonly { size: number; rows: number }[], measure: Measure): TitleBlock {
+  const extended = needsExtendedFont(text);
+  const style = plainStyle("display", extended);
+  for (const t of sizes) {
+    const width = (s: string) => measure(s, style, t.size);
+    const wrapped = wrapText(text.trim(), { maxWidth: CONTENT_WIDTH, maxRows: t.rows, width });
+    if (!wrapped.truncated || t === sizes[sizes.length - 1]) {
+      return { size: t.size, lineHeight: t.size * TITLE_LINE_HEIGHT, rows: wrapped.rows, extendedFirst: extended };
     }
   }
-  const titleHeight = title!.rows.length * title!.lineHeight;
+  throw new Error("no title sizes");
+}
 
+/** The byline and the address, and their height with the divider between them. Shared with passages. */
+export function layoutFooter(
+  input: Pick<ShareImageInput, "penName" | "language" | "host" | "path">,
+  measure: Measure,
+): { byline: ShareImageLayout["byline"]; address: ShareImageLayout["address"]; height: number } {
   // Byline: avatar, pen name on one row (cut with "…" if it must be), language.
   const nameExtended = needsExtendedFont(input.penName);
   const nameWidth = CONTENT_WIDTH - BYLINE.avatar - BYLINE.gap;
@@ -517,8 +535,15 @@ export function layoutShareImage(input: ShareImageInput, measure: Measure, optio
     pathExtended,
     height: Math.max(ADDRESS.logo, ADDRESS.host * ADDRESS.hostLineHeight + pathRows.length * ADDRESS.path * ADDRESS.pathLineHeight),
   };
+  return { byline, address, height: byline.height + GAPS.footerGap + GAPS.divider + GAPS.footerGap + address.height };
+}
 
-  const footerHeight = byline.height + GAPS.footerGap + GAPS.divider + GAPS.footerGap + address.height;
+export function layoutShareImage(input: ShareImageInput, measure: Measure, options: ShareImageOptions = {}): ShareImageLayout {
+  const format = options.format ?? "story";
+  const picked = options.picked ?? null;
+  const title = layoutTitle(input.title, TITLE_SIZES, measure);
+  const titleHeight = title.rows.length * title.lineHeight;
+  const { byline, address, height: footerHeight } = layoutFooter(input, measure);
   const linesFromHeight = picked ? GAPS.linesFrom * GAPS.linesFromLineHeight + GAPS.linesFromToTitle : 0;
   const fixed = linesFromHeight + titleHeight + GAPS.titleToRule + GAPS.rule + GAPS.ruleToPoem + GAPS.beforeFooter + footerHeight;
   const moreHeight = GAPS.poemToMore + GAPS.more * GAPS.moreLineHeight;
@@ -550,6 +575,7 @@ export function layoutShareImage(input: ShareImageInput, measure: Measure, optio
     size: best.size,
     rowHeight: best.size * POEM_LINE_HEIGHT,
     gapHeight: best.size * POEM_LINE_HEIGHT * STANZA_GAP_ROWS,
+    breakHeight: 0,
     rows: best.laid.rows,
     extendedFirst: poemExtended,
     truncated,
@@ -562,7 +588,11 @@ export function layoutShareImage(input: ShareImageInput, measure: Measure, optio
     format,
     frame: SHARE_FORMATS[format],
     quote: picked ? { picked: countLines(lines), shown: countLines(shown) } : null,
-    title: title!,
+    passage: null,
+    kicker: picked ? LINES_FROM_TEXT : null,
+    title,
+    subtitle: null,
+    more: truncated ? MORE_TEXT : null,
     poem,
     byline,
     address,

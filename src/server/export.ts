@@ -177,6 +177,7 @@ export async function loadEditorExport(
         createdAt: c.createdAt.toISOString(),
         updatedAt: c.updatedAt.toISOString(),
         wordCount: c.wordCount,
+        shareVisits: c.shareVisits,
         text: c.body,
         revisions: c.revisions.map((r) => ({ savedAt: r.savedAt.toISOString(), title: r.title, text: r.body })),
       })),

@@ -16,11 +16,13 @@ import {
 } from "@/lib/share-image/layout";
 import { SHARE_DESIGNS, type ShareDesign } from "@/lib/share-image/designs";
 import { encodeSelection, poemLines } from "@/lib/share-image/selection";
+import { encodePassage, passageParagraphs, pickedRanges, type PassagePick } from "@/lib/share-image/passage";
+import { layoutPassageImage, type PassageImageInput } from "@/lib/share-image/passage-layout";
 import { shortPath } from "@/lib/share-image/short-code";
 import { poemPath } from "@/lib/share-image/share-text";
 import { siteUrl } from "@/lib/site";
 import { pictureDataUri } from "./author-picture";
-import type { SharePoem } from "./board";
+import type { ShareChapter, SharePoem } from "./board";
 
 /*
  * Renders the "Share as image" PNG for a public poem (docs/PLAN.md, Phase 21).
@@ -143,17 +145,84 @@ export type RenderedShareImage = {
   quote: { picked: number; shown: number } | null;
 };
 
-/** Draws the PNG (Satori + resvg, about 40–150 ms). */
-export async function renderShareImage(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<RenderedShareImage> {
-  const { fonts, measure } = await shareImageFonts();
-  const layout = layoutShareImage(shareImageInput(poem), measure, request);
+/** Draws a layout to PNG bytes with the share image's fonts (poems and passages alike). */
+async function draw(layout: ShareImageLayout, picture: SharePoem["picture"], design: ShareDesign | undefined): Promise<Uint8Array> {
+  const { fonts } = await shareImageFonts();
   // The photo's JPEG copy straight from storage, or the avatar (no fetch to our own URL).
-  const avatar = await pictureDataUri(poem.picture);
-  const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} design={request.design && request.design in SHARE_DESIGNS ? request.design : "page"} />, {
+  const avatar = await pictureDataUri(picture);
+  const response = new ImageResponse(<ShareImage layout={layout} avatar={avatar} design={design && design in SHARE_DESIGNS ? design : "page"} />, {
     width: layout.frame.width,
     height: layout.frame.height,
     fonts,
   });
-  const png = new Uint8Array(await response.arrayBuffer());
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/** Draws the PNG (Satori + resvg, about 40–150 ms). */
+export async function renderShareImage(poem: SharePoem, request: ShareImageRequest = { format: "story" }): Promise<RenderedShareImage> {
+  const { measure } = await shareImageFonts();
+  const layout = layoutShareImage(shareImageInput(poem), measure, request);
+  const png = await draw(layout, poem.picture, request.design);
   return { png, etag: shareImageEtag(poem, request), quote: layout.quote };
+}
+
+// ---- "Share a passage" (Phase 25) ------------------------------------------------
+
+/** "Chapter 4 · The Radio", or "Chapter 4" for an untitled chapter. */
+export const chapterLine = (c: Pick<ShareChapter, "number" | "title">) => (c.title.trim() ? `Chapter ${c.number} · ${c.title.trim()}` : `Chapter ${c.number}`);
+
+/** A passage picture: the format, the design and the pick (validated by parsePassage). */
+export type PassageImageRequest = { format: ShareFormat; design?: ShareDesign; pick: PassagePick };
+
+/** What goes on a passage picture: the picked sentences with their emphasis, the novel, the chapter, the author, the short address. */
+export function passageImageInput(chapter: ShareChapter, pick: PassagePick): PassageImageInput {
+  const paragraphs = passageParagraphs(chapter.body);
+  return {
+    novelTitle: chapter.novel.title,
+    chapterLine: chapterLine(chapter),
+    paragraphs: pickedRanges(pick, paragraphs.map((p) => p.sentences.length)).map(([p, first, last]) => ({
+      sceneBreakBefore: paragraphs[p - 1].sceneBreakBefore,
+      sentences: paragraphs[p - 1].sentences.slice(first - 1, last),
+    })),
+    penName: chapter.penName,
+    language: languageName(chapter.novel.language),
+    host: siteUrl().host,
+    // The short link (the route made it before drawing).
+    path: chapter.shortCode ? shortPath(chapter.shortCode) : `/a/${chapter.authorSlug}/n/${chapter.novel.slug}/${chapter.slug}`,
+  };
+}
+
+/** The passage picture's ETag: everything it's drawn from, like shareImageEtag (picks are never cached, so this makes 304s free). */
+export function passageImageEtag(chapter: ShareChapter, request: PassageImageRequest): string {
+  const counts = passageParagraphs(chapter.body).map((p) => p.sentences.length);
+  const inputs = JSON.stringify([
+    RENDER_VERSION,
+    process.env.INKBOARD_BUILD_ID ?? "dev",
+    "passage",
+    passageImageInput(chapter, request.pick),
+    chapter.picture,
+    request.format,
+    request.design ?? "page",
+    encodePassage(request.pick, counts),
+  ]);
+  return `"${createHash("sha256").update(inputs).digest("base64url").slice(0, 32)}"`;
+}
+
+export type RenderedPassageImage = {
+  png: Uint8Array;
+  etag: string;
+  /** The passage's characters as picked and as shown (fewer when the picture had to cut it). */
+  passage: { picked: number; shown: number };
+};
+
+export async function passageLayout(chapter: ShareChapter, request: Omit<PassageImageRequest, "design">): Promise<ShareImageLayout> {
+  const { measure } = await shareImageFonts();
+  return layoutPassageImage(passageImageInput(chapter, request.pick), measure, { format: request.format });
+}
+
+/** Draws a passage picture (never cached on the server: the route rate-limits real renders). */
+export async function renderPassageImage(chapter: ShareChapter, request: PassageImageRequest): Promise<RenderedPassageImage> {
+  const layout = await passageLayout(chapter, request);
+  const png = await draw(layout, chapter.picture, request.design);
+  return { png, etag: passageImageEtag(chapter, request), passage: layout.passage! };
 }

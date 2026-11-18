@@ -1,8 +1,8 @@
 import "server-only";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { after } from "next/server";
 import { getDb } from "@/db";
-import { editors, emailOtps, novels, poems, rateLimits, retiredSlugs, sessions } from "@/db/schema";
+import { chapters, editors, emailOtps, novels, poems, rateLimits, retiredSlugs, sessions } from "@/db/schema";
 import { toNfc } from "@/lib/letters";
 import { describeUserAgent } from "@/lib/user-agent";
 import { isSessionFresh } from "./auth/step-up";
@@ -82,8 +82,20 @@ export async function deleteAccount(input: {
     // Not linked by foreign keys, so deleted by hand.
     await tx.delete(emailOtps).where(eq(emailOtps.email, editor.email));
     // Counters naming the editor, a session, the email's hash, or one of their poems
-    // (share-visit and unlock counters, Phase 21 round 3).
-    const named = [editorId, ...ownSessions.map((s) => s.id), sha256(editor.email), ...ownPoems.map((p) => p.id)];
+    // (share-visit and unlock counters, Phase 21 round 3), novels (unlock:n:…,
+    // Phase 25) or chapters (passage share visits, Phase 25).
+    const ownNovels = await tx.select({ id: novels.id }).from(novels).where(eq(novels.editorId, editorId));
+    const ownChapters = ownNovels.length
+      ? await tx.select({ id: chapters.id }).from(chapters).where(inArray(chapters.novelId, ownNovels.map((n) => n.id)))
+      : [];
+    const named = [
+      editorId,
+      ...ownSessions.map((s) => s.id),
+      sha256(editor.email),
+      ...ownPoems.map((p) => p.id),
+      ...ownNovels.map((n) => n.id),
+      ...ownChapters.map((c) => c.id),
+    ];
     await tx.delete(rateLimits).where(or(...named.map((id) => sql`${rateLimits.key} LIKE ${`%${id}%`}`)));
 
     // Everything else follows by ON DELETE CASCADE (see the header).

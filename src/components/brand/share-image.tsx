@@ -4,8 +4,6 @@ import {
   BYLINE,
   CONTENT_WIDTH,
   GAPS,
-  LINES_FROM_TEXT,
-  MORE_TEXT,
   OMISSION_TEXT,
   contentHeight,
   type PoemRow,
@@ -24,6 +22,11 @@ import { fontFamilyList as family, ogFontFamily } from "./og-type";
  * change colours only (and Board's canvas and card behind the content), never
  * where text goes. Fonts: ogFontFamily (og-type.ts), so Ghanaian letters and
  * tone marks are set in Gentium Book Plus first.
+ *
+ * Passages (Phase 25, src/lib/share-image/passage-layout.ts) are drawn by
+ * this same component from the same layout type: a kicker ("A passage
+ * from"), the novel's title, a subtitle ("Chapter 4 · The Radio"), the
+ * reflowed paragraphs as rows, and "Read the chapter on InkBoard" when cut.
  */
 
 function PoemRows({ layout, look }: { layout: ShareImageLayout; look: ShareDesignStyle }) {
@@ -41,14 +44,28 @@ function PoemRows({ layout, look }: { layout: ShareImageLayout; look: ShareDesig
       }}
     >
       {poem.rows.map((row, i) => (
-        <Row key={i} row={row} rowHeight={poem.rowHeight} gapHeight={poem.gapHeight} muted={look.muted} />
+        <Row key={i} row={row} rowHeight={poem.rowHeight} gapHeight={poem.gapHeight} breakHeight={poem.breakHeight} muted={look.muted} />
       ))}
     </div>
   );
 }
 
-function Row({ row, rowHeight, gapHeight, muted }: { row: PoemRow; rowHeight: number; gapHeight: number; muted: string }) {
+function Row({
+  row,
+  rowHeight,
+  gapHeight,
+  breakHeight,
+  muted,
+}: {
+  row: PoemRow;
+  rowHeight: number;
+  gapHeight: number;
+  breakHeight: number;
+  muted: string;
+}) {
   if (row.kind === "gap") return <div style={{ display: "flex", height: gapHeight }} />;
+  // A passage's scene break (Phase 25): a wider gap, no glyph, as the reader asked.
+  if (row.kind === "scene") return <div style={{ display: "flex", height: breakHeight }} />;
   if (row.kind === "omission") {
     // Where a quote skips lines: one stanza gap high, so the layout's sums hold.
     return (
@@ -169,7 +186,7 @@ export function ShareImage({
           paddingBottom: GAPS.beforeFooter,
         }}
       >
-        {layout.quote && (
+        {layout.kicker && (
           <div
             style={{
               display: "flex",
@@ -179,11 +196,11 @@ export function ShareImage({
               lineHeight: `${GAPS.linesFrom * GAPS.linesFromLineHeight}px`,
               color: look.accent,
               fontStyle: "italic",
-              fontFamily: ogFontFamily(LINES_FROM_TEXT),
+              fontFamily: ogFontFamily(layout.kicker),
               whiteSpace: "pre",
             }}
           >
-            {LINES_FROM_TEXT}
+            {layout.kicker}
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", fontFamily: family(title.extendedFirst) }}>
@@ -196,9 +213,35 @@ export function ShareImage({
             </div>
           ))}
         </div>
+        {layout.subtitle && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              marginTop: GAPS.titleToSubtitle,
+              color: look.muted,
+              fontFamily: family(layout.subtitle.extendedFirst),
+            }}
+          >
+            {layout.subtitle.rows.map((r, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex",
+                  height: layout.subtitle!.lineHeight,
+                  fontSize: layout.subtitle!.size,
+                  lineHeight: `${layout.subtitle!.lineHeight}px`,
+                  whiteSpace: "pre",
+                }}
+              >
+                {r}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", width: 120, height: GAPS.rule, marginTop: GAPS.titleToRule, marginBottom: GAPS.ruleToPoem, background: look.accent }} />
         <PoemRows layout={layout} look={look} />
-        {layout.poem.truncated && (
+        {layout.more && (
           <div
             style={{
               display: "flex",
@@ -207,11 +250,11 @@ export function ShareImage({
               fontSize: GAPS.more,
               color: look.accent,
               fontStyle: "italic",
-              fontFamily: ogFontFamily(MORE_TEXT),
+              fontFamily: ogFontFamily(layout.more),
               whiteSpace: "pre",
             }}
           >
-            {MORE_TEXT}
+            {layout.more}
           </div>
         )}
       </div>

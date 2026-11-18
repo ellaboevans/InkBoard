@@ -433,6 +433,42 @@ test("novel covers: the details' cover panel, the 2:3 crop step and a saved cove
   await scan(page, "novel page: an uploaded cover");
 });
 
+test("share a passage: the sheet with its passage picker (empty, picked and trimmed, over the cap), phone and desktop", async ({ browser }) => {
+  const id = unique();
+  const { rows } = await sql(`INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-passage-${id}@example.com', 'Selorm Agbɔ ${id}', 'a11y-passage-${id}') RETURNING id`);
+  const long = "Ŋkekea ɖe ɖeka la, èyi ƒuta kple eƒe nɔvi. ".repeat(18).trim();
+  const body = ["Nùnyá, àdìdòé. Àsí mètúnɛ́ ò.", "The ferry came late. Akua waited.", long].join("\\n\\n");
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, language) VALUES ('${rows[0].id}', 'Ʋu la', 'vu', 'ee') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, 'Ŋkeke', 'nkeke', E'${body}', 1, 'published'::poem_status, now(), 80 FROM n`);
+  const context = await browser.newContext();
+  // No file sharing in headless Chrome: Download image is the sheet's main action.
+  await context.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "canShare", { configurable: true, value: undefined });
+    Object.defineProperty(Navigator.prototype, "share", { configurable: true, value: undefined });
+  });
+  const page = await context.newPage();
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/a/a11y-passage-${id}/n/vu/nkeke`);
+    await page.getByRole("button", { name: "Share a passage" }).click();
+    const sheet = page.getByRole("dialog", { name: "Share a passage" });
+    await expect(sheet.getByRole("checkbox", { name: /^Paragraph 1:/ })).toBeVisible();
+    await scan(page, `share a passage: empty picker, ${width}px`);
+    await sheet.getByRole("checkbox", { name: /^Paragraph 1:/ }).check();
+    await sheet.getByRole("checkbox", { name: /^Paragraph 2:/ }).check();
+    await sheet.getByLabel("Start at").selectOption("2");
+    await expect(sheet.getByRole("img", { name: /^Preview of the image/ })).toBeVisible({ timeout: 45_000 });
+    await scan(page, `share a passage: picked and trimmed, ${width}px`);
+    await sheet.getByRole("button", { name: "Clear" }).click();
+    await sheet.getByRole("checkbox", { name: /^Paragraph 3:/ }).check();
+    await expect(sheet.locator("[data-passage-count]")).toContainText("too long");
+    await scan(page, `share a passage: over the cap, ${width}px`);
+    await page.keyboard.press("Escape");
+  }
+  await context.close();
+});
+
 test("admin screens", async ({ page }) => {
   const id = unique();
   await signUpAs(page, `a11y-admin-${id}@example.com`, `Access Poet ${id}`);

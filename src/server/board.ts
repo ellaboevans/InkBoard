@@ -530,6 +530,82 @@ export async function loadSharePoem(authorSlug: string, poemSlug: string): Promi
 }
 
 /**
+ * A chapter for "Share a passage" (Phase 25): a published chapter of a public
+ * novel by an onboarded author, with its text, its number among the published
+ * chapters and its short code; null for everything else, private novels
+ * included (an owner's decision: no passage pictures of a private novel,
+ * unlocked or not), so the route answers them all with the one 404 before it
+ * looks at the passage. The text is still selected through CASE WHEN (N1).
+ */
+export type ShareChapter = {
+  id: string;
+  slug: string;
+  title: string;
+  /** Among the published chapters, as readers number them. */
+  number: number;
+  body: string;
+  novel: { id: string; title: string; slug: string; language: string | null };
+  penName: string;
+  authorSlug: string;
+  editorId: string;
+  picture: AuthorPicture;
+  /** Its short link's code, or null until its first passage picture makes one. */
+  shortCode: string | null;
+};
+
+export async function loadShareChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ShareChapter | null> {
+  const [row] = await getDb()
+    .select({
+      id: chapters.id,
+      slug: chapters.slug,
+      title: chapters.title,
+      body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END`,
+      // Raw names: inside a subquery drizzle would render bare column names.
+      number: sql<number>`(SELECT count(*)::int FROM chapters o
+        WHERE o.novel_id = "chapters"."novel_id" AND o.status = 'published' AND o.position <= "chapters"."position")`,
+      novelId: novels.id,
+      novelTitle: novels.title,
+      novelSlug: novels.slug,
+      language: novels.language,
+      penName: editors.penName,
+      authorSlug: editors.slug,
+      editorId: editors.id,
+      avatar: editors.avatar,
+      photoKey: editors.photoKey,
+      shortCode: shortLinks.code,
+    })
+    .from(chapters)
+    .innerJoin(novels, eq(novels.id, chapters.novelId))
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .leftJoin(shortLinks, eq(shortLinks.chapterId, chapters.id))
+    .where(
+      and(
+        eq(editors.slug, authorSlug),
+        eq(novels.slug, novelSlug),
+        eq(chapters.slug, chapterSlug),
+        eq(chapters.status, "published"),
+        eq(novels.visibility, "public"),
+        isNotNull(editors.penName),
+      ),
+    )
+    .limit(1);
+  if (!row || row.body === null || row.penName === null || row.authorSlug === null) return null;
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    number: row.number,
+    body: row.body,
+    novel: { id: row.novelId, title: row.novelTitle, slug: row.novelSlug, language: row.language },
+    penName: row.penName,
+    authorSlug: row.authorSlug,
+    editorId: row.editorId,
+    picture: authorPicture({ id: row.editorId, avatar: row.avatar, photoKey: row.photoKey }),
+    shortCode: row.shortCode,
+  };
+}
+
+/**
  * The published poem's place in its collection: part n of the *published*
  * poems (drafts never leave gaps) and its published neighbours. Titles,
  * slugs and visibility only: no text, so private neighbours stay title-only (N1).

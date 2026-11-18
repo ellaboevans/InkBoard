@@ -9,6 +9,8 @@ import { SHARE_DESIGN_NAMES } from "@/lib/share-image/designs";
 import { IPA_GROUPS, LANGUAGE_SETS, TONE_MARKS } from "@/lib/letter-sets";
 import { readFontMetrics } from "@/lib/share-image/font-metrics";
 import { layoutShareImage } from "@/lib/share-image/layout";
+import { passageParagraphs } from "@/lib/share-image/passage";
+import { layoutPassageImage } from "@/lib/share-image/passage-layout";
 import { shareImageFonts } from "@/server/share-image";
 
 /*
@@ -153,6 +155,41 @@ describe("the share image, in every design (round 3)", () => {
         // Text that needs Gentium never gets Newsreader first (a block may choose Gentium for all its words).
         for (const n of nodes) if (needsExtendedFont(n.text)) expect(first(n.family), n.text).toBe("Gentium Book Plus");
       }
+    });
+  }
+});
+
+describe("a passage picture, in every design (Phase 25)", () => {
+  const passage = (novelTitle: string, chapterLine: string, body: string) => ({
+    novelTitle,
+    chapterLine,
+    paragraphs: passageParagraphs(body),
+    penName: "Selorm Agbɔ",
+    language: "Ewe",
+    host: "x.test",
+    path: "/s/k3x9qm",
+  });
+  for (const design of SHARE_DESIGN_NAMES) {
+    it(`${design}: an Ewe passage, its novel's title and chapter line in Gentium first; English in Newsreader`, async () => {
+      const { measure } = await shareImageFonts();
+      // Long enough on a chat picture to be cut, so "Read the chapter on InkBoard" is in the tree too.
+      const body = `${EWE}.\n\n${Array.from({ length: 30 }, () => EWE).join(". ")}.`;
+      const layout = layoutPassageImage(passage("Ʋu la".normalize("NFC"), "Chapter 2 · Ɖe ƒe ŋkɔ", body), measure, { format: "chat" });
+      expect(layout.more).not.toBeNull();
+      const nodes = textNodes(ShareImage({ layout, avatar: null, design }));
+      const families = Object.fromEntries(nodes.map((n) => [n.text, first(n.family)]));
+      expect(families["Ʋu la".normalize("NFC")]).toBe("Gentium Book Plus");
+      expect(families["Chapter 2 · Ɖe ƒe ŋkɔ"]).toBe("Gentium Book Plus");
+      expect(families["mètúnɛ́"]).toBe("Gentium Book Plus");
+      expect(families["Read the chapter on InkBoard"]).toBe("Newsreader");
+      expect(families["/s/k3x9qm"]).toBe("Newsreader");
+      for (const n of nodes) if (needsExtendedFont(n.text)) expect(first(n.family), n.text).toBe("Gentium Book Plus");
+
+      const english = layoutPassageImage(passage("The Ferry", "Chapter 4 · The Radio", "The ferry came *late*."), measure);
+      const en = Object.fromEntries(textNodes(ShareImage({ layout: english, avatar: null, design })).map((n) => [n.text, first(n.family)]));
+      expect(en["The Ferry"]).toBe("Newsreader");
+      expect(en["Chapter 4 · The Radio"]).toBe("Newsreader");
+      expect(en["late"]).toBe("Newsreader Text");
     });
   }
 });

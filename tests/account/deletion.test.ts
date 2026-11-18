@@ -2,7 +2,9 @@ import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import {
+  chapters,
   editors,
+  novels,
   emailOtps,
   passkeys,
   poems,
@@ -206,6 +208,27 @@ describe("deleting an account", () => {
     expect(Object.values(left).every((n) => n === 0), JSON.stringify(left)).toBe(true);
     const theirsLeft = await stillThere(theirs);
     for (const [table, ids] of theirs) expect(theirsLeft[table] ?? 0, table).toBe(ids.size);
+  });
+
+  it("also removes counters naming their novels and chapters (novel unlocks, passage visits: Phase 25), not someone else's", async () => {
+    const ada = await populated("ada@example.com", "Ada Verse");
+    const eve = await populated("eve@example.com", "Eve Other");
+    const book = async (editorId: string, slug: string) => {
+      const [n] = await db.insert(novels).values({ editorId, title: slug, slug }).returning();
+      const [c] = await db.insert(chapters).values({ novelId: n.id, title: "One", slug: "one", body: "x.", position: 1, status: "published", publishedAt: new Date() }).returning();
+      await db.insert(shortLinks).values({ chapterId: c.id, code: slug === "ada-book" ? "bcdfgh" : "bcdfgj" });
+      const keys = [`unlock:n:${n.id}:all`, `unlock:n:${n.id}:ip:198.51.100.7`, `share:visit:${c.id}:198.51.100.7`];
+      for (const key of keys) await db.insert(rateLimits).values({ key, windowStart: new Date(), count: 1 });
+      return keys;
+    };
+    const adaKeys = await book(ada.id, "ada-book");
+    const eveKeys = await book(eve.id, "eve-book");
+    await remove(ada, "Ada Verse");
+    const left = (await db.select({ key: rateLimits.key }).from(rateLimits)).map((r) => r.key);
+    for (const k of adaKeys) expect(left, k).not.toContain(k);
+    for (const k of eveKeys) expect(left, k).toContain(k);
+    // Ada's chapter's code is retired with it.
+    expect((await db.select().from(retiredShortCodes)).map((r) => r.code)).toContain("bcdfgh");
   });
 
   it("also removes what isn't linked by a foreign key: sign-in codes and rate-limit counters", async () => {

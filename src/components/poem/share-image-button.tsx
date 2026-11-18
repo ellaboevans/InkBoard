@@ -48,7 +48,7 @@ type Props = {
 };
 
 /** 44 px touch targets, as in the install card. */
-const TOUCH = "h-11 px-4 text-[15px] [&_svg:not([class*='size-'])]:size-[18px]";
+export const TOUCH = "h-11 px-4 text-[15px] [&_svg:not([class*='size-'])]:size-[18px]";
 
 export function ShareImageButton({ className, ...props }: Props & { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -81,6 +81,15 @@ export function ShareImageDialog({
 
 function ShareImageContent({ returnFocus, ...props }: Props & { returnFocus?: () => void }) {
   return (
+    <ShareDialogContent returnFocus={returnFocus}>
+      <PoemShareSheet {...props} />
+    </ShareDialogContent>
+  );
+}
+
+/** The sheet's dialog content: focus starts on the main action; `returnFocus` gets it back on close. Shared with passages. */
+export function ShareDialogContent({ returnFocus, children }: { returnFocus?: () => void; children: React.ReactNode }) {
+  return (
     <DialogContent
       showCloseButton={false}
       className="max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto p-5 sm:max-w-md lg:max-w-3xl"
@@ -101,7 +110,7 @@ function ShareImageContent({ returnFocus, ...props }: Props & { returnFocus?: ()
           : undefined
       }
     >
-      <ShareSheet {...props} />
+      {children}
     </DialogContent>
   );
 }
@@ -109,6 +118,7 @@ function ShareImageContent({ returnFocus, ...props }: Props & { returnFocus?: ()
 type Entry =
   | { status: "ready"; file: File; url: string; picked: number | null; shown: number | null }
   | { status: "failed"; reason: "offline" | "network" | "limited" };
+export type ReadyImage = Extract<Entry, { status: "ready" }>;
 type Lines = { status: "idle" | "loading" | "failed" } | { status: "ready"; lines: string[]; language: string | null };
 type Mode = "whole" | "pick";
 
@@ -128,28 +138,69 @@ const FAILED: Record<"offline" | "network" | "limited", string> = {
   limited: "Too many images made from this connection. Try again in a few minutes.",
 };
 
-function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
+/** A count the route sends back: picked lines or characters, and how many fit on the picture. */
+const countHeader = (res: Response, kind: "Picked" | "Shown") => {
+  for (const h of [`X-Share-Lines-${kind}`, `X-Share-Chars-${kind}`]) if (res.headers.has(h)) return Number(res.headers.get(h));
+  return null;
+};
+
+export type ShareSheetShellProps = {
+  heading: string;
+  /** With and without file sharing. */
+  description: { share: string; download: string };
+  /** The image route (no query). */
+  imagePath: string;
+  /** The query for the current choice, or null while nothing is picked yet. */
+  queryFor: (format: ShareFormat, design: ShareDesign) => string | null;
+  /** Wait a moment before fetching (a pick still changing). */
+  debounce: boolean;
+  fileName: (format: ShareFormat, design: ShareDesign) => string;
+  /** The text sent with the image, and the link Copy link copies. */
+  text: string;
+  url: string;
+  previewAlt: string;
+  /** In the preview while there's nothing to draw yet. */
+  emptyHint: string;
+  /** Below the preview when the picture had to leave something out. */
+  cutNote?: (ready: ReadyImage, format: ShareFormat) => React.ReactNode;
+  /** The choices under Size (the poem's Lines, a passage's picker). */
+  children?: React.ReactNode;
+};
+
+/**
+ * The sheet's shared part (poems, Phase 21; passages, Phase 25): the
+ * preview, Design and Size, Share / Download image / Copy link / Send on
+ * WhatsApp. Each choice's file is fetched when it's chosen (picks after a
+ * short pause) and kept for the sheet's life; Share and Download are
+ * aria-disabled until the current choice's file is there.
+ */
+export function ShareSheetShell({
+  heading,
+  description,
+  imagePath,
+  queryFor,
+  debounce,
+  fileName: fileNameFor,
+  text,
+  url,
+  previewAlt,
+  emptyHint,
+  cutNote,
+  children,
+}: ShareSheetShellProps) {
   const [fileShare] = useState(canShareFiles);
   const [format, setFormat] = useState<ShareFormat>("story");
   // Page each time the sheet opens (not remembered: nothing is stored in the browser).
   const [design, setDesign] = useState<ShareDesign>("page");
-  const [mode, setMode] = useState<Mode>("whole");
-  const [picked, setPicked] = useState<number[]>([]);
-  const [lines, setLines] = useState<Lines>({ status: "idle" });
   const [images, setImages] = useState<Record<string, Entry>>({});
   const [attempt, setAttempt] = useState(0);
   const urls = useRef<string[]>([]);
-  const text = shareText({ title, penName, url: poemUrl });
-  const imagePath = shareImagePath(authorSlug, slug);
 
-  // The current choice and the query that draws it (null: no lines picked yet).
-  const selection = mode === "pick" && lines.status === "ready" ? encodeSelection(picked, lines.lines) || null : null;
-  const key =
-    mode === "whole" ? shareImageQuery(format, null, design) : selection ? shareImageQuery(format, selection, design) : null;
+  const key = queryFor(format, design);
   const current = key !== null ? images[key] : undefined;
   const ready = current?.status === "ready" ? current : null;
   const failed = current?.status === "failed" ? current : null;
-  const fileName = shareImageFileName(slug, { format, design, lines: mode === "pick" });
+  const fileName = fileNameFor(format, design);
   const has = current !== undefined;
 
   useEffect(() => {
@@ -163,10 +214,9 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
             if (res.status === 429) return { status: "failed", reason: "limited" } as const;
             if (!res.ok) throw new Error(`share image: ${res.status}`);
             const file = new File([await res.blob()], fileName, { type: "image/png" });
-            const url = URL.createObjectURL(file);
-            urls.current.push(url);
-            const count = (h: string) => (res.headers.has(h) ? Number(res.headers.get(h)) : null);
-            return { status: "ready", file, url, picked: count("X-Share-Lines-Picked"), shown: count("X-Share-Lines-Shown") } as const;
+            const objectUrl = URL.createObjectURL(file);
+            urls.current.push(objectUrl);
+            return { status: "ready", file, url: objectUrl, picked: countHeader(res, "Picked"), shown: countHeader(res, "Shown") } as const;
           })
           .catch(() => {
             if (controller.signal.aborted) return null;
@@ -176,35 +226,19 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
             if (entry && !controller.signal.aborted) setImages((prev) => ({ ...prev, [key]: entry }));
           });
       },
-      mode === "pick" ? 350 : 0,
+      debounce ? 350 : 0,
     );
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [key, has, imagePath, fileName, mode, attempt]);
+  }, [key, has, imagePath, fileName, debounce, attempt]);
 
   // Every preview URL goes when the sheet closes.
   useEffect(() => {
     const made = urls.current;
     return () => made.forEach((u) => URL.revokeObjectURL(u));
   }, []);
-
-  const loadLines = () => {
-    setLines({ status: "loading" });
-    fetch(shareLinesPath(authorSlug, slug))
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`share lines: ${res.status}`);
-        const data = (await res.json()) as { lines: string[]; language: string | null };
-        setLines({ status: "ready", lines: data.lines, language: data.language });
-      })
-      .catch(() => setLines({ status: "failed" }));
-  };
-
-  const chooseMode = (next: Mode) => {
-    setMode(next);
-    if (next === "pick" && (lines.status === "idle" || lines.status === "failed")) loadLines();
-  };
 
   const retry = () => {
     if (key === null) return;
@@ -243,26 +277,21 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(poemUrl);
-      notify.success("Link copied", poemUrl);
+      await navigator.clipboard.writeText(url);
+      notify.success("Link copied", url);
     } catch {
-      notify.error("Couldn't copy the link", poemUrl);
+      notify.error("Couldn't copy the link", url);
     }
   };
 
   const needsImage = { "aria-disabled": ready ? undefined : true } as const;
   const waiting = key !== null && !current;
-  const quoteCut = mode === "pick" && ready && ready.picked !== null && ready.shown !== null && ready.shown < ready.picked;
 
   return (
     <>
       <DialogHeader className="pr-10">
-        <DialogTitle className="text-lg">Share as image</DialogTitle>
-        <DialogDescription>
-          {fileShare
-            ? "A picture of the poem for your WhatsApp Status, a chat or a Story, with its InkBoard address."
-            : "A picture of the poem with its InkBoard address. Download it, then post it from your gallery."}
-        </DialogDescription>
+        <DialogTitle className="text-lg">{heading}</DialogTitle>
+        <DialogDescription>{fileShare ? description.share : description.download}</DialogDescription>
       </DialogHeader>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
@@ -278,16 +307,7 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
           >
             {ready ? (
               // eslint-disable-next-line @next/next/no-img-element -- a blob: preview of the exact file that will be shared
-              <img
-                src={ready.url}
-                alt={
-                  mode === "pick"
-                    ? `Preview of the image: lines from “${title}” by ${penName}, with its InkBoard address.`
-                    : `Preview of the image: “${title}” by ${penName}, with lines from the poem and its InkBoard address.`
-                }
-                className="size-full object-contain"
-                data-share-preview
-              />
+              <img src={ready.url} alt={previewAlt} className="size-full object-contain" data-share-preview />
             ) : failed ? (
               <div className="flex size-full flex-col items-center justify-center gap-3 p-4 text-center">
                 <p className="text-sm text-destructive">{FAILED[failed.reason]}</p>
@@ -297,9 +317,7 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
                 </Button>
               </div>
             ) : key === null ? (
-              <p className="flex size-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                Pick the lines for your image.
-              </p>
+              <p className="flex size-full items-center justify-center p-4 text-center text-sm text-muted-foreground">{emptyHint}</p>
             ) : (
               <div className="flex size-full items-center justify-center">
                 <Loader2Icon className="size-6 animate-spin text-muted-foreground" aria-hidden />
@@ -309,12 +327,7 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
           <p role="status" className="sr-only">
             {waiting ? "Making the image…" : ready ? "Image ready." : ""}
           </p>
-          {quoteCut && (
-            <p className="text-sm text-muted-foreground" data-share-cut>
-              Only the first {ready.shown} of your {ready.picked} lines fit on this picture. Pick fewer or shorter lines
-              {format === "chat" ? ", or choose Status or Story, which is taller" : ""}.
-            </p>
-          )}
+          {ready && cutNote?.(ready, format)}
         </div>
 
         <div className="grid min-w-0 gap-4">
@@ -333,16 +346,7 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
               { value: "chat", label: "Chat", hint: "4:5" },
             ]}
           />
-          <Choice
-            legend="Lines"
-            value={mode}
-            onChange={chooseMode}
-            options={[
-              { value: "whole", label: "Whole poem" },
-              { value: "pick", label: "Choose lines" },
-            ]}
-          />
-          {mode === "pick" && <LinePicker lines={lines} picked={picked} onChange={setPicked} onRetry={loadLines} />}
+          {children}
 
           <div className="grid gap-2 sm:grid-cols-2">
             {fileShare ? (
@@ -388,8 +392,77 @@ function ShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
   );
 }
 
+/** A poem's sheet: the shell, plus "Lines" (Whole poem / Choose lines) and the line picker. */
+function PoemShareSheet({ authorSlug, slug, poemUrl, title, penName }: Props) {
+  const [mode, setMode] = useState<Mode>("whole");
+  const [picked, setPicked] = useState<number[]>([]);
+  const [lines, setLines] = useState<Lines>({ status: "idle" });
+
+  // The current pick (null: no lines picked yet).
+  const selection = mode === "pick" && lines.status === "ready" ? encodeSelection(picked, lines.lines) || null : null;
+
+  const loadLines = () => {
+    setLines({ status: "loading" });
+    fetch(shareLinesPath(authorSlug, slug))
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`share lines: ${res.status}`);
+        const data = (await res.json()) as { lines: string[]; language: string | null };
+        setLines({ status: "ready", lines: data.lines, language: data.language });
+      })
+      .catch(() => setLines({ status: "failed" }));
+  };
+
+  const chooseMode = (next: Mode) => {
+    setMode(next);
+    if (next === "pick" && (lines.status === "idle" || lines.status === "failed")) loadLines();
+  };
+
+  return (
+    <ShareSheetShell
+      heading="Share as image"
+      description={{
+        share: "A picture of the poem for your WhatsApp Status, a chat or a Story, with its InkBoard address.",
+        download: "A picture of the poem with its InkBoard address. Download it, then post it from your gallery.",
+      }}
+      imagePath={shareImagePath(authorSlug, slug)}
+      queryFor={(format, design) =>
+        mode === "whole" ? shareImageQuery(format, null, design) : selection ? shareImageQuery(format, selection, design) : null
+      }
+      debounce={mode === "pick"}
+      fileName={(format, design) => shareImageFileName(slug, { format, design, lines: mode === "pick" })}
+      text={shareText({ title, penName, url: poemUrl })}
+      url={poemUrl}
+      previewAlt={
+        mode === "pick"
+          ? `Preview of the image: lines from “${title}” by ${penName}, with its InkBoard address.`
+          : `Preview of the image: “${title}” by ${penName}, with lines from the poem and its InkBoard address.`
+      }
+      emptyHint="Pick the lines for your image."
+      cutNote={(ready, format) =>
+        mode === "pick" && ready.picked !== null && ready.shown !== null && ready.shown < ready.picked ? (
+          <p className="text-sm text-muted-foreground" data-share-cut>
+            Only the first {ready.shown} of your {ready.picked} lines fit on this picture. Pick fewer or shorter lines
+            {format === "chat" ? ", or choose Status or Story, which is taller" : ""}.
+          </p>
+        ) : null
+      }
+    >
+      <Choice
+        legend="Lines"
+        value={mode}
+        onChange={chooseMode}
+        options={[
+          { value: "whole", label: "Whole poem" },
+          { value: "pick", label: "Choose lines" },
+        ]}
+      />
+      {mode === "pick" && <LinePicker lines={lines} picked={picked} onChange={setPicked} onRetry={loadLines} />}
+    </ShareSheetShell>
+  );
+}
+
 /** Two real radio buttons styled as a segmented control, 44 px tall. */
-function Choice<T extends string>({
+export function Choice<T extends string>({
   legend,
   value,
   onChange,

@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, count, desc, eq, inArray, isNotNull, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
-import { chapterRevisions, chapters, editors, novels } from "@/db/schema";
+import { chapterRevisions, chapters, editors, novels, shortLinks } from "@/db/schema";
 import { toNfc } from "@/lib/letters";
 import {
   BLURB_MAX,
@@ -788,6 +788,8 @@ export type NovelForExport = {
     updatedAt: Date;
     wordCount: number;
     body: string;
+    /** Visits through its passage pictures' short link (Phase 25; 0 if never shared). */
+    shareVisits: number;
     revisions: { savedAt: Date; title: string; body: string }[];
   }[];
 };
@@ -825,8 +827,10 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
         novelId: chapters.novelId,
         createdAt: chapters.createdAt,
         body: chapters.body,
+        shareVisits: sql<number>`coalesce(${shortLinks.visits}, 0)::int`,
       })
       .from(chapters)
+      .leftJoin(shortLinks, eq(shortLinks.chapterId, chapters.id))
       .where(inArray(chapters.novelId, ids))
       .orderBy(asc(chapters.novelId), asc(chapters.position)),
     db
@@ -857,6 +861,7 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
         updatedAt: c.updatedAt,
         wordCount: c.wordCount,
         body: c.body,
+        shareVisits: Number(c.shareVisits),
         revisions: revisionRows
           .filter((r) => r.chapterId === c.id)
           .map((r) => ({ savedAt: r.savedAt, title: r.title, body: r.body })),

@@ -2,7 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import type { ShareDesign } from "@/lib/share-image/designs";
 import type { ShareFormat } from "@/lib/share-image/layout";
-import { loadSharePoem, type SharePoem } from "./board";
+import { loadShareChapter, loadSharePoem, type ShareChapter, type SharePoem } from "./board";
 import { BOARD_TAG, poemTag } from "./cache-tags";
 import { renderShareImage } from "./share-image";
 
@@ -51,4 +51,17 @@ export async function getShareImage(
   // The route made the code before calling (this function can't write); it's part of the key.
   const { png, etag } = await renderShareImage({ ...poem, shortCode }, { format, design });
   return { png, etag };
+}
+
+/**
+ * "Share a passage" (Phase 25): the chapter the route checks first, a
+ * published chapter of a public novel or null (a private novel's chapter is
+ * null, so its text never reaches this cache, N1). Passage pictures
+ * themselves are never cached here, like picked lines.
+ */
+export async function getShareChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ShareChapter | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadShareChapter(authorSlug, novelSlug, chapterSlug);
 }

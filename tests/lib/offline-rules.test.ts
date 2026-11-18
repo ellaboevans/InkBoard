@@ -72,6 +72,10 @@ describe("which request gets which strategy", () => {
       "/p/odalys-moon/solstice/share-image?format=chat",
       "/p/odalys-moon/solstice/share-image?format=chat&lines=3-6,9",
       "/p/odalys-moon/solstice/share-image/lines",
+      // A chapter's passage pictures and its picker's paragraphs (Phase 25).
+      "/a/odalys-moon/n/the-ferry/thursday/share-image?passage=1.2-3",
+      "/a/odalys-moon/n/the-ferry/thursday/share-image?format=chat&design=ink&passage=2",
+      "/a/odalys-moon/n/the-ferry/thursday/share-image/passage",
     ]) {
       expect(req(path, { mode: "cors" }), path).toBe("passthrough");
       expect(req(path, { mode: "no-cors" }), path).toBe("passthrough");

@@ -146,10 +146,11 @@ export default function PrivacyPage() {
           </Sub>
           <Sub heading="Short links on shared pictures">
             <p>
-              A picture of a public poem carries a short address (like /s/k3x9qm) that leads to the poem. We count
-              visits through it: one number per poem, which only the poem’s writer sees, on their dashboard. To count
-              each network once {F.shareVisitRepeat} per poem, we use the same kind of counter as below, named after the
-              poem and the IP address (for IPv6, only its network part). Nothing else about who visited is kept, and no
+              A picture of a public poem carries a short address (like /s/k3x9qm) that leads to the poem, and a picture
+              of a passage from a public novel’s chapter one that leads to the chapter. We count visits through it: one
+              number per poem or chapter, which only its writer sees (a poem’s on their dashboard, a chapter’s in their
+              JSON download). To count each network once {F.shareVisitRepeat} per poem or chapter, we use the same kind
+              of counter as below, named after the poem or chapter and the IP address (for IPv6, only its network part). Nothing else about who visited is kept, and no
               cookie is set. Link previews (such as WhatsApp drawing a preview) and browsers fetching ahead aren’t
               counted.
             </p>
@@ -242,7 +243,9 @@ export default function PrivacyPage() {
               title, text, place in the book, word count, and whether it’s a draft or published and when. We keep the{" "}
               {F.chapterVersionsKept} most recent versions of each chapter, which only you can see. Readers see a novel once
               one of its chapters is published, and then only its published chapters: drafts, their titles and their number
-              stay with you. For a private novel they see its title, blurb and chapter list, and its chapters’ text only
+              stay with you. Once a reader shares a passage of a chapter as a picture, we keep the chapter’s short address
+              and the number of visits through it (see “Short links on shared pictures”); a private novel’s passages can’t
+              be shared as pictures. For a private novel they see its title, blurb and chapter list, and its chapters’ text only
               with the password. Everything stays until you
               delete it or your account. While you write a chapter, your browser also keeps a copy of it on your device
               (see “On your device”).
@@ -316,9 +319,9 @@ export default function PrivacyPage() {
             <p>
               Delete account, in Settings, removes all of this at once: your profile, poems with their earlier versions,
               collections, novels with their chapters and their earlier versions, signed-in devices, passkeys, recovery codes, sign-in alert records, sign-in codes sent to your
-              email, attempt counters that name you or your poems, your poems’ visit counts, your profile photo’s and novel covers’ files,
+              email, attempt counters that name you, your poems or your novels, your poems’ and chapters’ visit counts, your profile photo’s and novel covers’ files,
               and readers’ follows of you.
-              We keep only your old author address and your poems’ short addresses on a list, so they’re never given to
+              We keep only your old author address and your poems’ and chapters’ short addresses on a list, so they’re never given to
               someone else.
             </p>
             <p>

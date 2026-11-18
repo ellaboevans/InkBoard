@@ -537,24 +537,30 @@ export const retiredSlugs = pgTable("retired_slugs", {
 /**
  * Short links for shared images (docs/PLAN.md, Phase 21 round 3): one random
  * code per poem, printed on its pictures as /s/<code>, made the first time a
- * picture of the poem is drawn (src/server/short-links.ts). `visits` counts
- * visits through the link: one number per poem, shown only to its writer;
- * nothing about who visited is stored. Goes with the poem (and so with the
- * account); a trigger (drizzle/0022) moves the code to retired_short_codes
- * on delete, so it's never given to another poem.
+ * picture of the poem is drawn (src/server/short-links.ts). Since Phase 25
+ * also one per chapter, made by the chapter's first passage picture: each
+ * row points at exactly one poem or one chapter (a check constraint).
+ * `visits` counts visits through the link: one number per poem or chapter,
+ * shown only to its writer; nothing about who visited is stored. Goes with
+ * the poem or chapter (and so with the account); a trigger (drizzle/0022)
+ * moves the code to retired_short_codes on delete, so it's never reused.
  */
 export const shortLinks = pgTable(
   "short_links",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    poemId: uuid("poem_id")
-      .notNull()
-      .references(() => poems.id, { onDelete: "cascade" }),
+    poemId: uuid("poem_id").references(() => poems.id, { onDelete: "cascade" }),
+    chapterId: uuid("chapter_id").references(() => chapters.id, { onDelete: "cascade" }),
     code: text("code").notNull(),
     visits: integer("visits").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("short_links_poem_key").on(t.poemId), uniqueIndex("short_links_code_key").on(t.code)],
+  (t) => [
+    uniqueIndex("short_links_poem_key").on(t.poemId),
+    uniqueIndex("short_links_chapter_key").on(t.chapterId),
+    uniqueIndex("short_links_code_key").on(t.code),
+    check("short_links_one_target", sql`(${t.poemId} IS NULL) <> (${t.chapterId} IS NULL)`),
+  ],
 );
 
 /**

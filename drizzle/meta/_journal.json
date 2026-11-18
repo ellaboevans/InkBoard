@@ -218,6 +218,13 @@
       "when": 1795000829796,
       "tag": "0030_novel_covers",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795006164364,
+      "tag": "0031_chapter_short_links",
+      "breakpoints": true
     }
   ]
 }

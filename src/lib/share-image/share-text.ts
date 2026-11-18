@@ -57,3 +57,41 @@ export function shareText({ title, penName, url }: { title: string; penName: str
 export function whatsappShareUrl(text: string): string {
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
+
+// ---- "Share a passage" (Phase 25) ------------------------------------------------
+
+/** A chapter's passage image route (src/app/a/[author]/n/[novel]/[chapter]/share-image/route.ts). */
+export function passageImagePath(authorSlug: string, novelSlug: string, chapterSlug: string): string {
+  return `/a/${encodeURIComponent(authorSlug)}/n/${encodeURIComponent(novelSlug)}/${encodeURIComponent(chapterSlug)}/share-image`;
+}
+
+/** The picker's paragraphs and sentences (…/share-image/passage). */
+export function passageOutlinePath(authorSlug: string, novelSlug: string, chapterSlug: string): string {
+  return `${passageImagePath(authorSlug, novelSlug, chapterSlug)}/passage`;
+}
+
+/** The route's query: "?passage=3.2-4", with format and design when they aren't the defaults. */
+export function passageImageQuery(format: string, passage: string, design = "page"): string {
+  const q = new URLSearchParams();
+  if (format !== "story") q.set("format", format);
+  if (design !== "page") q.set("design", design);
+  q.set("passage", passage);
+  return `?${q.toString()}`;
+}
+
+/** inkboard-<novel>-<chapter>[-chat][-ink|-board]-passage.png */
+export function passageImageFileName(
+  novelSlug: string,
+  chapterSlug: string,
+  { format = "story", design = "page" }: { format?: string; design?: string } = {},
+): string {
+  return shareImageFileName(`${novelSlug}-${chapterSlug}`, { format, design }).replace(/\.png$/, "-passage.png");
+}
+
+/**
+ * The text sent with a passage picture: “Novel”, Chapter 4, by Pen Name, on InkBoard: https://…
+ * (the chapter's full address, like a poem's).
+ */
+export function passageShareText({ novelTitle, chapterNumber, penName, url }: { novelTitle: string; chapterNumber: number; penName: string; url: string }): string {
+  return `“${novelTitle.trim()}”, Chapter ${chapterNumber}, by ${penName.trim()}, on ${SITE_NAME}: ${url}`;
+}

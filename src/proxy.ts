@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from "@/server/auth/cookie";
 import { clientIpFromForwardedFor, ipBucket } from "@/server/auth/ip";
 import { readerPathExists } from "@/server/board";
 import { handleShortLink, SHORT_LINK_CACHE_CONTROL } from "@/server/short-link-route";
-import { countShareVisit, resolveShortCode } from "@/server/short-links";
+import { countChapterShareVisit, countShareVisit, resolveShortCode } from "@/server/short-links";
 
 /**
  * Two jobs, both before anything renders:
@@ -65,9 +65,8 @@ async function shortLink(request: NextRequest, event: NextFetchEvent, raw: strin
   res.headers.set("X-Robots-Tag", "noindex");
   if (outcome.count) {
     const bucket = ipBucket(clientIpFromForwardedFor(request.headers.get("x-forwarded-for"), env().TRUSTED_PROXY_HOPS));
-    event.waitUntil(
-      countShareVisit(outcome.poemId, bucket).catch((error) => console.error("share visit not counted", error)),
-    );
+    const counted = "chapterId" in outcome ? countChapterShareVisit(outcome.chapterId, bucket) : countShareVisit(outcome.poemId, bucket);
+    event.waitUntil(counted.catch((error) => console.error("share visit not counted", error)));
   }
   return res;
 }

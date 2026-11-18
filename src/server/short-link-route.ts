@@ -1,5 +1,6 @@
 import "server-only";
 import { countsAsVisit } from "@/lib/share-image/visits";
+import { chapterPath } from "@/lib/novel-seo";
 import { poemPath } from "@/lib/share-image/share-text";
 import type { ShortLinkTarget } from "./short-links";
 
@@ -8,7 +9,8 @@ import type { ShortLinkTarget } from "./short-links";
  * the proxy (src/proxy.ts), so a missing link gets the same real 404 page as
  * a missing poem.
  *
- * - A published public poem: 302 to /p/<author>/<poem>, `no-store`. Not a 301
+ * - A published public poem: 302 to /p/<author>/<poem>, `no-store` (and since
+ *   Phase 25 a published chapter of a public novel: 302 to its page). Not a 301
  *   or 308: browsers keep permanent redirects indefinitely, so once the poem
  *   went private (or was deleted) a reader's browser would still send them to
  *   it without asking. A 302 that nothing may store is asked again every time.
@@ -23,6 +25,7 @@ import type { ShortLinkTarget } from "./short-links";
 
 export type ShortLinkOutcome =
   | { kind: "redirect"; location: string; poemId: string; count: boolean }
+  | { kind: "redirect"; location: string; chapterId: string; count: boolean }
   | { kind: "missing" };
 
 export async function handleShortLink(
@@ -32,6 +35,14 @@ export async function handleShortLink(
 ): Promise<ShortLinkOutcome> {
   const target = await resolve(rawCode);
   if (!target) return { kind: "missing" };
+  if ("chapterId" in target) {
+    return {
+      kind: "redirect",
+      location: chapterPath(target.authorSlug, target.novelSlug, target.chapterSlug),
+      chapterId: target.chapterId,
+      count: countsAsVisit(request),
+    };
+  }
   return {
     kind: "redirect",
     location: poemPath(target.authorSlug, target.poemSlug),

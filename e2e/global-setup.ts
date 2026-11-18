@@ -56,6 +56,8 @@ async function warmUp() {
     ["/a/warm-up/n/warm-up/opengraph-image"],
     ["/a/warm-up/n/warm-up/feed.xml"],
     ["/a/warm-up/n/warm-up/warm-up/opengraph-image"],
+    ["/a/warm-up/n/warm-up/warm-up/share-image?passage=1"],
+    ["/a/warm-up/n/warm-up/warm-up/share-image/passage"],
     ["/missing/novel"],
     ["/missing/chapter"],
     ["/feed.xml"],

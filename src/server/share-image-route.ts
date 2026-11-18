@@ -2,11 +2,12 @@ import "server-only";
 import { SHARE_DESIGN_NAMES, type ShareDesign } from "@/lib/share-image/designs";
 import { SHARE_FORMAT_NAMES, type ShareFormat } from "@/lib/share-image/layout";
 import { parseSelection, poemLines } from "@/lib/share-image/selection";
-import { shareImageFileName } from "@/lib/share-image/share-text";
+import { parsePassage, passageOutline, passageParagraphs } from "@/lib/share-image/passage";
+import { passageImageFileName, shareImageFileName } from "@/lib/share-image/share-text";
 import { shortPath } from "@/lib/share-image/short-code";
-import type { SharePoem } from "./board";
+import type { ShareChapter, SharePoem } from "./board";
 import type { RateLimitResult } from "./rate-limit";
-import type { RenderedShareImage, ShareImageRequest } from "./share-image";
+import type { PassageImageRequest, RenderedPassageImage, RenderedShareImage, ShareImageRequest } from "./share-image";
 
 /*
  * The share image routes' logic (docs/PLAN.md, Phase 21, rounds 1 to 3),
@@ -172,6 +173,88 @@ export async function handleShareLines(
   if (!poem) return notFound();
   return Response.json(
     { language: poem.language, lines: poemLines(poem.body) },
+    { headers: { "Cache-Control": IMAGE_CACHE_CONTROL, "X-Robots-Tag": "noindex" } },
+  );
+}
+
+// ---- "Share a passage" (docs/PLAN.md, Phase 25 round 3) -----------------------------
+//
+//   GET /a/<author>/n/<novel>/<chapter>/share-image?passage=3.2-4[&format=chat][&design=ink|board]
+//   GET /a/<author>/n/<novel>/<chapter>/share-image/passage   (the picker's paragraphs, JSON)
+//
+// The poems' order, the poems' answers:
+//   1. `format` and `design` (parseFormat, parseDesign): a 404 for anything else.
+//   2. The chapter: a published chapter of a public novel, or the one 404 for
+//      everything else, private novels included (unlocked or not: an owner's
+//      decision). getChapter never selects a private novel's text, and nothing
+//      below runs for it: its paragraphs are never split or counted, and the
+//      rate limit is never touched, so no status or timing tells anything
+//      about it that a missing chapter wouldn't.
+//   3. Its short link: made now by its first passage picture.
+//   4. `passage` (src/lib/share-image/passage.ts): required (there's no whole
+//      chapter picture), once, canonical, inside the chapter, at most 600
+//      characters; otherwise a 400 (the chapter is public: nothing to hide).
+//   5. Never cached on the server (any pick could be asked for): a matching
+//      If-None-Match is a 304 from the input-based ETag with no drawing; a
+//      real render counts toward SHARE_RENDER_LIMIT on the same key as poems'.
+
+export type PassageRouteDeps = {
+  /** Cached in production (getShareChapter); null unless a published chapter of a public novel. */
+  getChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ShareChapter | null>;
+  /** Its short link's code, made now if it has none (null: not shareable any more). */
+  ensureShortCode(chapterId: string): Promise<string | null>;
+  render(chapter: ShareChapter, request: PassageImageRequest): Promise<RenderedPassageImage>;
+  etagFor(chapter: ShareChapter, request: PassageImageRequest): string;
+  limitRender(): Promise<RateLimitResult>;
+  /** Only for tests: called when the passage is parsed (never for a chapter that isn't shareable). */
+  onParsePassage?(): void;
+};
+
+type ChapterParams = { author: string; novel: string; chapter: string };
+
+export async function handlePassageImage(request: Request, params: ChapterParams, deps: PassageRouteDeps): Promise<Response> {
+  const query = new URL(request.url).searchParams;
+  const format = parseFormat(query);
+  const design = parseDesign(query);
+  if (!format || !design) return notFound();
+
+  const found = await deps.getChapter(params.author, params.novel, params.chapter);
+  if (!found) return notFound();
+  const shortCode = found.shortCode ?? (await deps.ensureShortCode(found.id));
+  if (!shortCode) return notFound();
+  const chapter: ShareChapter = { ...found, shortCode };
+
+  deps.onParsePassage?.();
+  const raw = query.getAll("passage");
+  if (raw.length !== 1) return plain(400, "Pick a passage");
+  const parsed = parsePassage(raw[0], passageOutline(passageParagraphs(chapter.body)).paragraphs);
+  if (!parsed.ok) return plain(400, "Bad passage");
+
+  const pick: PassageImageRequest = { format, design, pick: parsed.pick };
+  const fileName = passageImageFileName(chapter.novel.slug, chapter.slug, { format, design });
+  const etag = deps.etagFor(chapter, pick);
+  if (matches(request.headers.get("if-none-match"), etag)) return imageResponse(request, null, etag, fileName);
+
+  const limit = await deps.limitRender();
+  if (!limit.allowed) {
+    return plain(429, "Too many images made from this network. Try again in a few minutes.", {
+      "Retry-After": String(limit.retryAfter),
+    });
+  }
+  const image = await deps.render(chapter, pick);
+  return imageResponse(request, image.png, image.etag, fileName, {
+    "X-Share-Address": shortPath(shortCode),
+    "X-Share-Chars-Picked": String(image.passage.picked),
+    "X-Share-Chars-Shown": String(image.passage.shown),
+  });
+}
+
+/** The picker's paragraphs (each a list of sentences, plain text), the scene breaks and the language. Same 404 as the image. */
+export async function handlePassageOutline(params: ChapterParams, getChapter: PassageRouteDeps["getChapter"]): Promise<Response> {
+  const chapter = await getChapter(params.author, params.novel, params.chapter);
+  if (!chapter) return notFound();
+  return Response.json(
+    { language: chapter.novel.language, ...passageOutline(passageParagraphs(chapter.body)) },
     { headers: { "Cache-Control": IMAGE_CACHE_CONTROL, "X-Robots-Tag": "noindex" } },
   );
 }

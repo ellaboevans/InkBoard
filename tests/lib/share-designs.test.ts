@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { ShareImage } from "@/components/brand/share-image";
 import { SHARE_DESIGNS, SHARE_DESIGN_NAMES } from "@/lib/share-image/designs";
 import { layoutShareImage, type ShareImageInput } from "@/lib/share-image/layout";
+import { passageParagraphs } from "@/lib/share-image/passage";
+import { layoutPassageImage } from "@/lib/share-image/passage-layout";
 import { shareImageFonts } from "@/server/share-image";
 
 /*
@@ -58,8 +60,27 @@ describe("contrast, measured on each design's real tree", () => {
       // A cut poem (so "Read the whole poem" is drawn) and a quote with a skip ("Lines from", "…").
       const whole = layoutShareImage(INPUT, measure);
       const quote = layoutShareImage(INPUT, measure, { picked: [1, 4] });
+      // A passage (Phase 25), long enough to be cut, with a scene break.
+      const passage = layoutPassageImage(
+        {
+          novelTitle: INPUT.title,
+          chapterLine: "Chapter 4 · The Radio",
+          paragraphs: passageParagraphs(`First paragraph.\n\n* * *\n\n${Array.from({ length: 80 }, (_, i) => `Sentence ${i}.`).join(" ")}`),
+          penName: INPUT.penName,
+          language: INPUT.language,
+          host: INPUT.host,
+          path: INPUT.path,
+        },
+        measure,
+        { format: "chat" },
+      );
       expect(whole.poem.truncated).toBe(true);
-      const found = [...texts(ShareImage({ layout: whole, avatar: null, design })), ...texts(ShareImage({ layout: quote, avatar: null, design }))];
+      expect(passage.more).toBe("Read the chapter on InkBoard");
+      const found = [
+        ...texts(ShareImage({ layout: whole, avatar: null, design })),
+        ...texts(ShareImage({ layout: quote, avatar: null, design })),
+        ...texts(ShareImage({ layout: passage, avatar: null, design })),
+      ];
       const seen = new Map<string, number>();
       for (const t of found) {
         const ratio = contrast(t.color || look.text, look.surface);
@@ -67,7 +88,7 @@ describe("contrast, measured on each design's real tree", () => {
         expect(ratio, `${design}: "${t.text}" ${t.color || look.text} on ${look.surface}`).toBeGreaterThanOrEqual(4.5);
       }
       expect(contrast(look.text, look.surface), `${design} poem text`).toBeGreaterThanOrEqual(7);
-      for (const label of ["Read the whole poem on InkBoard", "Lines from", "…", "in Ewe", "/s/k3x9qm", "InkBoard · tryinkboard.elabo.me"]) {
+      for (const label of ["Read the whole poem on InkBoard", "Lines from", "…", "in Ewe", "/s/k3x9qm", "InkBoard · tryinkboard.elabo.me", "Chapter 4 · The Radio", "Read the chapter on InkBoard"]) {
         expect(found.some((t) => t.text === label), `${design} draws "${label}"`).toBe(true);
       }
       expect(seen.size).toBeGreaterThanOrEqual(3); // text, muted, accent

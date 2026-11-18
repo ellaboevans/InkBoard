@@ -20,8 +20,9 @@ import { parseProse } from "./prose";
  * 4: `novels`, each with its chapters in order and their versions (Phase 23).
  * 5: novels carry `visibility` (Phase 25; never a password hash or version).
  * 6: novels carry `cover`, the uploaded cover itself (Phase 25), or null.
+ * 7: chapters carry `shareVisits` (Phase 25, "Share a passage").
  */
-export const EXPORT_FORMAT_VERSION = 6;
+export const EXPORT_FORMAT_VERSION = 7;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -61,6 +62,8 @@ export type ExportedChapter = {
   createdAt: string;
   updatedAt: string;
   wordCount: number;
+  /** Visits through the short link printed on its passage pictures (Phase 25; 0 if never shared). */
+  shareVisits: number;
   /** As written: prose (paragraphs, kept line breaks, `* * *` scene breaks, light Markdown). */
   text: string;
   /** Saved versions, oldest first (the newest matches the chapter). */

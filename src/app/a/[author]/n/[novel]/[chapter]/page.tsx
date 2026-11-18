@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProseText } from "@/components/novel/prose-text";
 import { RememberChapter } from "@/components/novel/novel-reading";
+import { SharePassageButton } from "@/components/novel/share-passage-button";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
@@ -15,7 +16,7 @@ import { SiteLinks } from "@/components/site-links";
 import type { ReaderChapter } from "@/lib/board-types";
 import { pluralCount } from "@/lib/plural";
 import { chapterDescription, chapterJsonLd, chapterPath, novelPath } from "@/lib/novel-seo";
-import { BASE_OPEN_GRAPH } from "@/lib/site";
+import { absoluteUrl, BASE_OPEN_GRAPH } from "@/lib/site";
 import { getReaderChapter } from "@/server/board-cache";
 import { getUnlockedChapterBody } from "@/server/unlock-cookie";
 
@@ -208,6 +209,19 @@ async function Chapter({ params }: Pick<Props, "params">) {
           <a href={`${base}#chapters`} className={linkClass}>
             All chapters
           </a>
+          {/* Phase 25: a public novel's passages only, never a private one's, unlocked or not (an owner's decision). */}
+          {!isPrivate && c.body !== null && (
+            <SharePassageButton
+              authorSlug={c.authorSlug}
+              novelSlug={c.novel.slug}
+              chapterSlug={c.slug}
+              novelTitle={c.novel.title}
+              chapterNumber={c.number}
+              penName={c.penName}
+              chapterUrl={absoluteUrl(chapterPath(c.authorSlug, c.novel.slug, c.slug))}
+              className={linkClass}
+            />
+          )}
         </div>
       </nav>
     </>

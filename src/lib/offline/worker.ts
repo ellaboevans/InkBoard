@@ -1,5 +1,13 @@
 import { PUSH_PREFS_CACHE, PUSH_PREFS_KEY } from "@/lib/push-prefs-cache";
-import { OFFLINE_RULES_JS, PAGES_CACHE_PREFIX, SAVE_MESSAGE, SAVED_INDEX_KEY, STATIC_CACHE_PREFIX } from "./rules";
+import {
+  CHAPTER_OFFLINE_CAP,
+  OFFLINE_RULES_JS,
+  PAGES_CACHE_PREFIX,
+  SAVE_MESSAGE,
+  SAVE_NOVEL_MESSAGE,
+  SAVED_INDEX_KEY,
+  STATIC_CACHE_PREFIX,
+} from "./rules";
 
 /**
  * Source of the service worker served at /sw.js (src/app/sw.js/route.ts).
@@ -191,6 +199,32 @@ self.addEventListener("message", function (event) {
   if (data.type !== ${JSON.stringify(SAVE_MESSAGE)} || typeof data.path !== "string") return;
   if (!R.readerKind(new URL(data.path, "http://x").pathname)) return;
   event.waitUntil(saveCopy(data.path));
+});
+
+// "Save this novel for offline" (Phase 24): the novel page and its chapters, one
+// at a time, each through saveCopy (a cookie-less copy, kept only if marked
+// "save"), reporting progress on the page's MessagePort. Only novel and
+// chapter pages, at most the chapter cap plus the novel page.
+self.addEventListener("message", function (event) {
+  var data = event.data || {};
+  if (data.type !== ${JSON.stringify(SAVE_NOVEL_MESSAGE)} || !Array.isArray(data.paths)) return;
+  var port = event.ports && event.ports[0];
+  var paths = data.paths.filter(function (p) {
+    if (typeof p !== "string") return false;
+    var kind = R.readerKind(new URL(p, "http://x").pathname);
+    return kind === "novel" || kind === "chapter";
+  }).slice(0, ${CHAPTER_OFFLINE_CAP} + 1);
+  event.waitUntil((async function () {
+    var saved = 0;
+    for (var i = 0; i < paths.length; i++) {
+      try {
+        await saveCopy(paths[i]);
+        if (await savedPage(R.cacheKey(paths[i]))) saved++;
+      } catch (e) {}
+      if (port) port.postMessage({ done: i + 1, saved: saved, total: paths.length });
+    }
+    if (port) port.postMessage({ finished: true, saved: saved, total: paths.length });
+  })());
 });
 
 // ---- notifications about new poems (Phase 18) ----------------------------------

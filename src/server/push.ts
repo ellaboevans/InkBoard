@@ -7,6 +7,7 @@ import { env } from "@/env";
 import {
   DEVICE_DAILY_LIMIT,
   DEVICE_WINDOW_HOURS,
+  newChapterPayload,
   newPoemPayload,
   PER_AUTHOR_WINDOW_HOURS,
   PUSH_TTL_SECONDS,
@@ -22,6 +23,15 @@ import {
   type PushSubscriptionInput,
 } from "@/lib/push-rules";
 import { siteUrl } from "@/lib/site";
+import { appendFile } from "node:fs/promises";
+
+/**
+ * The E2E server's stand-in for push services (like E2E_OTP_OUTBOX for
+ * emails; never in production): the stubbed browsers' endpoints look real, so
+ * payloads are appended to this file (with the subscription's id, never the
+ * endpoint) instead of being sent anywhere.
+ */
+const pushOutbox = process.env.NODE_ENV !== "production" ? process.env.E2E_PUSH_OUTBOX : undefined;
 
 /*
  * Notifications about new poems (docs/PLAN.md, Phase 18). Framework-free like
@@ -32,7 +42,9 @@ import { siteUrl } from "@/lib/site";
  *   allowlisted push service, see push-rules.ts), its two keys, timestamps.
  * - A poem is announced at most once (poems.notified_at, set in the save
  *   transaction by claimAnnouncement in poems.ts); only public poems by an
- *   author with a pen name.
+ *   author with a pen name. A chapter likewise (chapters.notified_at,
+ *   claimChapterAnnouncement in novels.ts; Phase 24), and only to devices
+ *   that follow its author.
  * - Limits per device: one per author in 12 hours, three in 24 hours. They're
  *   claimed in push_deliveries under the subscription rows' locks *before*
  *   sending, so two poems published at once can't both take a device's last
@@ -193,6 +205,23 @@ type Claimed = {
 };
 
 /**
+ * What a delivery is for: a poem, or (Phase 24) a chapter. Both count toward
+ * the same limits: push_deliveries rows per device and author, whatever kind.
+ */
+export type DeliveryTarget = { poemId: string } | { chapterId: string };
+
+/** Who may hear about it: poems go to "all" devices and followers; chapters to followers only (an owner's decision). */
+type Audience = "poem" | "chapter";
+
+function audienceWhere(audience: Audience, editorId: string) {
+  const follows = sql`EXISTS (
+    SELECT 1 FROM push_follows f WHERE f.subscription_id = s.id AND f.editor_id = ${editorId}
+  )`;
+  // Poems: "All new poems", or this author is followed (Phase 18 round 2). Chapters: followed only.
+  return audience === "poem" ? sql`(s.mode = 'all' OR ${follows})` : follows;
+}
+
+/**
  * Send the announcement for a poem whose save claimed it (`announce` in the
  * mutation result). Runs in `after()`, never inside the save.
  */
@@ -200,14 +229,12 @@ export async function announcePoem(
   poemId: string,
   opts: { budgetMs?: number; now?: () => number } = {},
 ): Promise<AnnounceResult> {
-  const result: AnnounceResult = { sent: 0, gone: 0, failed: 0, limited: 0, updates: 0, unreached: 0 };
   const config = pushConfig();
-  if (!config) return { ...result, skipped: "not-configured" };
-  const db = getDb();
+  if (!config) return { ...emptyResult(), skipped: "not-configured" };
 
   // Checked again at send time: claimed, still published, still public, pen name set.
   const poem = (
-    (await db.execute(sql`
+    (await getDb().execute(sql`
       SELECT p.id, p.title, p.slug, p.editor_id, e.pen_name, e.slug AS author_slug
       FROM poems p JOIN editors e ON e.id = p.editor_id
       WHERE p.id = ${poemId} AND p.notified_at IS NOT NULL
@@ -217,70 +244,148 @@ export async function announcePoem(
       rows: { id: string; title: string; slug: string; editor_id: string; pen_name: string; author_slug: string }[];
     }
   ).rows[0];
-  if (!poem) return { ...result, skipped: "not-announceable" };
+  if (!poem) return { ...emptyResult(), skipped: "not-announceable" };
 
-  const payloadFor = (count: number) =>
-    JSON.stringify(
-      newPoemPayload({
-        editorId: poem.editor_id,
-        title: poem.title,
-        penName: poem.pen_name,
-        authorSlug: poem.author_slug,
-        poemSlug: poem.slug,
-        count,
-      }),
-    );
+  return sendToAudience(config, {
+    editorId: poem.editor_id,
+    target: { poemId: poem.id },
+    audience: "poem",
+    label: `poem ${poemId}`,
+    payloadFor: (count) =>
+      JSON.stringify(
+        newPoemPayload({
+          editorId: poem.editor_id,
+          title: poem.title,
+          penName: poem.pen_name,
+          authorSlug: poem.author_slug,
+          poemSlug: poem.slug,
+          count,
+        }),
+      ),
+    opts,
+  });
+}
+
+/**
+ * Send the "new chapter" notification for a chapter whose publish claimed it
+ * (`announce` in saveChapter's result; Phase 24). Runs in `after()`. Checked
+ * again here: claimed, still published, the author's pen name set. Only to
+ * devices that follow the author, never to "all new poems" devices that
+ * don't. The same limits and grouping as poems, in the same rows.
+ */
+export async function announceChapter(
+  chapterId: string,
+  opts: { budgetMs?: number; now?: () => number } = {},
+): Promise<AnnounceResult> {
+  const config = pushConfig();
+  if (!config) return { ...emptyResult(), skipped: "not-configured" };
+
+  const chapter = (
+    (await getDb().execute(sql`
+      SELECT c.id, c.slug, n.title AS novel_title, n.slug AS novel_slug, n.editor_id, e.pen_name, e.slug AS author_slug,
+        -- Its number among the novel's published chapters, as readers see it.
+        (SELECT count(*)::int FROM chapters o
+          WHERE o.novel_id = c.novel_id AND o.status = 'published' AND o.position <= c.position) AS number
+      FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
+      WHERE c.id = ${chapterId} AND c.notified_at IS NOT NULL AND c.status = 'published'
+        AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+    `)) as unknown as {
+      rows: {
+        id: string;
+        slug: string;
+        novel_title: string;
+        novel_slug: string;
+        editor_id: string;
+        pen_name: string;
+        author_slug: string;
+        number: number;
+      }[];
+    }
+  ).rows[0];
+  if (!chapter) return { ...emptyResult(), skipped: "not-announceable" };
+
+  return sendToAudience(config, {
+    editorId: chapter.editor_id,
+    target: { chapterId: chapter.id },
+    audience: "chapter",
+    label: `chapter ${chapterId}`,
+    payloadFor: (count) =>
+      JSON.stringify(
+        newChapterPayload({
+          editorId: chapter.editor_id,
+          novelTitle: chapter.novel_title,
+          number: chapter.number,
+          penName: chapter.pen_name,
+          authorSlug: chapter.author_slug,
+          novelSlug: chapter.novel_slug,
+          chapterSlug: chapter.slug,
+          count,
+        }),
+      ),
+    opts,
+  });
+}
+
+const emptyResult = (): AnnounceResult => ({ sent: 0, gone: 0, failed: 0, limited: 0, updates: 0, unreached: 0 });
+
+/** The shared loop: pages of the audience's devices, each page claimed under its locks, then sent. */
+async function sendToAudience(
+  config: PushConfig,
+  a: {
+    editorId: string;
+    target: DeliveryTarget;
+    audience: Audience;
+    label: string;
+    payloadFor: (count: number) => string;
+    opts: { budgetMs?: number; now?: () => number };
+  },
+): Promise<AnnounceResult> {
+  const result = emptyResult();
+  const db = getDb();
   const options: webpush.RequestOptions = {
     vapidDetails: config,
     TTL: PUSH_TTL_SECONDS,
     urgency: "normal",
-    topic: pushTopic(poem.editor_id),
+    topic: pushTopic(a.editorId),
     timeout: SEND_TIMEOUT_MS,
   };
-
-  const now = opts.now ?? Date.now;
+  const now = a.opts.now ?? Date.now;
   const started = now();
-  const budget = opts.budgetMs ?? SEND_BUDGET_MS;
+  const budget = a.opts.budgetMs ?? SEND_BUDGET_MS;
   let after = "00000000-0000-0000-0000-000000000000";
   for (;;) {
     const page = (
       (await db.execute(sql`
         SELECT s.id FROM push_subscriptions s
-        WHERE s.id > ${after}
-          -- "All new poems", or this author is followed (Phase 18 round 2).
-          AND (s.mode = 'all' OR EXISTS (
-            SELECT 1 FROM push_follows f WHERE f.subscription_id = s.id AND f.editor_id = ${poem.editor_id}
-          ))
+        WHERE s.id > ${after} AND ${audienceWhere(a.audience, a.editorId)}
         ORDER BY s.id LIMIT ${CLAIM_BATCH}
       `)) as unknown as { rows: { id: string }[] }
     ).rows.map((r) => r.id);
     if (page.length === 0) break;
     after = page[page.length - 1];
     if (now() - started > budget) {
-      result.unreached += page.length + (await countAfter(after, poem.editor_id));
-      console.error(`[push] poem ${poemId}: time budget spent, ${result.unreached} device(s) not reached`);
+      result.unreached += page.length + (await countAfter(after, a.editorId, a.audience));
+      console.error(`[push] ${a.label}: time budget spent, ${result.unreached} device(s) not reached`);
       break;
     }
-    const claimed = await claimDeliveries(poem.editor_id, poem.id, page);
+    const claimed = await claimDeliveries(a.editorId, a.target, page);
     result.limited += page.length - claimed.length;
     result.updates += claimed.filter((c) => c.count > 1).length;
-    await sendAll(claimed, payloadFor, options, result);
+    await sendAll(claimed, a.payloadFor, options, result);
   }
   return result;
 }
 
-async function countAfter(id: string, editorId: string): Promise<number> {
+async function countAfter(id: string, editorId: string, audience: Audience): Promise<number> {
   const r = (await getDb().execute(sql`
     SELECT count(*)::int AS n FROM push_subscriptions s
-    WHERE s.id > ${id} AND (s.mode = 'all' OR EXISTS (
-      SELECT 1 FROM push_follows f WHERE f.subscription_id = s.id AND f.editor_id = ${editorId}
-    ))
+    WHERE s.id > ${id} AND ${audienceWhere(audience, editorId)}
   `)) as unknown as { rows: { n: number }[] };
   return r.rows[0].n;
 }
 
 /**
- * Take a slot on each of these devices for this author's poem, if the limits
+ * Take a slot on each of these devices for this author's poem (or chapter), if the limits
  * allow, in one transaction: lock the subscription rows first (id order, so
  * concurrent announcements can't deadlock), then decide and insert in a
  * second statement. Under READ COMMITTED that statement takes a fresh
@@ -296,8 +401,12 @@ async function countAfter(id: string, editorId: string): Promise<number> {
  * - else nothing.
  * Returns the devices to send to, with the count to show.
  */
-export async function claimDeliveries(editorId: string, poemId: string, ids: string[]): Promise<Claimed[]> {
+export async function claimDeliveries(editorId: string, target: string | DeliveryTarget, ids: string[]): Promise<Claimed[]> {
   if (ids.length === 0) return [];
+  // A bare string is a poem id (the original signature).
+  const t: DeliveryTarget = typeof target === "string" ? { poemId: target } : target;
+  const poemId = "poemId" in t ? t.poemId : null;
+  const chapterId = "chapterId" in t ? t.chapterId : null;
   const list = sql.join(
     ids.map((id) => sql`${id}::uuid`),
     sql`, `,
@@ -329,8 +438,8 @@ export async function claimDeliveries(editorId: string, poemId: string, ids: str
            OR (alert_at IS NOT NULL AND updates < ${UPDATES_PER_WINDOW}
                AND split_part(split_part(endpoint, '://', 2), '/', 1) NOT LIKE '%push.apple.com')
       ), ins AS (
-        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, kind)
-        SELECT id, ${editorId}, ${poemId}, kind FROM ok
+        INSERT INTO push_deliveries (subscription_id, editor_id, poem_id, chapter_id, kind)
+        SELECT id, ${editorId}, ${poemId}::uuid, ${chapterId}::uuid, kind FROM ok
         RETURNING subscription_id
       )
       SELECT ok.id, ok.endpoint, ok.p256dh, ok.auth, ok.count::int AS count
@@ -355,6 +464,12 @@ async function sendAll(
       const s = subs[next++];
       let status: number;
       try {
+        if (pushOutbox) {
+          // E2E only (never production): record what would be sent instead of reaching a push service.
+          await appendFile(pushOutbox, JSON.stringify({ subscriptionId: s.id, payload: JSON.parse(payloadFor(s.count)) }) + "\n");
+          sent.push(s.id);
+          continue;
+        }
         const res = await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           payloadFor(s.count),

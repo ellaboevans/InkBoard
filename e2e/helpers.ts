@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, type CDPSession, type Page } from "@playwright/test";
 import pg from "pg";
-import { E2E_DATABASE_URL, OTP_OUTBOX } from "../playwright.config";
+import { E2E_DATABASE_URL, OTP_OUTBOX, PUSH_OUTBOX } from "../playwright.config";
 
 export async function latestCode(email: string): Promise<string> {
   let code: string | undefined;
@@ -302,4 +302,13 @@ export async function deletionNoticesFor(email: string): Promise<{ device: strin
     .map((l) => JSON.parse(l) as { to: string; kind?: string; device: string })
     .filter((m) => m.to === email && m.kind === "account-deleted")
     .map(({ device }) => ({ device }));
+}
+
+/** Pushes the server recorded instead of sending (E2E_PUSH_OUTBOX, Phase 24), for one subscription row. */
+export async function pushesFor(subscriptionId: string): Promise<{ title: string; author: string; url: string; tag: string; count: number }[]> {
+  const lines = (await readFile(PUSH_OUTBOX, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { subscriptionId: string; payload: { title: string; author: string; url: string; tag: string; count: number } })
+    .filter((r) => r.subscriptionId === subscriptionId)
+    .map((r) => r.payload);
 }

@@ -124,15 +124,15 @@ export function isVapidKeyPair(publicKey: string, privateKey: string): boolean {
 }
 
 export type NewPoemPayload = {
-  /** The (latest) poem's title, as shown on the board. */
+  /** The (latest) poem's title, as shown on the board; for a chapter, "New chapter: <novel>, Chapter n". */
   title: string;
   /** The author's pen name ("New poem by …", "3 new poems by …"). */
   author: string;
-  /** One poem: its path, /p/<author>/<poem>. A group (count ≥ 2): the author page, /a/<author>. */
+  /** One poem: /p/<author>/<poem>; one chapter: /a/<author>/n/<novel>/<chapter>. A group (count ≥ 2): the author page, /a/<author>. */
   url: string;
   /** One notification per author: a later poem in the window replaces it. */
   tag: string;
-  /** Poems by this author in the current 12-hour window on this device, this one included. */
+  /** Poems and chapters by this author in the current 12-hour window on this device, this one included. */
   count: number;
 };
 
@@ -154,6 +154,37 @@ export function newPoemPayload(p: {
     title: p.title,
     author: p.penName,
     url: p.count > 1 ? `/a/${author}` : `/p/${author}/${encodeURIComponent(p.poemSlug)}`,
+    tag: `author:${p.editorId}`,
+    count: p.count,
+  };
+}
+
+/**
+ * A new chapter's notification (Phase 24): exactly the same five fields as a
+ * poem's (the same type, so the worker and the limits treat them alike).
+ * The title says what it is, "New chapter: The Ferry at Yeji, Chapter 4",
+ * numbered among published chapters like the page; one chapter links to its
+ * page, a group (count ≥ 2) to the author page. Never chapter text: chapters
+ * are announced only to devices that follow the author.
+ */
+export function newChapterPayload(p: {
+  editorId: string;
+  novelTitle: string;
+  number: number;
+  penName: string;
+  authorSlug: string;
+  novelSlug: string;
+  chapterSlug: string;
+  count: number;
+}): NewPoemPayload {
+  const author = encodeURIComponent(p.authorSlug);
+  return {
+    title: `New chapter: ${p.novelTitle}, Chapter ${p.number}`,
+    author: p.penName,
+    url:
+      p.count > 1
+        ? `/a/${author}`
+        : `/a/${author}/n/${encodeURIComponent(p.novelSlug)}/${encodeURIComponent(p.chapterSlug)}`,
     tag: `author:${p.editorId}`,
     count: p.count,
   };

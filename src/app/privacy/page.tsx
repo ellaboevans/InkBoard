@@ -128,14 +128,14 @@ export default function PrivacyPage() {
               Notifications are off until you turn them on. Then your browser gives us a delivery address for this
               device, issued by its push service (Google, Apple, Mozilla or Microsoft), and we store that address, the
               keys that encrypt messages to it, when we last sent to it, whether you want every new poem or only those by
-              writers you follow, and which writers you follow. We don’t store your name, email or location, and the
-              address isn’t linked to an account.
+              writers you follow, and which writers you follow. New chapters of novels are sent only to the writers’
+              followers. We don’t store your name, email or location, and the address isn’t linked to an account.
             </p>
             <p>
               To keep to our limits on how often we notify you, we note which notifications went to each address, and a
               daily clean-up deletes those notes after {F.pushDeliveryCleanup}. Each notification carries only a poem’s
-              title, its writer’s name and a link, never a private poem, and it’s encrypted on its way through the push
-              service.
+              title (or a novel’s title and the chapter’s number), its writer’s name and a link, never a private poem or
+              any of a chapter’s text, and it’s encrypted on its way through the push service.
             </p>
             <p>
               Turning notifications off deletes the address and the writers it follows. So does the push service telling
@@ -168,8 +168,9 @@ export default function PrivacyPage() {
           <ul className={list}>
             <li>
               <strong className="font-medium">Copies for reading offline.</strong> {SITE_NAME}’s service worker keeps
-              copies of the public pages you open (the board, public poems, writers’ and collection pages, the About page
-              and this one) so they work without a connection, and drops the oldest as you open more. It fetches them
+              copies of the public pages you open (the board, public poems, writers’, collection and novel pages, the
+              chapters you read, the About page and this one) so they work without a connection, and drops the oldest as
+              you open more. “Save this novel for offline” asks it to keep a novel’s chapters the same way. It fetches them
               fresh, without your cookies, so a copy never holds a private poem, even one you unlocked, or anything about
               an account.
             </li>

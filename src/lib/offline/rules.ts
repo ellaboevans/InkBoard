@@ -27,6 +27,9 @@
  *      saved copy (unpublished, deleted or now-private poems). Other
  *      statuses (5xx, redirects) leave things as they are.
  */
+/** Chapters a device keeps for offline reading (all novels together), newest first. */
+export const CHAPTER_OFFLINE_CAP = 60;
+
 export const OFFLINE_RULES_JS = String.raw`
 var InkboardOffline = (function () {
   var POEM = /^\/p\/[^/]+\/[^/]+$/;
@@ -44,7 +47,7 @@ var InkboardOffline = (function () {
   // Saved pages kept per kind, newest first: poems, chapters (a commute's
   // worth of a novel) and novel pages each have their own; everything else
   // (board, author, collection, About, Privacy) shares "other".
-  var CAPS = { poem: 50, chapter: 60, novel: 30, other: 30 };
+  var CAPS = { poem: 50, chapter: ${CHAPTER_OFFLINE_CAP}, novel: 30, other: 30 };
 
   function readerKind(pathname) {
     if (pathname === "/") return "board";
@@ -164,12 +167,19 @@ var InkboardOffline = (function () {
   // ones), so anything malformed still shows a plain one that opens the board.
   // One notification per author (tag author:<id>): count 1 is a new alert
   // (renotify: buzz even if it replaces an old one); count ≥ 2 quietly updates
-  // it ("3 new poems by …", renotify false and silent, opening the author page).
+  // it ("3 new from …", renotify false and silent, opening the author page).
+  // Chapters (Phase 24) use the same payload; their title says "New chapter: …".
   function str(v, max) {
     return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
   }
+  // Where a push may lead: a poem, an author page, and (Phase 24) a chapter or
+  // a novel page (a novel's own files are not pages); anything else, the board.
+  function isChapterUrl(url) {
+    var m = CHAPTER.exec(url);
+    return Boolean(m) && NOVEL_FILES.indexOf(m[1]) === -1;
+  }
   function pushTarget(url) {
-    return typeof url === "string" && (POEM.test(url) || AUTHOR.test(url)) ? url : "/";
+    return typeof url === "string" && (POEM.test(url) || AUTHOR.test(url) || NOVEL.test(url) || isChapterUrl(url)) ? url : "/";
   }
   function notificationFor(data) {
     var d = data && typeof data === "object" ? data : {};
@@ -182,7 +192,10 @@ var InkboardOffline = (function () {
     var options = {
       body: grouped
         ? (title ? "Latest: " + title : "Tap to read them.")
-        : (author ? "New poem by " + author : "Tap to read it."),
+        : !author
+          ? "Tap to read it."
+          // A chapter's title already says "New chapter: …".
+          : isChapterUrl(url) || NOVEL.test(url) ? "By " + author : "New poem by " + author,
       icon: "/icons/192.png",
       badge: "/icons/badge-96.png",
       tag: tag,
@@ -193,7 +206,8 @@ var InkboardOffline = (function () {
       if (grouped) options.silent = true;
     }
     return {
-      title: grouped ? count + " new poems by " + author : (title || "A new poem on InkBoard"),
+      // A group can mix poems and chapters (Phase 24): "3 new from …".
+      title: grouped ? count + " new from " + author : (title || "A new poem on InkBoard"),
       options: options,
     };
   }
@@ -252,3 +266,10 @@ export const PAGES_CACHE_PREFIX = "inkboard-pages-";
 export const STATIC_CACHE_PREFIX = "inkboard-static-";
 export const SAVED_INDEX_KEY = "/__inkboard/saved.json";
 export const SAVE_MESSAGE = "inkboard:save";
+/**
+ * "Save this novel for offline" (Phase 24): { type, paths } with a
+ * MessagePort; the worker saves the novel page and each chapter in turn
+ * through the same storage rules and posts { done, saved, total } after each,
+ * then { finished: true, saved, total }.
+ */
+export const SAVE_NOVEL_MESSAGE = "inkboard:save-novel";

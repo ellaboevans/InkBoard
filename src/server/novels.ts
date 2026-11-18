@@ -388,8 +388,13 @@ export type ChapterResult =
   | {
       ok: true;
       chapter: { id: string; slug: string; position: number; status: "draft" | "published" };
-      /** This save published the chapter for the first time ever (for the coming "new chapter" notice). */
+      /** This save published the chapter for the first time ever. */
       publishedNow: boolean;
+      /**
+       * This save claimed the chapter's one "new chapter" notification
+       * (Phase 24): send it after the response (announceChapter), never otherwise.
+       */
+      announce: boolean;
     }
   | { ok: false; errors: ChapterErrors }
   | { ok: false; notFound: true };
@@ -400,6 +405,23 @@ const chapterReturn = {
   position: chapters.position,
   status: chapters.status,
 };
+
+/**
+ * Claim a published chapter's one "new chapter" notification, in the
+ * publishing transaction (after the editor → novel → chapter locks). Only
+ * once ever: `notified_at` is never cleared, so unpublishing and publishing
+ * again claims nothing; a draft, or an author without a pen name, neither.
+ * Like claimAnnouncement for poems (poems.ts).
+ */
+async function claimChapterAnnouncement(tx: Tx, chapterId: string): Promise<boolean> {
+  const r = await tx.execute(sql`
+    UPDATE chapters SET notified_at = now()
+    FROM novels n JOIN editors e ON e.id = n.editor_id
+    WHERE chapters.id = ${chapterId} AND n.id = chapters.novel_id AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+      AND chapters.notified_at IS NULL AND chapters.status = 'published'
+  `);
+  return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
+}
 
 /** A new chapter at the end of the novel (a draft unless `status: "published"`). */
 export async function createChapter(editorId: string, novelId: string, raw: unknown): Promise<ChapterResult> {
@@ -432,7 +454,8 @@ export async function createChapter(editorId: string, novelId: string, raw: unkn
         await recordVersion(tx, CHAPTER_REVISIONS, chapter.id, { chapterId: chapter.id, title: data.title, body: data.body }, CHAPTER_REVISIONS_KEPT);
       }
       await touchNovel(tx, novelId);
-      return { ok: true, chapter, publishedNow: status === "published" };
+      const announce = status === "published" && (await claimChapterAnnouncement(tx, chapter.id));
+      return { ok: true, chapter, publishedNow: status === "published", announce };
     }),
   );
 }
@@ -488,7 +511,8 @@ export async function saveChapter(editorId: string, chapterId: string, raw: unkn
         });
       }
       await touchNovel(tx, novelId);
-      return { ok: true, chapter, publishedNow: status === "published" && !current.publishedAt };
+      const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
+      return { ok: true, chapter, publishedNow: status === "published" && !current.publishedAt, announce };
     }),
   );
 }
@@ -513,7 +537,8 @@ async function setChapterStatus(editorId: string, chapterId: string, status: "dr
       .where(eq(chapters.id, chapterId))
       .returning(chapterReturn);
     await touchNovel(tx, novelId);
-    return { ok: true, chapter, publishedNow: status === "published" && !row.publishedAt };
+    const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
+    return { ok: true, chapter, publishedNow: status === "published" && !row.publishedAt, announce };
   });
 }
 

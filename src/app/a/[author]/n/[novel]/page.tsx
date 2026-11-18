@@ -6,6 +6,8 @@ import { Suspense } from "react";
 import { AuthorPicture } from "@/components/author/author-picture";
 import { NovelCover } from "@/components/novel/novel-cover";
 import { ChapterList, ContinueReading, type ChapterLink } from "@/components/novel/novel-reading";
+import { SaveNovelOffline } from "@/components/novel/save-novel-offline";
+import { FollowAuthorToggle } from "@/components/notifications/notifications-setting";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
@@ -160,9 +162,13 @@ async function Novel({ params }: Pick<Props, "params">) {
       </div>
 
       <section aria-labelledby="chapters-heading" id="chapters" className="mt-10 scroll-mt-6 sm:mt-14">
-        <h2 id="chapters-heading" className="mb-3 font-serif text-[28px] leading-tight">
-          Chapters
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 id="chapters-heading" className="font-serif text-[28px] leading-tight">
+            Chapters
+          </h2>
+          {/* Phase 24: the whole novel for a journey without data. */}
+          <SaveNovelOffline novelId={n.id} novelPath={base} chapters={n.chapters.map((c) => ({ number: c.number, slug: c.slug }))} />
+        </div>
         <ChapterList novelId={n.id} base={base} chapters={chapters} />
       </section>
 
@@ -170,6 +176,10 @@ async function Novel({ params }: Pick<Props, "params">) {
       <div className="mt-8 flex flex-wrap gap-x-6 gap-y-1">
         <NovelFeedLink authorSlug={n.authorSlug} novelSlug={n.slug} />
         <AuthorFeedLink slug={n.authorSlug} penName={n.penName} className="min-h-11" />
+      </div>
+      {/* New chapters reach followers only (Phase 24); renders nothing where notifications aren't possible. */}
+      <div className="mt-3">
+        <FollowAuthorToggle slug={n.authorSlug} penName={n.penName} writesNovels />
       </div>
     </>
   );

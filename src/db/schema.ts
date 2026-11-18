@@ -468,6 +468,12 @@ export const chapters = pgTable(
     /** First publish; kept when unpublished, so "ever published" fixes the slugs. */
     publishedAt: timestamp("published_at", { withTimezone: true }),
     wordCount: integer("word_count").notNull().default(0),
+    /**
+     * Set once, in the transaction of the chapter's first publish, when its
+     * "new chapter" notification is claimed (Phase 24); never cleared, so
+     * unpublishing and publishing again never announces it twice.
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -604,9 +610,9 @@ export const pushDeliveries = pgTable(
     editorId: uuid("editor_id")
       .notNull()
       .references(() => editors.id, { onDelete: "cascade" }),
-    poemId: uuid("poem_id")
-      .notNull()
-      .references(() => poems.id, { onDelete: "cascade" }),
+    /** The poem announced, or (Phase 24) the chapter: exactly one is set. */
+    poemId: uuid("poem_id").references(() => poems.id, { onDelete: "cascade" }),
+    chapterId: uuid("chapter_id").references(() => chapters.id, { onDelete: "cascade" }),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
     /**
      * "alert": the first notification for this author in the 12-hour window
@@ -618,6 +624,8 @@ export const pushDeliveries = pgTable(
   },
   (t) => [
     check("push_deliveries_kind_check", sql`${t.kind} IN ('alert', 'update')`),
+    check("push_deliveries_one_target_check", sql`(${t.poemId} IS NULL) <> (${t.chapterId} IS NULL)`),
+    index("push_deliveries_chapter_idx").on(t.chapterId),
     index("push_deliveries_subscription_sent_idx").on(t.subscriptionId, t.sentAt),
     index("push_deliveries_editor_idx").on(t.editorId),
     index("push_deliveries_poem_idx").on(t.poemId),

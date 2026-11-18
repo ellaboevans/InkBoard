@@ -3,7 +3,7 @@ import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import { E2E_BASE_URL, E2E_DATABASE_URL, E2E_PHOTO_DIR, OTP_OUTBOX } from "../playwright.config";
+import { E2E_BASE_URL, E2E_DATABASE_URL, E2E_PHOTO_DIR, OTP_OUTBOX, PUSH_OUTBOX } from "../playwright.config";
 
 export default async function globalSetup() {
   if (!/e2e|test/.test(new URL(E2E_DATABASE_URL).pathname)) {
@@ -17,6 +17,7 @@ export default async function globalSetup() {
   await pool.end();
   await mkdir(path.dirname(OTP_OUTBOX), { recursive: true });
   await writeFile(OTP_OUTBOX, "");
+  await writeFile(PUSH_OUTBOX, "");
   // Profile photos' files go with the rows they belonged to.
   await rm(E2E_PHOTO_DIR, { recursive: true, force: true });
   await warmUp();

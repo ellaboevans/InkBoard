@@ -114,15 +114,20 @@ async function Author({ params }: Pick<Props, "params">) {
             {a.tagline && <p className="mt-2 text-lg text-muted-foreground">{a.tagline}</p>}
           </div>
           <p className="text-sm text-muted-foreground">
-            {a.novels.length > 0 && <>{pluralCount(a.novels.length, "novel")} · </>}
-            {pluralCount(a.poems.length, "poem")}
+            {/* "1 novel · 3 poems", "1 novel", "3 poems": no "0 poems" for a novelist. */}
+            {[
+              a.novels.length > 0 && pluralCount(a.novels.length, "novel"),
+              (a.poems.length > 0 || a.novels.length === 0) && pluralCount(a.poems.length, "poem"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             {privateCount > 0 && <> · {privateCount} password protected</>}
             {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
           </p>
           <div className="grid justify-items-start gap-2">
             <AuthorFeedLink slug={a.slug} penName={a.penName} />
             {/* Phase 18 round 2: renders nothing where notifications aren't possible. */}
-            <FollowAuthorToggle slug={a.slug} penName={a.penName} />
+            <FollowAuthorToggle slug={a.slug} penName={a.penName} writesNovels={a.novels.length > 0} />
           </div>
           {a.bio && <p className="max-w-2xl leading-relaxed whitespace-pre-line">{a.bio}</p>}
           {a.links.length > 0 && (

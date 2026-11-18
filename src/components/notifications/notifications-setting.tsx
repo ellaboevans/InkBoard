@@ -152,6 +152,10 @@ function DevicePrefsEditor() {
           Only authors I follow
         </label>
       </RadioGroup>
+      {/* Phase 24: an owner's decision; "All new poems" never brings chapters. */}
+      <p className="text-xs text-muted-foreground" data-chapters-note>
+        New chapters of novels come only from authors you follow, in either choice.
+      </p>
       <span id={listId} className="mt-1 text-sm font-medium">
         Authors you follow
       </span>
@@ -193,8 +197,10 @@ function DevicePrefsEditor() {
  * round 2). Following with notifications off turns them on in "Only authors
  * I follow"; that tap is the permission request. iPhone/iPad outside the
  * Home Screen app get the "Add to Home Screen first" note instead.
+ * `writesNovels` (Phase 24): says that following is the only way to hear
+ * about new chapters, which go to followers only.
  */
-export function FollowAuthorToggle({ slug, penName }: { slug: string; penName: string }) {
+export function FollowAuthorToggle({ slug, penName, writesNovels = false }: { slug: string; penName: string; writesNovels?: boolean }) {
   const s = usePush();
   const noteId = useId();
   if (s.status === "unavailable" || s.status === "unsupported") return null;
@@ -208,11 +214,17 @@ export function FollowAuthorToggle({ slug, penName }: { slug: string; penName: s
   }
   const following = s.status === "on" && Boolean(s.prefs?.follows.some((f) => f.slug === slug));
   const blocked = s.status === "blocked";
+  const chapters = writesNovels ? `New chapters of ${penName}’s novels go only to devices that follow them.` : null;
   const note = blocked
     ? "Notifications are blocked for InkBoard in this browser: allow them in your browser’s site settings first."
-    : following && s.prefs?.mode === "all"
-      ? "This device gets every new poem; choose “Only authors I follow” under Subscribe to hear only from authors you follow."
-      : null;
+    : [
+        following && s.prefs?.mode === "all"
+          ? "This device gets every new poem; choose “Only authors I follow” under Subscribe to hear only from authors you follow."
+          : null,
+        chapters,
+      ]
+        .filter(Boolean)
+        .join(" ") || null;
   return (
     <div className="grid justify-items-start gap-1" data-follow-author={following ? "on" : s.status}>
       <Button

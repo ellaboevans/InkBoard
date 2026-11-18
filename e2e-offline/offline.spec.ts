@@ -334,3 +334,53 @@ test("a chapter read online opens offline after a reload; its novel page too; a 
   expect(await saved(page)).not.toContain(`${novelPath}/${F.novel.draft}`);
   expect((await cacheContents(page, "DRAFT CHAPTER TEXT")).found).toBe(false);
 });
+
+test("'Save this novel for offline' saves every published chapter; offline, chapter 2 opens from the novel page (Phase 24)", async ({ context, page }) => {
+  const shots = process.env.NOVEL_SHOTS ?? "test-results/novel-save-screens";
+  await withWorker(page);
+  const novelPath = `/a/offline-poet/n/${F.novel.slug}`;
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(novelPath);
+    await expect(page.getByRole("heading", { level: 1, name: "The Ferry at Yeji" })).toBeVisible();
+    await page.getByRole("button", { name: /this novel for offline/ }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${shots}/save-before-${width}.png` });
+  }
+  await page.setViewportSize({ width: 375, height: 900 });
+
+  // Slow the worker's own fetches of the chapters a little, to see the progress.
+  await context.route(/\/a\/offline-poet\/n\/[^/]+\/[^/]+$/, async (route) => {
+    await new Promise((r) => setTimeout(r, 700));
+    await route.continue();
+  });
+  const button = page.getByRole("button", { name: "Save this novel for offline" });
+  // The keyboard works: focus it and press Enter.
+  await button.focus();
+  await page.keyboard.press("Enter");
+  const status = page.locator("#save-novel-status");
+  await expect(status).toContainText("Saving…");
+  await expect(button).toHaveAttribute("aria-disabled", "true");
+  await page.screenshot({ path: `${shots}/save-saving-375.png` });
+  await expect(status).toHaveText("Saved for reading offline: the novel page and 2 chapters.", { timeout: 20_000 });
+  await context.unroute(/\/a\/offline-poet\/n\/[^/]+\/[^/]+$/);
+  const chapterLinks = page.getByRole("region", { name: "Chapters" }).getByRole("link");
+  await expect(chapterLinks.nth(0)).toContainText("Saved offline");
+  await expect(chapterLinks.nth(1)).toContainText("Saved offline");
+  await page.screenshot({ path: `${shots}/save-done-375.png` });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: `${shots}/save-done-1280.png` });
+  // Chapter 2 was never opened, yet it's saved; the draft is not.
+  const savedNow = await saved(page);
+  expect(savedNow).toEqual(expect.arrayContaining([novelPath, `${novelPath}/${F.novel.chapter}`, `${novelPath}/the-landing`]));
+  expect(savedNow).not.toContain(`${novelPath}/${F.novel.draft}`);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "The Ferry at Yeji" })).toBeVisible();
+  await indicator(page);
+  await page.getByRole("region", { name: "Chapters" }).getByRole("link").nth(1).click();
+  await expect(page).toHaveURL(new RegExp(`${novelPath}/the-landing$`));
+  await expect(page.getByRole("heading", { level: 1, name: "The Landing" })).toBeVisible();
+  await expect(page.getByRole("main").locator("[data-chapter-text] p")).toHaveText(["Kwabena did not come back."]);
+  await expect(page.getByRole("navigation", { name: "Novel" })).toContainText("Chapter 2 of 2");
+});

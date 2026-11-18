@@ -217,7 +217,7 @@ test("a burst becomes one notification: a grouped update replaces it quietly, an
   await deliver(context, page, { title: "Low Tide Inventory", author: "Offline Poet", url: "/a/offline-poet", tag: TAG, count: 3 });
   await expect.poll(() => shownFull(page)).toEqual([
     {
-      title: "3 new poems by Offline Poet",
+      title: "3 new from Offline Poet",
       body: "Latest: Low Tide Inventory",
       tag: TAG,
       data: { url: "/a/offline-poet" },

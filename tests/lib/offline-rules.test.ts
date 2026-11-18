@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadOfflineRules } from "@/lib/offline/rules";
+import { CHAPTER_OFFLINE_CAP, loadOfflineRules, SAVE_NOVEL_MESSAGE } from "@/lib/offline/rules";
 import { serviceWorkerSource } from "@/lib/offline/worker";
 
 // The same source string the worker embeds (see rules.ts).
@@ -200,6 +200,14 @@ describe("the worker source", () => {
   it("is valid JavaScript", () => {
     expect(() => new Function(serviceWorkerSource("x"))).not.toThrow();
   });
+
+  it("saves a whole novel on request (Phase 24): novel and chapter pages only, at most the chapter cap plus the novel page", () => {
+    const src = serviceWorkerSource("x");
+    expect(src).toContain(`data.type !== ${JSON.stringify(SAVE_NOVEL_MESSAGE)}`);
+    expect(src).toContain('return kind === "novel" || kind === "chapter";');
+    expect(src).toContain(`.slice(0, ${CHAPTER_OFFLINE_CAP} + 1)`);
+    expect(R.CAPS.chapter).toBe(CHAPTER_OFFLINE_CAP);
+  });
 });
 
 describe("notifications about new poems (Phase 18)", () => {
@@ -220,9 +228,9 @@ describe("notifications about new poems (Phase 18)", () => {
     });
   });
 
-  it("a group: 'n new poems by …', the latest title, the author page, and a quiet replacement (renotify false, silent)", () => {
+  it("a group: 'n new from …' (poems and chapters may mix), the latest title, the author page, and a quiet replacement (renotify false, silent)", () => {
     expect(R.notificationFor({ title: "Third Light", author: "Ama Sɛwaa", url: "/a/ama-sewaa", tag, count: 3 })).toStrictEqual({
-      title: "3 new poems by Ama Sɛwaa",
+      title: "3 new from Ama Sɛwaa",
       options: {
         body: "Latest: Third Light",
         icon: "/icons/192.png",
@@ -233,6 +241,27 @@ describe("notifications about new poems (Phase 18)", () => {
         silent: true,
       },
     });
+  });
+
+  it("a new chapter (Phase 24): its own title, 'By …', the chapter's page; novel pages are allowed targets too", () => {
+    const url = "/a/ama-owusu/n/the-ferry/the-radio";
+    expect(R.notificationFor({ title: "New chapter: The Ferry, Chapter 4", author: "Ama Owusu", url, tag, count: 1 })).toStrictEqual({
+      title: "New chapter: The Ferry, Chapter 4",
+      options: { body: "By Ama Owusu", icon: "/icons/192.png", badge: "/icons/badge-96.png", tag, data: { url }, renotify: true },
+    });
+    expect(R.clickUrl({ url }, "https://inkboard.app")).toBe(`https://inkboard.app${url}`);
+    expect(R.clickUrl({ url: "/a/ama-owusu/n/the-ferry" }, "https://inkboard.app")).toBe("https://inkboard.app/a/ama-owusu/n/the-ferry");
+    // Still nothing else: a novel's own files, deeper paths, other origins.
+    for (const bad of [
+      "/a/ama/n/the-ferry/feed.xml",
+      "/a/ama/n/the-ferry/opengraph-image",
+      "/a/ama/n/the-ferry/one/two",
+      "/a/ama/n",
+      "https://evil.example/a/ama/n/x/y",
+      "//evil.example/a/ama/n/x",
+    ]) {
+      expect(R.notificationFor({ title: "x", author: "y", url: bad, tag, count: 1 }).options.data.url, bad).toBe("/");
+    }
   });
 
   it("always shows something (no silent pushes), even for a broken payload", () => {

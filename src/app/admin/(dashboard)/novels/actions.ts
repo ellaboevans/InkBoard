@@ -1,7 +1,9 @@
 "use server";
 
 import { refresh, updateTag } from "next/cache";
+import { after } from "next/server";
 import { BOARD_TAG } from "@/server/cache-tags";
+import { announceChapter } from "@/server/push";
 import { redirect, RedirectType } from "next/navigation";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import {
@@ -88,6 +90,19 @@ export async function createChapterAction(novelId: string): Promise<{ ok: false;
   redirect(`/admin/novels/${novelId}/chapters/${res.chapter.id}?created=1`);
 }
 
+/**
+ * A chapter's one "new chapter" notification (Phase 24), claimed by the
+ * publishing transaction: sent after the response, to followers only.
+ */
+function announceLater(chapterId: string, announce: boolean) {
+  if (!announce) return;
+  after(() =>
+    announceChapter(chapterId).catch((e: unknown) => {
+      console.error("[push] announcing a chapter failed", e);
+    }),
+  );
+}
+
 export type ChapterFormState = {
   errors?: ChapterErrors;
   /** Set on every successful save (resets the form's dirty state and clears the device draft). */
@@ -107,6 +122,7 @@ export async function saveChapterAction(chapterId: string, _prev: ChapterFormSta
   });
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: CHAPTER_GONE } };
   updateTag(BOARD_TAG); // publish, unpublish, or an edit readers may see
+  announceLater(chapterId, res.announce);
   refresh(); // the novel page's list, History, the status badge
   return { savedAt: Date.now(), status: res.chapter.status, publishedNow: res.publishedNow };
 }

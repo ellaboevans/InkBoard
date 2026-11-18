@@ -3,6 +3,7 @@
 import { cn } from "cn";
 import { useEffect } from "react";
 import { rememberChapter, useReadingPlace } from "@/hooks/use-reading-place";
+import { useSavedPages } from "@/lib/offline/saved-store";
 import { continueIndex } from "@/lib/reading-place";
 
 /*
@@ -61,14 +62,20 @@ export function ContinueReading({ novelId, base, chapters }: { novelId: string; 
   );
 }
 
-/** The published chapters; the one this browser stopped at is marked, the ones before it dimmed. */
+/**
+ * The published chapters; the one this browser stopped at is marked, the ones
+ * before it dimmed, and (Phase 24) the ones saved on this device for offline
+ * reading say so.
+ */
 export function ChapterList({ novelId, base, chapters }: { novelId: string; base: string; chapters: ChapterLink[] }) {
   const at = continueIndex(useReadingPlace(novelId), chapters);
+  const savedPages = useSavedPages();
   return (
     <ol className="border-t">
       {chapters.map((c, i) => {
         const here = i === at;
         const read = at !== null && i < at;
+        const saved = savedPages.has(`${base}/${c.slug}`);
         return (
           <li key={c.slug}>
             <a
@@ -88,6 +95,7 @@ export function ChapterList({ novelId, base, chapters }: { novelId: string; base
               </span>
               <span className="col-start-2 -mt-1 text-[13px] whitespace-nowrap text-muted-foreground sm:col-start-auto sm:mt-0">
                 {here ? `You stopped here · ${c.time}` : [c.time, c.date].filter(Boolean).join(" · ")}
+                {saved && <span data-saved-offline> · Saved offline</span>}
               </span>
             </a>
           </li>

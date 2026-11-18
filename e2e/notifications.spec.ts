@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { expectBackOnList, signUpAs, sql } from "./helpers";
+import { expectBackOnList, pushesFor, signUpAs, sql } from "./helpers";
 import { fakePush, pushRecord } from "./push-stub";
 
 /*
@@ -353,4 +353,112 @@ test("the author page on an iPhone outside the Home Screen explains first; block
   expect(await pushRecord(page)).toMatchObject({ prompts: 0, subscribes: 0 });
   await expect(page.getByRole("main").getByText(/Notifications are blocked for InkBoard/)).toBeVisible();
   await blocked.close();
+});
+
+// ---- Phase 24: new chapters go to followers only ---------------------------------
+
+const subscriptionId = async (endpoint: string | null) =>
+  (await sql(`SELECT id FROM push_subscriptions WHERE endpoint = '${(endpoint ?? "").replace(/'/g, "''")}'`)).rows[0]?.id as string;
+const NOTE_SHOTS = process.env.NOTE_SHOTS ?? "/private/tmp/claude-501/-Users-user--cache-claude-hfi--Users-user-poemhub-oak/5eb20973-a314-4dbe-8393-541691d53b99/scratchpad/shots";
+
+test("a new chapter reaches a device that follows its author, not an 'all new poems' device that doesn't", async ({ browser }) => {
+  test.slow();
+  const id = unique();
+  const writer = { email: `chapter-writer-${id}@example.com`, penName: `Serial Writer ${id}` };
+  const writerContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const w = await writerContext.newPage();
+  await signUpAs(w, writer.email, writer.penName);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${writer.email}'`);
+  const [editorId, slug] = [rows[0].id as string, rows[0].slug as string];
+
+  // A novel with its first chapter published before anyone subscribes (announced to nobody).
+  await w.goto("/admin/novels");
+  await w.getByRole("button", { name: "New novel" }).click();
+  const dialog = w.getByRole("dialog", { name: "New novel" });
+  await dialog.getByRole("textbox", { name: "Title" }).fill(`The Ferry ${id}`);
+  await dialog.getByRole("button", { name: "Create novel" }).click();
+  await expect(w).toHaveURL(/\/admin\/novels\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  const novelAdmin = new URL(w.url()).pathname;
+  const publishChapter = async (title: string) => {
+    await w.goto(novelAdmin);
+    await w.getByRole("button", { name: "New chapter" }).click();
+    await expect(w).toHaveURL(/\/chapters\/[0-9a-f-]{36}/, { timeout: 45_000 });
+    await w.getByRole("textbox", { name: /Chapter title/ }).fill(title);
+    await w.getByRole("textbox", { name: "Text" }).fill(`SECRET CHAPTER TEXT ${title}`);
+    await w.getByRole("button", { name: "Publish chapter" }).click();
+    await expect(w.locator("[data-sileo-toast]").getByText("Chapter published", { exact: true }).first()).toBeVisible({ timeout: 45_000 });
+    return new URL(w.url()).pathname;
+  };
+  await publishChapter("Thursday");
+
+  // Device 1 follows the writer from their page (which says chapters go to followers only).
+  const followerContext = await browser.newContext({ viewport: { width: 375, height: 812 } });
+  await fakePush(followerContext, { permission: "default" });
+  const f = await followerContext.newPage();
+  await f.goto(`/a/${slug}`);
+  const follow = f.getByRole("main").getByRole("button", { name: `Notify me about new poems by ${writer.penName}` });
+  await expect(f.getByRole("main")).toContainText(`New chapters of ${writer.penName}’s novels go only to devices that follow them.`);
+  await f.screenshot({ path: `${NOTE_SHOTS}/follow-note-375.png` });
+  await follow.click();
+  await expect(follow).toHaveAttribute("aria-pressed", "true");
+  const follower = await subscriptionId(await endpointHere(f));
+  expect(follower).toBeTruthy();
+
+  // Device 2: notifications on for "All new poems", following nobody.
+  const allContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await fakePush(allContext, { permission: "default" });
+  const a = await allContext.newPage();
+  await openBoard(a);
+  const popover = await openPopover(a);
+  await theSwitch(popover).click();
+  await expect(theSwitch(popover)).toBeChecked();
+  const everything = await subscriptionId(await endpointHere(a));
+  await expect.poll(async () => (await deviceRow(await endpointHere(a)))?.mode).toBe("all");
+  await expect(popover.getByText("New chapters of novels come only from authors you follow, in either choice.")).toBeVisible();
+  await a.screenshot({ path: `${NOTE_SHOTS}/popover-chapters-note-1280.png` });
+  await a.setViewportSize({ width: 375, height: 812 });
+  await a.screenshot({ path: `${NOTE_SHOTS}/popover-chapters-note-375.png` });
+  await f.setViewportSize({ width: 1280, height: 800 });
+  await f.screenshot({ path: `${NOTE_SHOTS}/follow-note-1280.png` });
+
+  // Chapter 2 is published: the follower is told (the same five fields as a poem, no text); the other device isn't.
+  const chapterAdmin = await publishChapter("The Landing");
+  await expect.poll(() => pushesFor(follower), { timeout: 30_000 }).toEqual([
+    {
+      title: `New chapter: The Ferry ${id}, Chapter 2`,
+      author: writer.penName,
+      url: `/a/${slug}/n/the-ferry-${id}/the-landing`,
+      tag: `author:${editorId}`,
+      count: 1,
+    },
+  ]);
+  expect(JSON.stringify(await pushesFor(follower))).not.toContain("SECRET");
+
+  // A poem by the same writer: both devices hear (the "all" device as today); for the follower it
+  // joins the chapter's notification (shared limits and grouping: one per author per 12 hours).
+  await w.goto("/admin/poems/new");
+  await w.getByRole("textbox", { name: "Title" }).fill(`Harbour ${id}`);
+  await w.getByRole("textbox", { name: "Poem" }).fill("boats like tired dogs");
+  await w.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(w);
+  await expect.poll(async () => (await pushesFor(everything)).map((p) => p.title), { timeout: 30_000 }).toEqual([`Harbour ${id}`]);
+  await expect.poll(async () => (await pushesFor(follower)).map((p) => [p.count, p.url]), { timeout: 30_000 }).toEqual([
+    [1, `/a/${slug}/n/the-ferry-${id}/the-landing`],
+    [2, `/a/${slug}`],
+  ]);
+
+  // Unpublishing chapter 2 and publishing it again announces nothing more, to anyone.
+  await w.goto(chapterAdmin);
+  await w.getByRole("button", { name: "Unpublish" }).click();
+  await expect(w.locator("[data-sileo-toast]").getByText("Chapter unpublished", { exact: true }).first()).toBeVisible({ timeout: 45_000 });
+  await w.getByRole("button", { name: "Publish chapter" }).click();
+  // Not a first publish, so the editor says "Chapter saved".
+  await expect(w.locator("[data-sileo-toast]").getByText("Chapter saved", { exact: true }).first()).toBeVisible({ timeout: 45_000 });
+  await expect.poll(async () => (await sql(`SELECT status FROM chapters WHERE slug = 'the-landing' AND novel_id IN (SELECT id FROM novels WHERE editor_id = '${editorId}')`)).rows[0].status).toBe("published");
+  await w.waitForTimeout(1500);
+  expect(await pushesFor(follower)).toHaveLength(2);
+  expect((await pushesFor(everything)).map((p) => p.title)).toEqual([`Harbour ${id}`]);
+
+  for (const c of [writerContext, followerContext, allContext]) await c.close();
+  await sql(`DELETE FROM push_subscriptions WHERE id IN ('${follower}', '${everything}')`);
 });

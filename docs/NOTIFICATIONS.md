@@ -82,10 +82,17 @@ On each phone:
 1. **Follow an author.** With notifications off, open an author's page and tap "Notify me about new poems by …". The permission prompt appears, then the button shows as on. Subscribe should now show "Only authors I follow" with that author listed.
 2. **Mode filtering.** Publish a poem by **another** author: nothing arrives. Publish one by the followed author: it arrives.
 3. **Grouping.** Publish a second and a third poem by the followed author, minutes apart.
-   - **Android/Chrome:** the first notification should change to "2 new poems by …", then "3 new poems by …", in place, **without a new sound or vibration**. Tapping it opens the author's page.
+   - **Android/Chrome:** the first notification should change to "2 new from …", then "3 new from …", in place, **without a new sound or vibration**. Tapping it opens the author's page.
    - **iPhone/iPad and Safari on a Mac:** only the first poem arrives; the later ones are not announced. That's on purpose: Safari doesn't replace notifications, so each update would arrive as another buzzing notification.
 4. **Unfollow.** Unfollow from the popover, publish again: nothing arrives. Switch to "All new poems": everything arrives again.
 5. **Re-registration.** Note whether a follow survives reinstalling the app or clearing site data. It shouldn't survive clearing site data (that removes the subscription itself), but it should survive the browser silently renewing the subscription.
+
+### New chapters of novels (Phase 24)
+
+New chapters go **only to devices that follow the author**, even in "All new poems" mode (an owner's decision). On each phone:
+1. **Followers only.** With "All new poems" on and the author **not** followed, have the author publish a chapter: nothing arrives. Follow them (on their page or the novel page) and publish another chapter: it arrives, titled "New chapter: *Novel*, Chapter *n*", "By *Pen name*", and tapping it opens the chapter.
+2. **Once only.** Unpublish that chapter and publish it again: nothing arrives the second time.
+3. **Shared limits.** A poem and a chapter by the same author within 12 hours group into one notification ("2 new from …") on Android, and count together toward the three alerts a day.
 
 ### What to report back
 

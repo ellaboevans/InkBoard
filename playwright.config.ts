@@ -7,6 +7,8 @@ export const E2E_BASE_URL = `http://localhost:${PORT}`;
 export const E2E_DATABASE_URL =
   process.env.E2E_DATABASE_URL ?? "postgresql://localhost:5432/poemhub_e2e";
 export const OTP_OUTBOX = path.resolve("test-results/otp-outbox.jsonl");
+/** What the server would have pushed (src/server/push.ts): E2E never reaches a real push service. */
+export const PUSH_OUTBOX = path.resolve("test-results/push-outbox.jsonl");
 // Profile photos (Phase 22): the local storage driver, in this run's own folder.
 export const E2E_PHOTO_DIR = path.resolve(".storage/e2e");
 // Notifications (Phase 18): a throwaway VAPID key pair per run, never in git.
@@ -46,6 +48,7 @@ export default defineConfig({
       APP_URL: E2E_BASE_URL,
       NEXT_DIST_DIR: ".next-e2e",
       E2E_OTP_OUTBOX: OTP_OUTBOX,
+      E2E_PUSH_OUTBOX: PUSH_OUTBOX,
       RESEND_API_KEY: "",
       EDITOR_ALLOWLIST: "",
       VAPID_PUBLIC_KEY: vapid.publicKey,

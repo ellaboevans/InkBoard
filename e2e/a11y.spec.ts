@@ -338,6 +338,11 @@ With a second paragraph.', 'ak') RETURNING id)
     await expect(page.getByRole("link", { name: "Continue: Chapter 2" })).toBeVisible();
     await scan(page, `novel page: continue, ${width}px`);
   }
+  // "Save this novel for offline" under next dev (no worker): it says so plainly.
+  await page.goto(novelUrl);
+  await page.getByRole("button", { name: "Save this novel for offline" }).click();
+  await expect(page.locator("#save-novel-status")).toContainText("Offline saving isn’t available in this browser right now");
+  await scan(page, "novel page: save for offline, unavailable");
   await page.goto(`${novelUrl}/draft`);
   await expect(page.getByRole("heading", { level: 1, name: "Chapter not found" })).toBeVisible();
   await scan(page, "chapter not found");

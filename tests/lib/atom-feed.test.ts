@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAtomFeed, escapeXml, poemToHtml, PRIVATE_ENTRY_TEXT, type Feed, type FeedEntry } from "@/lib/atom-feed";
+import { buildAtomFeed, escapeXml, poemToHtml, PRIVATE_ENTRY_TEXT, proseToHtml, type Feed, type FeedEntry } from "@/lib/atom-feed";
 
 const entry = (over: Partial<FeedEntry> = {}): FeedEntry => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -119,5 +119,24 @@ describe("buildAtomFeed", () => {
     const xml = feed([entry({ body: "a & b <i>" })]);
     expect(xml).toContain("&lt;p&gt;a &amp;amp; b &amp;lt;i&amp;gt;&lt;/p&gt;");
     expect(contentHtml(xml)).toBe("<p>a &amp; b &lt;i&gt;</p>");
+  });
+});
+
+describe("proseToHtml (chapters in feeds, Phase 24)", () => {
+  it("escapes first, then only <p>, <em>/<strong>, <br> and <hr>", () => {
+    const html = proseToHtml("^^The <b>ferry</b> & *late* **boat**,\nstill.\n\n* * *\n\n<script>x</script>");
+    expect(html).toBe(
+      "<p>The &lt;b&gt;ferry&lt;/b&gt; &amp; <em>late</em> <strong>boat</strong>,<br>\nstill.</p>\n<hr>\n<p>&lt;script&gt;x&lt;/script&gt;</p>",
+    );
+    const tags = [...html.matchAll(/<\/?([a-z]+)/g)].map((m) => m[1]);
+    expect(new Set(tags)).toEqual(new Set(["p", "em", "strong", "br", "hr"]));
+    // The drop cap marker never reaches a feed.
+    expect(html).not.toContain("^");
+  });
+
+  it("a prose entry's content is the chapter as HTML, in the novel's language; its title (mixed) has no lang", () => {
+    const xml = feed([entry({ format: "prose", language: "ak", title: "Ɔdɔ: Chapter 1", body: "One.\n\nTwo." })]);
+    expect(xml).toContain('<content type="html" xml:lang="ak">&lt;p&gt;One.&lt;/p&gt;\n&lt;p&gt;Two.&lt;/p&gt;</content>');
+    expect(xml).toContain('<title type="text">Ɔdɔ: Chapter 1</title>');
   });
 });

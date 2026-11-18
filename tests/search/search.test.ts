@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { editors, poems } from "@/db/schema";
+import { chapters, editors, novels, poems } from "@/db/schema";
 import { searchBoard, searchWords } from "@/server/search";
 
 const db = getDb();
@@ -80,7 +81,7 @@ describe("searchBoard", () => {
   it("finds private poems by title, but never by their text (N1)", async () => {
     expect(await titles("secret")).toEqual(["Secret Rooms"]);
     for (const q of ["lantern", "harbour", "moon"]) {
-      expect(await searchBoard(q)).toEqual({ authors: [], poems: [] });
+      expect(await searchBoard(q)).toEqual({ authors: [], novels: [], poems: [] });
     }
     const json = JSON.stringify(await searchBoard("secret"));
     expect(json).not.toContain("lantern");
@@ -95,12 +96,57 @@ describe("searchBoard", () => {
 
   it("ignores too-short, empty, symbol-only and non-string input", async () => {
     for (const q of ["", " ", "r", "&|!", 42, null, undefined]) {
-      expect(await searchBoard(q)).toEqual({ authors: [], poems: [] });
+      expect(await searchBoard(q)).toEqual({ authors: [], novels: [], poems: [] });
     }
   });
 
   it("treats tsquery syntax as plain text", async () => {
     await expect(searchBoard("rose:* | !garden & (")).resolves.toBeDefined();
     expect(await titles("rose:* | !garden")).toEqual(["Rose Garden at Dusk"]);
+  });
+});
+
+describe("novel titles (Phase 24)", () => {
+  async function novel(editorId: string, title: string, chapterStatus: "draft" | "published" | null, body = "the lighthouse keeper's chapter") {
+    const [n] = await db
+      .insert(novels)
+      .values({ editorId, title, slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"), blurb: "a blurb about lighthouses" })
+      .returning();
+    if (chapterStatus) {
+      await db.insert(chapters).values({
+        novelId: n.id, title: "Chapter Lighthouse", slug: "c", body, position: 1, status: chapterStatus,
+        publishedAt: chapterStatus === "published" ? new Date() : null,
+      });
+    }
+  }
+  const novelTitles = async (q: string) => (await searchBoard(q)).novels.map((n) => n.title);
+
+  it("finds a novel with a published chapter by its title (prefix, accents, typos), in its own group", async () => {
+    const [emily] = await db.select().from(editors).where(eq(editors.slug, "emily-dickinson"));
+    await novel(emily.id, "Ɔdɔ ne Ɛkɔm", "published");
+    await novel(emily.id, "The Ferry at Yeji", "published");
+    expect(await novelTitles("ferr")).toEqual(["The Ferry at Yeji"]);
+    expect(await novelTitles("odo")).toEqual(["Ɔdɔ ne Ɛkɔm"]);
+    expect(await novelTitles("ferri yeji")).toEqual(["The Ferry at Yeji"]);
+    const res = await searchBoard("ferry");
+    expect(res.novels[0]).toMatchObject({ title: "The Ferry at Yeji", slug: "the-ferry-at-yeji", penName: "Emily Dickinson", authorSlug: "emily-dickinson" });
+    expect(res.poems).toEqual([]);
+  });
+
+  it("never finds a novel with nothing published, nor by its chapters' text or titles or its blurb", async () => {
+    const [emily] = await db.select().from(editors).where(eq(editors.slug, "emily-dickinson"));
+    await novel(emily.id, "Unready Novel", "draft");
+    await novel(emily.id, "Empty Novel", null);
+    await novel(emily.id, "Seaside", "published", "zanzibar marmalade");
+    expect(await novelTitles("unready")).toEqual([]);
+    expect(await novelTitles("empty")).toEqual([]);
+    for (const q of ["zanzibar", "marmalade", "lighthouse", "blurb"]) expect(await novelTitles(q), q).toEqual([]);
+    expect(JSON.stringify(await searchBoard("seaside"))).not.toMatch(/zanzibar|blurb/);
+  });
+
+  it("finds an author whose only published work is a novel", async () => {
+    const id = await author("Novel Only", "novel-only");
+    await novel(id, "Solo", "published");
+    expect(await names("novel only")).toEqual(["Novel Only"]);
   });
 });

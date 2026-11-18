@@ -5,9 +5,12 @@ import { toNfc } from "@/lib/letters";
 import type { SearchResults } from "@/lib/search-types";
 
 /*
- * Board search (R10): author pen names (section labels) and poem titles.
- * Poem bodies are never searched or returned (N1), not even for public
- * poems, so a private poem can't be found by its text.
+ * Board search (R10): author pen names (section labels), poem titles and
+ * (Phase 24) novel titles. Poem bodies are never searched or returned (N1),
+ * not even for public poems, so a private poem can't be found by its text;
+ * nor are chapter text, chapter titles ("Chapter 3" would match everything)
+ * or blurbs. A novel is found only once it has a published chapter, like
+ * its page (drizzle/0025_novel_search.sql for its indexes).
  *
  * Matching (see drizzle/0003_search.sql for the indexes):
  *   - every word as a prefix, all words required ("ros gar" -> "Rose Garden")
@@ -40,7 +43,7 @@ export function searchWords(raw: string): string[] {
 export async function searchBoard(raw: unknown): Promise<SearchResults> {
   const q = typeof raw === "string" ? raw.trim().slice(0, SEARCH_MAX_LENGTH) : "";
   const words = searchWords(q);
-  if (q.length < SEARCH_MIN_LENGTH || words.length === 0) return { authors: [], poems: [] };
+  if (q.length < SEARCH_MIN_LENGTH || words.length === 0) return { authors: [], novels: [], poems: [] };
 
   // e.g. "ros:* & gar:*". Words are \p{L}\p{N} only, so this can't inject
   // tsquery operators; search_normalize() lower-cases and strips accents.
@@ -55,6 +58,7 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
                           search_normalize(${text}) AS norm)`;
     const authorName = sql`search_normalize(coalesce(e.pen_name, ''))`;
     const poemTitle = sql`search_normalize(p.title)`;
+    const novelTitle = sql`search_normalize(n.title)`;
     // Fuzzy still requires *every* word, each either as a prefix or close
     // by trigram, so "rose feathers" doesn't match on "feathers" alone.
     const everyWordRoughly = (field: SQL) =>
@@ -73,7 +77,10 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
                 WHERE p.editor_id = e.id AND p.status = 'published') AS "poemCount"
         FROM editors e, ${q} q
         WHERE e.pen_name IS NOT NULL AND e.slug IS NOT NULL
-          AND EXISTS (SELECT 1 FROM poems p WHERE p.editor_id = e.id AND p.status = 'published')
+          -- On the board: a published poem or a novel's published chapter.
+          AND (EXISTS (SELECT 1 FROM poems p WHERE p.editor_id = e.id AND p.status = 'published')
+               OR EXISTS (SELECT 1 FROM novels n JOIN chapters c ON c.novel_id = n.id
+                          WHERE n.editor_id = e.id AND c.status = 'published'))
           AND ${fuzzy ? everyWordRoughly(authorName) : sql`to_tsvector('simple', ${authorName}) @@ q.tsq`}
         ORDER BY ${fuzzy ? sql`word_similarity(q.norm, ${authorName})` : sql`ts_rank(to_tsvector('simple', ${authorName}), q.tsq)`} DESC,
                  lower(e.pen_name)
@@ -92,10 +99,26 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
         LIMIT ${LIMIT}
       `)) as unknown as { rows: SearchResults["poems"] }).rows;
 
+    // Titles only (never chapter text or blurbs), and only novels readers can open.
+    const findNovels = async (fuzzy: boolean) =>
+      ((await tx.execute(sql`
+        SELECT n.id, n.title, n.slug,
+               e.id AS "editorId", e.pen_name AS "penName", e.slug AS "authorSlug"
+        FROM novels n JOIN editors e ON e.id = n.editor_id, ${q} q
+        WHERE e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+          AND EXISTS (SELECT 1 FROM chapters c WHERE c.novel_id = n.id AND c.status = 'published')
+          AND ${fuzzy ? everyWordRoughly(novelTitle) : sql`to_tsvector('simple', ${novelTitle}) @@ q.tsq`}
+        ORDER BY ${fuzzy ? sql`word_similarity(q.norm, ${novelTitle})` : sql`ts_rank(to_tsvector('simple', ${novelTitle}), q.tsq)`} DESC,
+                 n.updated_at DESC
+        LIMIT ${LIMIT}
+      `)) as unknown as { rows: SearchResults["novels"] }).rows;
+
     let authors = await findAuthors(false);
     if (authors.length === 0 && fuzzyAllowed) authors = await findAuthors(true);
     let poems = await findPoems(false);
     if (poems.length === 0 && fuzzyAllowed) poems = await findPoems(true);
-    return { authors, poems };
+    let novels = await findNovels(false);
+    if (novels.length === 0 && fuzzyAllowed) novels = await findNovels(true);
+    return { authors, novels, poems };
   });
 }

@@ -41,7 +41,7 @@ test("search finds authors and titles (prefix, typo, accents) and flies to them"
 
   // Poem text is never searched.
   await searchBox(page).fill(`secretbodyword${id}`);
-  await expect(palette(page).getByText(/No authors or poems match/)).toBeVisible();
+  await expect(palette(page).getByText(/No authors, novels or poems match/)).toBeVisible();
 
   // Author by misspelt, accent-free name
   await searchBox(page).fill(`ostrowsk ${id}`);
@@ -73,9 +73,9 @@ test("search finds authors and titles (prefix, typo, accents) and flies to them"
 test("search API never returns poem text and rejects junk safely", async ({ request }) => {
   const res = await request.get("/api/search?q=" + encodeURIComponent("x:* | !y & ("));
   expect(res.status()).toBe(200);
-  expect(await res.json()).toEqual({ authors: [], poems: [] });
+  expect(await res.json()).toEqual({ authors: [], novels: [], poems: [] });
   const short = await request.get("/api/search?q=a");
-  expect(await short.json()).toEqual({ authors: [], poems: [] });
+  expect(await short.json()).toEqual({ authors: [], novels: [], poems: [] });
   const body = await (await request.get("/api/search?q=the")).text();
   expect(body).not.toMatch(/"body"|excerpt|password/i);
 });

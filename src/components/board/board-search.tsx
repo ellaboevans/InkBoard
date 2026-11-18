@@ -1,6 +1,6 @@
 "use client";
 
-import { FileTextIcon, Loader2Icon, LockIcon, UserRoundIcon } from "lucide-react";
+import { BookOpenIcon, FileTextIcon, Loader2Icon, LockIcon, UserRoundIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
@@ -25,20 +25,22 @@ const DEBOUNCE_MS = 150;
 type Fetched = { query: string; results: SearchResults } | { query: string; error: string };
 
 /**
- * ⌘K palette over the board (R10). Searches author names and poem titles on
- * the server (/api/search); filtering is the server's job, so cmdk's own
- * filter is off.
+ * ⌘K palette over the board (R10). Searches author names, novel titles
+ * (Phase 24) and poem titles on the server (/api/search); filtering is the
+ * server's job, so cmdk's own filter is off.
  */
 export function BoardSearch({
   open,
   onOpenChange,
   onPickAuthor,
   onPickPoem,
+  onPickNovel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPickAuthor: (author: SearchResults["authors"][number]) => void;
   onPickPoem: (poem: SearchResults["poems"][number]) => void;
+  onPickNovel: (novel: SearchResults["novels"][number]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [fetched, setFetched] = useState<Fetched | null>(null);
@@ -75,7 +77,7 @@ export function BoardSearch({
   const loading = trimmed.length >= MIN && !current;
   const results = current && "results" in current ? current.results : null;
   const error = current && "error" in current ? current.error : null;
-  const empty = results && results.authors.length === 0 && results.poems.length === 0;
+  const empty = results && results.authors.length === 0 && results.novels.length === 0 && results.poems.length === 0;
 
   // When a result is picked the board moves focus to it; Radix must not
   // then return focus to the Search button (Enter would reopen search).
@@ -100,19 +102,19 @@ export function BoardSearch({
       >
       <DialogHeader className="sr-only">
         <DialogTitle>Search the board</DialogTitle>
-        <DialogDescription>Find an author or a poem title</DialogDescription>
+        <DialogDescription>Find an author, a novel or a poem title</DialogDescription>
       </DialogHeader>
-      <Command shouldFilter={false} label="Search authors and poems">
+      <Command shouldFilter={false} label="Search authors, novels and poems">
         <CommandInput
           value={query}
           onValueChange={setQuery}
-          placeholder="Search authors and poem titles…"
+          placeholder="Search authors, novels and poems…"
           aria-describedby="board-search-hint"
         />
         {/* Messages sit outside the listbox: ARIA lets a listbox contain only options/groups. */}
         {trimmed.length < MIN && (
           <p id="board-search-hint" className="px-4 py-6 text-center text-sm text-muted-foreground">
-            Type at least {MIN} letters. Poem text isn&apos;t searched, only titles and author names.
+            Type at least {MIN} letters. Only titles and author names are searched, never the text.
           </p>
         )}
         {loading && (
@@ -128,7 +130,7 @@ export function BoardSearch({
         )}
         {empty && (
           <p role="status" className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No authors or poems match &ldquo;{trimmed}&rdquo;.
+            No authors, novels or poems match &ldquo;{trimmed}&rdquo;.
           </p>
         )}
         <CommandList className="max-h-[min(60vh,24rem)]" hidden={!results || empty ? true : undefined}>
@@ -145,6 +147,17 @@ export function BoardSearch({
                   <span className="ml-auto text-xs text-muted-foreground">
                     {pluralCount(a.poemCount, "poem")}
                   </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {results && results.novels.length > 0 && (
+            <CommandGroup heading="Novels">
+              {results.novels.map((n) => (
+                <CommandItem key={n.id} value={`novel-${n.id}`} onSelect={() => pick(() => onPickNovel(n))}>
+                  <BookOpenIcon aria-hidden />
+                  <span className="min-w-0 truncate font-serif text-[15px]">{n.title}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">{n.penName}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

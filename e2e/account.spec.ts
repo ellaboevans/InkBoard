@@ -141,7 +141,7 @@ test("delete an account: step-up, pen name, then gone everywhere; the same email
   await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
   await expect(page.getByRole("region", { name: new RegExp(`^${pen}`) })).toHaveCount(0);
   const search = await page.request.get(`/api/search?q=${encodeURIComponent(pen)}`);
-  expect(await search.json()).toEqual({ authors: [], poems: [] });
+  expect(await search.json()).toEqual({ authors: [], novels: [], poems: [] });
   const poemSearch = await page.request.get(`/api/search?q=${encodeURIComponent(`Farewell ${id}`)}`);
   expect((await poemSearch.json()).poems).toEqual([]);
   // The old links are real 404s (Phase 19), and stay so.

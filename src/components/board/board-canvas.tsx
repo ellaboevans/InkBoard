@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { cardTitleClass, PoemCardFace } from "./poem-card-face";
 import { BookCardFace } from "@/components/novel/book-card-face";
+import { novelPath } from "@/lib/novel-seo";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -588,6 +589,7 @@ export function BoardCanvas({
         onOpenChange={setSearchOpen}
         onPickAuthor={pickAuthor}
         onPickPoem={pickPoem}
+        onPickNovel={(n) => router.push(novelPath(n.authorSlug, n.slug))}
       />
 
       {/* Centred by a full-width column, not left-1/2 (see the top overlays).

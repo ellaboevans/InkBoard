@@ -293,7 +293,7 @@ describe("deleting an account", () => {
     const feed = await loadSiteFeed();
     expect(feed).not.toContain("Ada Verse");
     expect(feed).toContain("Eve Other Ode");
-    expect(await searchBoard("Ada")).toEqual({ authors: [], poems: [] });
+    expect(await searchBoard("Ada")).toEqual({ authors: [], novels: [], poems: [] });
     expect((await searchBoard("Ode")).poems.map((p) => p.penName)).toEqual(["Eve Other"]);
   });
 

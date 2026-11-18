@@ -114,7 +114,7 @@ test("readers find a novel on the board and the author page, read on, continue w
   await expect(page).toHaveURL(novelUrl);
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { level: 1, name: "The Ferry at Yeji" })).toHaveAttribute("lang", "ak");
-  await expect(main.getByRole("link", { name: pen })).toHaveAttribute("href", `/a/${author}`);
+  await expect(main.getByRole("link", { name: pen, exact: true })).toHaveAttribute("href", `/a/${author}`);
   await expect(main.locator("[data-novel-facts]")).toContainText("2 chapters · about 1 min · in Akan");
   await expect(main.locator("[data-novel-cover]")).toBeVisible();
   const chapterLinks = main.getByRole("region", { name: "Chapters" }).getByRole("link");
@@ -158,6 +158,8 @@ test("readers find a novel on the board and the author page, read on, continue w
   await expect(chapters.getByRole("link", { name: "Previous chapter: 1 · Thursday" })).toHaveAttribute("href", `${novelUrl}/thursday`);
 
   // Where you stopped: only in this browser, one key, no cookie.
+  // Recorded by the page's effect after hydration: wait for it.
+  await expect.poll(async () => JSON.parse((await readingStore(page)) ?? "{}").novels?.[novelId]?.chapter).toBe("the-landing");
   expect(JSON.parse((await readingStore(page))!)).toEqual({
     v: 1,
     novels: { [novelId]: { chapter: "the-landing", at: expect.any(String) } },
@@ -385,4 +387,130 @@ test("the list view lists novels by language; the pages give search engines and 
   const sitemap = await (await request.get("/sitemap.xml")).text();
   for (const path of [novelUrl, `${novelUrl}/thursday`, `${novelUrl}/chapter`]) expect(sitemap, path).toContain(`${path}</loc>`);
   for (const path of [`${novelUrl}/secret`, `/a/${author}/n/unready`]) expect(sitemap, path).not.toContain(path);
+});
+
+test("a writer adds a drop cap with the button; readers see it, the feed and search don't show the marker (Phase 24)", async ({ page, request }) => {
+  test.slow();
+  const id = unique();
+  const email = `dropcap-${id}@example.com`;
+  const pen = `Drop Cap Writer ${id}`;
+  const title = `Harmattan Lighthouse ${id}`;
+  await signUpAs(page, email, pen);
+  const { rows } = await sql(`SELECT slug FROM editors WHERE email = '${email}'`);
+  const author = rows[0].slug as string;
+
+  await page.goto("/admin/novels");
+  await page.getByRole("button", { name: "New novel" }).click();
+  const dialog = page.getByRole("dialog", { name: "New novel" });
+  await dialog.getByRole("textbox", { name: "Title" }).fill(title);
+  await dialog.getByRole("button", { name: "Create novel" }).click();
+  await expect(page).toHaveURL(/\/admin\/novels\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  await page.getByRole("button", { name: "New chapter" }).click();
+  await expect(page).toHaveURL(/\/chapters\/[0-9a-f-]{36}/, { timeout: 45_000 });
+  await page.getByRole("textbox", { name: /Chapter title/ }).fill("Thursday");
+  const text = page.getByRole("textbox", { name: "Text" });
+  await text.fill("The stranger did not ask for Akua.\nHe asked for the tickets.\n\nHe put the radio on the counter.");
+
+  // The button marks the paragraph the cursor is in (here: its second line), and toggles.
+  const bar = page.getByRole("toolbar", { name: "Formatting" });
+  const dropCap = bar.getByRole("button", { name: "Drop cap" });
+  await text.evaluate((el: HTMLTextAreaElement) => {
+    el.focus();
+    el.setSelectionRange(45, 45);
+  });
+  await dropCap.click();
+  await expect(text).toHaveValue("^^The stranger did not ask for Akua.\nHe asked for the tickets.\n\nHe put the radio on the counter.");
+  await dropCap.click();
+  await expect(text).toHaveValue("The stranger did not ask for Akua.\nHe asked for the tickets.\n\nHe put the radio on the counter.");
+  await dropCap.click();
+  await expect(page.locator("#chapter-help")).toContainText("^^ at the very start of a paragraph");
+
+  // Preview shows it.
+  await page.getByRole("tab", { name: "Preview" }).click();
+  const preview = page.getByRole("article", { name: "Preview of Thursday" });
+  await expect(preview.locator("p.prose-drop-cap")).toHaveCount(1);
+  await expect(preview.locator("p").first()).toHaveText("The stranger did not ask for Akua.He asked for the tickets.");
+  await page.getByRole("tab", { name: "Write" }).click();
+  await page.getByRole("button", { name: "Publish chapter" }).click();
+  await expect(toast(page, "Chapter published")).toBeVisible({ timeout: 45_000 });
+
+  // The chapter page: a big first letter on the marked paragraph only, the word whole, no marker anywhere.
+  const novelUrl = `/a/${author}/n/harmattan-lighthouse-${id}`;
+  await page.goto(`${novelUrl}/thursday`);
+  const paragraphs = page.getByRole("main").locator("[data-chapter-text] p");
+  await expect(paragraphs).toHaveCount(2);
+  await expect(paragraphs.nth(0)).toHaveAttribute("data-drop-cap", "");
+  await expect(paragraphs.nth(1)).not.toHaveAttribute("data-drop-cap");
+  await expect(paragraphs.nth(0)).toHaveText("The stranger did not ask for Akua.He asked for the tickets.");
+  const letter = (n: number) =>
+    paragraphs.nth(n).evaluate((el) => {
+      const first = getComputedStyle(el, "::first-letter");
+      return { color: first.color, size: parseFloat(first.fontSize) || 0, body: parseFloat(getComputedStyle(el).fontSize) };
+    });
+  const primary = await page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--primary)";
+    document.body.append(probe);
+    const c = getComputedStyle(probe).color;
+    probe.remove();
+    return c;
+  });
+  expect((await letter(0)).color).toBe(primary);
+  expect((await letter(1)).color).not.toBe(primary);
+  // The initial sinks three lines: this paragraph has only two lines of text, yet its box grows to hold
+  // the initial, so the next paragraph starts below it instead of running into it.
+  const [p1, p2] = [(await paragraphs.nth(0).boundingBox())!, (await paragraphs.nth(1).boundingBox())!];
+  expect(p1.height).toBeGreaterThan(2 * 19 * 1.7 + 10);
+  expect(p2.y).toBeGreaterThanOrEqual(p1.y + p1.height - 1);
+  await expect(page.getByRole("main")).not.toContainText("^^");
+  // Copying the paragraph gives the whole word (the initial is only a ::first-letter style).
+  const copied = await paragraphs.nth(0).evaluate((el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection.toString();
+  });
+  expect(copied.startsWith("The stranger did not ask for Akua.")).toBe(true);
+  expect(await page.locator('meta[name="description"]').getAttribute("content")).toBe(
+    "The stranger did not ask for Akua. He asked for the tickets. He put the radio on the counter.",
+  );
+  await noSidewaysScroll(page, "drop cap at 375");
+  await page.setViewportSize({ width: 320, height: 700 });
+  await noSidewaysScroll(page, "drop cap at 320");
+  await page.setViewportSize({ width: 375, height: 812 });
+
+  // The novel's feed: Atom, the chapter as HTML, no marker; advertised by both pages and linked from the novel page.
+  const feedPath = `${novelUrl}/feed.xml`;
+  const alternates = await page.locator('link[rel="alternate"][type="application/atom+xml"]').evaluateAll((ls) => ls.map((l) => new URL((l as HTMLLinkElement).href).pathname));
+  expect(alternates).toEqual([feedPath, `/a/${author}/feed.xml`, "/feed.xml"]);
+  const feed = await request.get(feedPath);
+  expect(feed.status()).toBe(200);
+  expect(feed.headers()["content-type"]).toBe("application/atom+xml; charset=utf-8");
+  const xml = await feed.text();
+  expect(xml).toContain(`<title type="text">${title}: Chapter 1 · Thursday</title>`);
+  expect(xml).toContain("&lt;p&gt;The stranger did not ask for Akua.&lt;br&gt;");
+  expect(xml).not.toContain("^^");
+  expect((await request.get(`/a/${author}/n/nope/feed.xml`)).status()).toBe(404);
+  // The proxy and the chapter route leave feed.xml to the feed (not a "Chapter not found").
+  expect((await request.get(feedPath, { headers: { Accept: "text/html" } })).headers()["content-type"]).toContain("atom");
+  expect(await (await request.get(`/a/${author}/feed.xml`)).text()).toContain(`${title}: Chapter 1 · Thursday`);
+  expect(await (await request.get("/feed.xml")).text()).toContain(`New novel by ${pen}: ${title}`);
+  await page.goto(novelUrl);
+  await expect(page.getByRole("link", { name: "Follow this novel in a feed reader" })).toHaveAttribute("href", feedPath);
+
+  // Search: the novel by its title, in its own group, opening the novel page.
+  await openBoard(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "Search the board" });
+  await palette.getByRole("combobox").fill(`harmattan lighth ${id}`);
+  const result = palette.getByRole("group", { name: "Novels" }).getByRole("option", { name: new RegExp(title) });
+  await expect(result).toBeVisible();
+  await palette.getByRole("combobox").fill(`stranger ${id}`);
+  await expect(palette.getByText(/No authors, novels or poems match/)).toBeVisible();
+  await palette.getByRole("combobox").fill(`harmattan lighth ${id}`);
+  await result.click();
+  await expect(page).toHaveURL(novelUrl);
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 });

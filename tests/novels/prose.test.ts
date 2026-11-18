@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ProseText } from "@/components/novel/prose-text";
 import { proseToMarkdown } from "@/lib/export-format";
-import { countWords, normalizeProse, parseProse, stripProse, type ProseBlock } from "@/lib/prose";
+import { countWords, normalizeProse, parseProse, stripProse, toggleDropCap, type ProseBlock } from "@/lib/prose";
 
 /** Blocks as plain strings: paragraphs as their lines (emphasis flattened to *…*), breaks as "⁂". */
 const shape = (blocks: ProseBlock[]) =>
@@ -98,5 +98,77 @@ describe("chapter prose (Phase 23)", () => {
     );
     // Words and letters unchanged.
     expect(stripProse(text).replace(/\s+/g, " ")).toContain("Not a heading");
+  });
+});
+
+describe("drop caps the writer chose (Phase 24)", () => {
+  const caps = (text: string) => parseProse(text).map((b) => (b.kind === "paragraph" ? Boolean(b.dropCap) : "⁂"));
+
+  it("`^^` straight before a paragraph's text marks it, and is gone from the text", () => {
+    const blocks = parseProse("^^The stranger did not ask.\n\nHe put the radio down.\n\n* * *\n\n^^That night she listened.");
+    expect(caps("^^The stranger did not ask.\n\nHe put the radio down.\n\n* * *\n\n^^That night she listened.")).toEqual([true, false, "⁂", true]);
+    expect(shape(blocks)).toEqual([["The stranger did not ask."], ["He put the radio down."], "⁂", ["That night she listened."]]);
+  });
+
+  it("is never automatic: unmarked text has no drop cap anywhere (old chapters look as they did)", () => {
+    expect(caps("The first paragraph.\n\n* * *\n\nAfter a break.")).toEqual([false, "⁂", false]);
+    expect(renderToStaticMarkup(ProseText({ text: "The first paragraph." }) as never)).toBe('<p data-p="1">The first paragraph.</p>');
+  });
+
+  it("works after leading spaces and on a scene break's next paragraph; emphasis and quotes may follow it", () => {
+    expect(caps("   ^^Indented start.")).toEqual([true]);
+    expect(shape(parseProse("^^*Once* upon a time"))).toEqual([["<em> upon a time"]]);
+    expect(shape(parseProse("^^“Where did you get this?”"))).toEqual([["“Where did you get this?”"]]);
+    expect(caps("^^“Where did you get this?”")).toEqual([true]);
+  });
+
+  it("is ordinary text anywhere else: a later line, mid-line, alone, before a space, or tripled", () => {
+    for (const text of ["Dear Kwabena,\n^^the lake is high.", "She wrote ^^ back.", "^^", "^^ see you soon", "^^^Three carets", "x\n\n^^\n\ny"]) {
+      const out = parseProse(text);
+      expect(out.some((b) => b.kind === "paragraph" && b.dropCap), text).toBe(false);
+      expect(stripProse(text), text).toContain("^^");
+    }
+  });
+
+  it("keeps a tone-marked first letter whole and NFC (ɛ́, ɔ̀, Ɔ̃), even when typed decomposed", () => {
+    for (const word of ["ɛ́kɔ", "ɔ̀dɔ", "Ɔ̃nɔ"]) {
+      const decomposed = `^^${word}`.normalize("NFD");
+      const [block] = parseProse(decomposed);
+      expect(block.kind === "paragraph" && block.dropCap, word).toBe(true);
+      expect(stripProse(decomposed)).toBe(word.normalize("NFC"));
+    }
+    const html = renderToStaticMarkup(ProseText({ text: "^^ɛ́kɔ ne nsuo" }) as never);
+    expect(html).toBe(`<p data-p="1" class="prose-drop-cap" data-drop-cap="">${"ɛ́kɔ ne nsuo".normalize("NFC")}</p>`);
+  });
+
+  it("never shows as text: plain text, word counts and the Markdown download drop it", () => {
+    const text = "^^The ferry came late.\n\n* * *\n\n^^Akua *waited*.";
+    expect(stripProse(text)).toBe("The ferry came late.\n\nAkua waited.");
+    expect(countWords(text)).toBe(6);
+    const md = proseToMarkdown(text);
+    expect(md).not.toContain("^");
+    expect(markdownHtml(md)).toBe("<p>The ferry came late.</p>\n<hr />\n<p>Akua <em>waited</em>.</p>\n");
+  });
+});
+
+describe("the editor's Drop cap button (toggleDropCap)", () => {
+  const apply = (text: string, at: number) => {
+    const e = toggleDropCap(text, at);
+    return e && text.slice(0, e.from) + e.insert + text.slice(e.to);
+  };
+
+  it("adds the marker at the start of the paragraph holding the cursor, after its leading spaces", () => {
+    const text = "First paragraph.\n\nSecond, line one\nline two.";
+    // Cursor on the second paragraph's second line.
+    expect(apply(text, text.indexOf("two."))).toBe("First paragraph.\n\n^^Second, line one\nline two.");
+    expect(apply("  Indented.", 5)).toBe("  ^^Indented.");
+    expect(toggleDropCap("abc", 2)).toMatchObject({ selStart: 4, selEnd: 4 });
+  });
+
+  it("removes it when the paragraph has one, and does nothing on a blank line or a scene break", () => {
+    expect(apply("^^Marked.", 5)).toBe("Marked.");
+    expect(toggleDropCap("^^Marked.", 5)).toMatchObject({ selStart: 3 });
+    expect(toggleDropCap("One.\n\nTwo.", 5)).toBeNull();
+    expect(toggleDropCap("One.\n* * *\nTwo.", 7)).toBeNull();
   });
 });

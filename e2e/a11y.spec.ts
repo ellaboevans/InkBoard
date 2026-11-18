@@ -308,7 +308,7 @@ test("novels for readers: the book card, author page, novel page (start and cont
 With a second paragraph.', 'ak') RETURNING id)
     INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
     SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 40 FROM n,
-      (VALUES ('Thursday', 'thursday', E'The ferry came *late*.\n\n* * *\n\nAkua waited.\nA kept line.', 1, 'published'),
+      (VALUES ('Thursday', 'thursday', E'^^The ferry came *late*.\n\n* * *\n\n^^“Akua waited.”\nA kept line.', 1, 'published'),
               ('', 'chapter', 'Second chapter text.', 2, 'published'),
               ('Draft', 'draft', 'Draft text.', 3, 'draft')) AS t(title, slug, body, pos, status)`);
   // …then a poem through the app, which refreshes the board's cache.
@@ -570,7 +570,7 @@ test("board, list view, search and reading", async ({ page }) => {
   await expect(palette.getByRole("option").first()).toBeVisible();
   await scan(page, "search: results");
   await palette.getByRole("combobox").fill("qxjzvwpkfy");
-  await expect(palette.getByText(/No authors or poems match/)).toBeVisible();
+  await expect(palette.getByText(/No authors, novels or poems match/)).toBeVisible();
   await scan(page, "search: no results");
   await page.keyboard.press("Escape");
 

@@ -29,7 +29,7 @@ import { CHAPTER_BODY_MAX, CHAPTER_TITLE_MAX, chapterDisplayTitle, readingMinute
 import { notify, withErrorToast } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import { toggleEmphasis, type TextEdit } from "@/lib/poem-markdown";
-import { countWords } from "@/lib/prose";
+import { countWords, DROP_CAP_MARKER, toggleDropCap } from "@/lib/prose";
 import { HistoryPanel, VersionDialog, type HistoryItem, type SelectedVersion } from "../poems/poem-history";
 import { deleteChapterAction, saveChapterAction, type ChapterFormState } from "./actions";
 import { ConfirmDelete } from "./chapter-order";
@@ -261,6 +261,18 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
     applyEdit(el, sceneBreakEdit(el.value, el.selectionStart, el.selectionEnd), edit);
   }
 
+  /** Add or remove the drop cap marker at the start of the paragraph the cursor is in. */
+  function dropCap() {
+    const el = bodyRef.current;
+    if (!el) return;
+    const change = toggleDropCap(el.value, el.selectionStart, el.selectionEnd);
+    if (!change) {
+      notify.info("Put the cursor in a paragraph", "A drop cap starts a paragraph: click in the one that should begin with it.");
+      return;
+    }
+    applyEdit(el, change, edit);
+  }
+
   function restoreDraft(d: ChapterDraft) {
     setTitle(d.title);
     setBody(d.body);
@@ -408,6 +420,10 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
                 <ToolButton label="Scene break" onPress={sceneBreak}>
                   <span aria-hidden className="font-serif text-base leading-none">⁂</span>
                 </ToolButton>
+                <ToolButton label="Drop cap" onPress={dropCap}>
+                  {/* A big serif initial: the button's own picture of what it does. */}
+                  <span aria-hidden className="font-serif text-lg leading-none text-primary">A</span>
+                </ToolButton>
               </div>
             )}
             <TabsList className="ml-auto max-sm:h-11!">
@@ -442,7 +458,7 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
                 <article
                   lang={novel.language ?? undefined}
                   aria-label={`Preview of ${chapterDisplayTitle(title, n)}`}
-                  className="mx-auto max-w-[34em] font-serif text-[19px] leading-[1.7] hyphens-auto [&_p]:indent-[1.5em] [&_h2+p]:indent-0 [&_[data-scene-break]+p]:indent-0"
+                  className="mx-auto max-w-[34em] font-serif text-[19px] leading-[1.7] hyphens-auto [&_p]:indent-[1.5em] [&_h2+p]:indent-0 [&_[data-scene-break]+p]:indent-0 [&_p.prose-drop-cap]:indent-0"
                 >
                   <h2 className="mb-6 font-serif text-3xl leading-tight">{chapterDisplayTitle(title, n)}</h2>
                   <ProseText text={body} />
@@ -468,7 +484,8 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
             A blank line starts a new paragraph; a single line break is kept. A line with only{" "}
             <span className="font-mono">* * *</span> is a scene break. <span className="font-mono">*italic*</span> and{" "}
             <span className="font-mono">**bold**</span> (⌘I / ⌘B, or Ctrl on Windows); <span className="font-mono">\*</span> for a
-            plain asterisk.
+            plain asterisk. <span className="font-mono">{DROP_CAP_MARKER}</span> at the very start of a paragraph (Drop cap) makes its
+            first letter large, as in a printed book.
           </p>
           <SpecialLetters fields={LETTER_FIELDS} />
         </div>

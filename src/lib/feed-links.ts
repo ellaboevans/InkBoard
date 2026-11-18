@@ -9,12 +9,17 @@ import { absoluteUrl, SITE_NAME } from "./site";
 export const ATOM_TYPE = "application/atom+xml";
 export const SITE_FEED_PATH = "/feed.xml";
 export const authorFeedPath = (authorSlug: string) => `/a/${authorSlug}/feed.xml`;
+/** A novel's own feed (Phase 24); `feed.xml` is never read as a chapter slug (reader-paths.ts, offline rules). */
+export const novelFeedPath = (authorSlug: string, novelSlug: string) => `/a/${authorSlug}/n/${novelSlug}/feed.xml`;
 
-/** The author's feed first (most specific), then the whole board's. */
-export function feedAlternates(author?: { slug: string; penName: string }) {
+/** The most specific feed first: the novel's, then the author's, then the whole board's. */
+export function feedAlternates(author?: { slug: string; penName: string }, novel?: { slug: string; title: string }) {
   return {
     types: {
       [ATOM_TYPE]: [
+        ...(author && novel
+          ? [{ url: absoluteUrl(novelFeedPath(author.slug, novel.slug)), title: `${novel.title}, by ${author.penName}` }]
+          : []),
         ...(author ? [{ url: absoluteUrl(authorFeedPath(author.slug)), title: `${author.penName} on ${SITE_NAME}` }] : []),
         { url: absoluteUrl(SITE_FEED_PATH), title: `${SITE_NAME}: new poems` },
       ],

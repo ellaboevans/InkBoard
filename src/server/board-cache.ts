@@ -12,7 +12,7 @@ import {
   type SitemapChapter,
 } from "./board";
 import { BOARD_TAG } from "./cache-tags";
-import { loadAuthorFeed, loadSiteFeed } from "./feeds";
+import { loadAuthorFeed, loadNovelFeed, loadSiteFeed } from "./feeds";
 
 /*
  * Cached reader data (N8). Everything readers see is tagged BOARD_TAG, and
@@ -91,4 +91,12 @@ export async function getSitemapChapters(): Promise<SitemapChapter[]> {
   cacheTag(BOARD_TAG);
   cacheLife("hours");
   return loadSitemapChapters();
+}
+
+/** Atom XML for /a/[author]/n/[novel]/feed.xml (Phase 24), or null when readers can't see the novel. */
+export async function getNovelFeed(authorSlug: string, novelSlug: string): Promise<string | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadNovelFeed(authorSlug, novelSlug);
 }

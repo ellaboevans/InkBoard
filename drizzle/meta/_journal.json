@@ -176,6 +176,13 @@
       "when": 1794955477636,
       "tag": "0024_novels",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1794976475019,
+      "tag": "0025_novel_search",
+      "breakpoints": true
     }
   ]
 }

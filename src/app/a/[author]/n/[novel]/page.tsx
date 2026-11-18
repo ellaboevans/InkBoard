@@ -10,6 +10,8 @@ import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
+import { AuthorFeedLink, NovelFeedLink } from "@/components/feeds/feed-link";
+import { feedAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { sectionHue } from "@/lib/board-layout";
@@ -47,7 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: url },
+    alternates: { canonical: url, ...feedAlternates({ slug: n.authorSlug, penName: n.penName }, { slug: n.slug, title: n.title }) },
     authors: [{ name: n.penName, url: `/a/${n.authorSlug}` }],
     openGraph: { ...BASE_OPEN_GRAPH, type: "book", url, title, description },
     twitter: { card: "summary_large_image", title, description },
@@ -163,6 +165,12 @@ async function Novel({ params }: Pick<Props, "params">) {
         </h2>
         <ChapterList novelId={n.id} base={base} chapters={chapters} />
       </section>
+
+      {/* Phase 24: every new chapter in a feed reader; the author's feed has their poems too. */}
+      <div className="mt-8 flex flex-wrap gap-x-6 gap-y-1">
+        <NovelFeedLink authorSlug={n.authorSlug} novelSlug={n.slug} />
+        <AuthorFeedLink slug={n.authorSlug} penName={n.penName} className="min-h-11" />
+      </div>
     </>
   );
 }

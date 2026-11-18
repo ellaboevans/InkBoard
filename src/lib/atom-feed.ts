@@ -15,9 +15,13 @@
 
 import { languageName } from "./poem-languages";
 import { parsePoem, type PoemNode } from "./poem-markdown";
+import { parseProse } from "./prose";
 
 export type FeedEntry = {
+  /** A poem's id, or (Phase 24) a chapter's: `urn:uuid:<id>`, never changed. */
   id: string;
+  /** How `body` is written: a poem's lines (the default) or a chapter's prose. */
+  format?: "poem" | "prose";
   title: string;
   /** Absolute URL of the reading page. */
   url: string;
@@ -98,6 +102,20 @@ export function poemToHtml(body: string): string {
   return `<p>${lines.join("<br>\n")}</p>`;
 }
 
+/**
+ * A chapter's prose as HTML (Phase 24): every character escaped first, then
+ * only <p> per paragraph, <em>/<strong>, <br> for a kept line break and <hr>
+ * for a scene break. No other tags; a drop cap marker is already gone
+ * (parseProse), and a drop cap isn't drawn in feeds.
+ */
+export function proseToHtml(body: string): string {
+  return parseProse(body)
+    .map((block) =>
+      block.kind === "break" ? "<hr>" : `<p>${block.lines.map((line) => nodesToHtml(line, false)).join("<br>\n")}</p>`,
+    )
+    .join("\n");
+}
+
 const iso = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
 function entryXml(e: FeedEntry): string {
@@ -105,13 +123,14 @@ function entryXml(e: FeedEntry): string {
   const name = languageName(e.language);
   const content =
     e.visibility === "public" && e.body !== null
-      ? `<content type="html"${lang}>${escapeXml(poemToHtml(e.body))}</content>`
+      ? `<content type="html"${lang}>${escapeXml(e.format === "prose" ? proseToHtml(e.body) : poemToHtml(e.body))}</content>`
       : // English UI text, even for a poem in another language.
         `<content type="text" xml:lang="en">${escapeXml(PRIVATE_ENTRY_TEXT)}</content>`;
   return [
     "  <entry>",
     `    <id>urn:uuid:${escapeXml(e.id)}</id>`,
-    `    <title type="text"${lang}>${escapeXml(e.title)}</title>`,
+    // A chapter's title mixes our English ("Chapter 4", "New novel by …") with the novel's: no xml:lang on it.
+    `    <title type="text"${e.format === "prose" ? "" : lang}>${escapeXml(e.title)}</title>`,
     `    <link rel="alternate" type="text/html" href="${escapeXml(e.url)}"/>`,
     `    <author><name>${escapeXml(e.penName)}</name><uri>${escapeXml(e.authorUrl)}</uri></author>`,
     `    <published>${iso(e.published)}</published>`,

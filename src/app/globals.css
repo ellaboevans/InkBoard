@@ -139,6 +139,63 @@
     font-size: 1.4em;
     line-height: 1;
   }
+  /* A drop cap the writer asked for (`^^` in the text, src/lib/prose.ts; never
+     automatic). ::first-letter keeps the word whole in the DOM, takes an
+     opening quote mark along with the letter, and keeps a letter's tone mark
+     with it (a grapheme cluster), in the text's own font stack. Where the
+     browser has initial-letter it sinks exactly three lines; elsewhere a
+     float of about the same size. flow-root keeps a short paragraph's
+     initial from hanging into the next one. */
+  p.prose-drop-cap {
+    text-indent: 0;
+    display: flow-root;
+  }
+  p.prose-drop-cap::first-letter {
+    float: left;
+    margin: 0.07em 0.09em 0 0;
+    font-size: 4.2em;
+    line-height: 0.8;
+    color: var(--primary);
+  }
+  @supports (initial-letter: 3) or (-webkit-initial-letter: 3) {
+    p.prose-drop-cap::first-letter {
+      float: none;
+      margin: 0 0.12em 0 0;
+      font-size: inherit;
+      line-height: inherit;
+      -webkit-initial-letter: 3;
+      initial-letter: 3;
+    }
+  }
+  /* Narrow phones: three lines would leave a few words a line beside the
+     initial, so it sinks two under 360px; an initial with its opening quote
+     mark (twice as wide) sinks two on every phone. */
+  @supports (initial-letter: 2) or (-webkit-initial-letter: 2) {
+    @media (max-width: 639px) {
+      p.prose-drop-cap-quoted::first-letter {
+        -webkit-initial-letter: 2;
+        initial-letter: 2;
+      }
+    }
+    @media (max-width: 359px) {
+      p.prose-drop-cap::first-letter {
+        -webkit-initial-letter: 2;
+        initial-letter: 2;
+      }
+    }
+  }
+  @supports not ((initial-letter: 2) or (-webkit-initial-letter: 2)) {
+    @media (max-width: 639px) {
+      p.prose-drop-cap-quoted::first-letter {
+        font-size: 3em;
+      }
+    }
+    @media (max-width: 359px) {
+      p.prose-drop-cap::first-letter {
+        font-size: 3em;
+      }
+    }
+  }
   /* How far through the chapter: driven by the page's scroll where browsers
      support it; elsewhere the bar isn't shown at all. */
   .chapter-progress {

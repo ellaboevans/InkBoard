@@ -4,10 +4,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProseText } from "@/components/novel/prose-text";
 import { RememberChapter } from "@/components/novel/novel-reading";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SaveForOffline } from "@/components/offline/save-for-offline";
+import { JsonLd } from "@/components/seo/json-ld";
 import { SiteLinks } from "@/components/site-links";
 import type { ReaderChapter } from "@/lib/board-types";
 import { pluralCount } from "@/lib/plural";
+import { chapterDescription, chapterJsonLd, chapterPath, novelPath } from "@/lib/novel-seo";
 import { BASE_OPEN_GRAPH } from "@/lib/site";
 import { getReaderChapter } from "@/server/board-cache";
 
@@ -24,12 +28,15 @@ import { getReaderChapter } from "@/server/board-cache";
  * bar, kicker and links stay in the UI's English), like a poem's.
  *
  * Opening it records this chapter as where this browser stopped in the
- * novel (RememberChapter, localStorage only). Not saved offline yet.
+ * novel (RememberChapter, localStorage only). Saved for offline reading
+ * (kind "chapter", 60 kept); its link card (opengraph-image.tsx) shows the
+ * novel's cover and the chapter's title, never its text. JSON-LD: a Chapter
+ * that isPartOf the Book (src/lib/novel-seo.ts).
  */
 
 type Props = PageProps<"/a/[author]/n/[novel]/[chapter]">;
 
-const novelUrl = (c: ReaderChapter) => `/a/${c.authorSlug}/n/${c.novel.slug}`;
+const novelUrl = (c: ReaderChapter) => novelPath(c.authorSlug, c.novel.slug);
 
 /** The chapter's heading: "Chapter 4" when it has no title of its own. */
 const hasOwnTitle = (c: ReaderChapter) => c.title.trim() !== "";
@@ -40,11 +47,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { author, novel, chapter } = await params;
   const c = await getReaderChapter(author, novel, chapter);
   if (!c) return { title: "Chapter not found", robots: { index: false } };
-  const url = `${novelUrl(c)}/${c.slug}`;
+  const url = chapterPath(c.authorSlug, c.novel.slug, c.slug);
   const title = hasOwnTitle(c)
     ? `${c.displayTitle} · ${c.novel.title}, chapter ${c.number}`
     : `${c.novel.title}, chapter ${c.number}`;
-  const description = `Chapter ${c.number} of ${c.novel.title}, a novel by ${c.penName}.`;
+  // The chapter's first lines, as plain text (stripProse).
+  const description = chapterDescription(c);
   return {
     title,
     description,
@@ -58,6 +66,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default function ChapterPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* "You're offline · showing saved poems", as on the other reader pages. */}
+      <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <Suspense fallback={<ChapterSkeleton />}>
         <Chapter params={params} />
       </Suspense>
@@ -89,8 +99,15 @@ async function Chapter({ params }: Pick<Props, "params">) {
 
   return (
     <>
-      {/* Not saved for offline reading yet (Phase 23b): the next round adds the chapter kind. */}
-      <OfflineMarker save={false} />
+      {/* Saved for offline reading (only rendered for a published chapter: drafts and 404s never are). */}
+      <OfflineMarker
+        save
+        kind="chapter"
+        title={hasOwnTitle(c) ? `${c.novel.title} · Chapter ${c.number}: ${c.displayTitle}` : `${c.novel.title} · Chapter ${c.number}`}
+        author={c.penName}
+      />
+      <SaveForOffline path={chapterPath(c.authorSlug, c.novel.slug, c.slug)} />
+      <JsonLd data={chapterJsonLd(c)} />
       <RememberChapter novelId={c.novel.id} chapterSlug={c.slug} />
 
       <div className="sticky top-[env(safe-area-inset-top,0px)] z-20 border-b bg-background/92 backdrop-blur-md">

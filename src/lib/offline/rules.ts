@@ -8,8 +8,10 @@
  *
  * THE STORAGE RULE (what may be saved for offline reading):
  *   1. Only reader pages: the board (/), poem pages (/p/a/b), author pages
- *      (/a/a), collection pages (/a/a/c/c), and the About and Privacy pages
- *      (/about, /privacy; kind "page", Phase 19). Never /admin, /sign-in, /api,
+ *      (/a/a), collection pages (/a/a/c/c), novel pages (/a/a/n/n) and
+ *      chapter pages (/a/a/n/n/c; Phase 23b), and the About and Privacy pages
+ *      (/about, /privacy; kind "page", Phase 19). A novel's own files
+ *      (opengraph-image, twitter-image, feed.xml) are never chapters. Never /admin, /sign-in, /api,
  *      the feeds, /sw.js, anything that isn't a GET, any RSC request
  *      (navigations, prefetches, the overlay) or Server Action.
  *   2. The saved copy is never the response the reader got. The worker
@@ -30,18 +32,27 @@ var InkboardOffline = (function () {
   var POEM = /^\/p\/[^/]+\/[^/]+$/;
   var AUTHOR = /^\/a\/[^/]+$/;
   var COLLECTION = /^\/a\/[^/]+\/c\/[^/]+$/;
+  var NOVEL = /^\/a\/[^/]+\/n\/[^/]+$/;
+  var CHAPTER = /^\/a\/[^/]+\/n\/[^/]+\/([^/]+)$/;
+  var NOVEL_FILES = ["opengraph-image", "twitter-image", "feed.xml"];
   var PAGES = ["/about", "/privacy"];
   // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
   // Never /photos/ (profile photos, Phase 22): they pass through to the browser's
   // own cache (an hour), so a removed photo can't outlive that in the worker.
   var STATIC_PREFIXES = ["/_next/static/", "/icons/", "/avatars/"];
   var STATIC_FILES = ["/icon.svg", "/apple-icon", "/favicon.ico", "/manifest.webmanifest", "/install-capture.js"];
-  var CAPS = { poem: 50, other: 30 };
+  // Saved pages kept per kind, newest first: poems, chapters (a commute's
+  // worth of a novel) and novel pages each have their own; everything else
+  // (board, author, collection, About, Privacy) shares "other".
+  var CAPS = { poem: 50, chapter: 60, novel: 30, other: 30 };
 
   function readerKind(pathname) {
     if (pathname === "/") return "board";
     if (POEM.test(pathname)) return "poem";
     if (COLLECTION.test(pathname)) return "collection";
+    if (NOVEL.test(pathname)) return "novel";
+    var chapter = CHAPTER.exec(pathname);
+    if (chapter && NOVEL_FILES.indexOf(chapter[1]) === -1) return "chapter";
     if (AUTHOR.test(pathname)) return "author";
     if (PAGES.indexOf(pathname) !== -1) return "page";
     return null;
@@ -131,16 +142,18 @@ var InkboardOffline = (function () {
   }
 
   /**
-   * Keep the most recent CAPS.poem poems and CAPS.other other pages.
+   * Keep the most recent CAPS[kind] pages of each kind with its own cap, and
+   * CAPS.other of everything else together.
    * index: [{ url, kind, savedAt }]; returns the urls to remove.
    */
   function overCap(index) {
     var byTime = index.slice().sort(function (a, b) { return b.savedAt - a.savedAt; });
-    var poems = 0, others = 0, drop = [];
+    var counts = {}, drop = [];
     for (var i = 0; i < byTime.length; i++) {
-      var isPoem = byTime[i].kind === "poem";
-      var n = isPoem ? ++poems : ++others;
-      if (n > (isPoem ? CAPS.poem : CAPS.other)) drop.push(byTime[i].url);
+      var kind = byTime[i].kind;
+      var bucket = kind !== "other" && Object.prototype.hasOwnProperty.call(CAPS, kind) ? kind : "other";
+      counts[bucket] = (counts[bucket] || 0) + 1;
+      if (counts[bucket] > CAPS[bucket]) drop.push(byTime[i].url);
     }
     return drop;
   }
@@ -198,7 +211,7 @@ var InkboardOffline = (function () {
 `;
 
 export type OfflineRules = {
-  readerKind(pathname: string): "board" | "poem" | "author" | "collection" | null;
+  readerKind(pathname: string): "board" | "poem" | "author" | "collection" | "novel" | "chapter" | "page" | null;
   isStatic(pathname: string): boolean;
   strategyFor(req: {
     method: string;
@@ -213,7 +226,7 @@ export type OfflineRules = {
   pageMeta(html: string): { kind: string | null; title: string | null; author: string | null };
   assetUrls(html: string): string[];
   overCap(index: { url: string; kind: string; savedAt: number }[]): string[];
-  CAPS: { poem: number; other: number };
+  CAPS: { poem: number; chapter: number; novel: number; other: number };
   notificationFor(data: unknown): {
     title: string;
     options: {

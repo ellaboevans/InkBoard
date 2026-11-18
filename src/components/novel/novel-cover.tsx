@@ -1,4 +1,5 @@
 import { cn } from "cn";
+import { coverCss } from "@/lib/novel-cover";
 
 /**
  * The drawn cover (docs/PLAN.md, Phase 23b; docs/mockups/novels/): the title
@@ -27,11 +28,14 @@ export function NovelCover({
       data-novel-cover=""
       className={cn(
         "relative flex aspect-[2/3] shrink-0 flex-col justify-between overflow-hidden rounded-[4px_8px_8px_4px] py-[12%] pr-[10%] pl-[14%]",
-        "bg-[oklch(0.9_0.05_var(--cover-hue))] text-[oklch(0.3_0.08_var(--cover-hue))]",
-        "shadow-[inset_6px_0_0_oklch(0.82_0.06_var(--cover-hue)),0_1px_2px_oklch(0_0_0/0.12)]",
         className,
       )}
-      style={{ ["--cover-hue" as string]: hue }}
+      // The same tones as the link cards' cover (src/lib/novel-cover.ts).
+      style={{
+        background: coverCss("paper", hue),
+        color: coverCss("ink", hue),
+        boxShadow: `inset 6px 0 0 ${coverCss("spine", hue)}, 0 1px 2px oklch(0 0 0 / 0.12)`,
+      }}
     >
       <div className="min-w-0">
         <div lang={lang ?? undefined} className="line-clamp-5 font-serif leading-[1.05] [overflow-wrap:anywhere]">

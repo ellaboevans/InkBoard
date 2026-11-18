@@ -21,10 +21,11 @@ import type { BoardSection } from "@/lib/board-types";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { SubscribeButton } from "@/components/feeds/subscribe-button";
 import { SiteLinks } from "@/components/site-links";
-import { BoardCanvas } from "./board-canvas";
+import { BoardCanvas, worksCount } from "./board-canvas";
+import { novelFacts } from "@/components/novel/book-card-face";
+import { novelPath } from "@/lib/novel-seo";
 import { CollectionBadgeLine } from "./poem-card-face";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
-import { pluralCount } from "@/lib/plural";
 
 /**
  * Canvas by default, with a plain list as an accessible alternative (N7).
@@ -89,6 +90,9 @@ function Board({
   );
 }
 
+/** "Novels" / "Poems" inside an author's entry, when they have both. */
+const subHeading = "mt-4 text-xs font-semibold tracking-[0.06em] text-primary uppercase";
+
 export type BoardFilter = {
   options: LanguageOption[];
   active: string | null;
@@ -133,38 +137,72 @@ function BoardList({
               <h2 id={`author-${s.editorId}`} className="flex items-center gap-2.5 border-b pb-2 font-serif text-2xl">
                 <AuthorPicture picture={s.picture} size={28} loading="lazy" className="size-7" />
                 {s.penName}
-                <span className="font-sans text-sm text-muted-foreground">
-                  {pluralCount(s.poems.length, "poem")}
-                </span>
+                <span className="font-sans text-sm text-muted-foreground">{worksCount(s, " · ")}</span>
               </h2>
-              <ul className="mt-2 divide-y">
-                {s.poems.map((p) => (
-                  <li key={p.id}>
-                    <Link href={`/p/${s.slug}/${p.slug}`} className="group block rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring">
-                      <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
-                        <span lang={p.language ?? undefined}>{p.title}</span>
-                        {p.visibility === "private" && (
-                          <LockIcon className="size-3.5 text-muted-foreground" aria-label="password protected" />
-                        )}
-                        {languageName(p.language) && (
-                          <span className="rounded-full border px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
-                            {languageName(p.language)}
+              {/* Novels first, as on the board (Phase 23b); the language filter has already narrowed them. */}
+              {s.novels.length > 0 && (
+                <>
+                  <h3 id={`novels-${s.editorId}`} className={subHeading}>
+                    Novels
+                  </h3>
+                  <ul aria-labelledby={`novels-${s.editorId}`} className="divide-y" data-list-novels>
+                    {s.novels.map((n) => (
+                      <li key={n.id}>
+                        <Link
+                          href={novelPath(s.slug, n.slug)}
+                          className="group block rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring"
+                        >
+                          <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
+                            <span lang={n.language ?? undefined}>{n.title}</span>
+                            {languageName(n.language) && (
+                              <span className="rounded-full border px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
+                                {languageName(n.language)}
+                              </span>
+                            )}
+                          </span>
+                          <span className="mt-0.5 block text-sm text-muted-foreground">Novel · {novelFacts(n)}</span>
+                          {n.blurb && (
+                            <span lang={n.language ?? undefined} className="mt-1 line-clamp-2 block font-serif text-sm text-muted-foreground">
+                              {n.blurb}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  {s.poems.length > 0 && <h3 className={subHeading}>Poems</h3>}
+                </>
+              )}
+              {s.poems.length > 0 && (
+                <ul className="mt-2 divide-y">
+                  {s.poems.map((p) => (
+                    <li key={p.id}>
+                      <Link href={`/p/${s.slug}/${p.slug}`} className="group block rounded-md py-3 focus-visible:outline-2 focus-visible:outline-ring">
+                        <span className="flex items-center gap-2 font-serif text-lg group-hover:underline">
+                          <span lang={p.language ?? undefined}>{p.title}</span>
+                          {p.visibility === "private" && (
+                            <LockIcon className="size-3.5 text-muted-foreground" aria-label="password protected" />
+                          )}
+                          {languageName(p.language) && (
+                            <span className="rounded-full border px-2 py-0.5 font-sans text-[11px] text-muted-foreground">
+                              {languageName(p.language)}
+                            </span>
+                          )}
+                        </span>
+                        {p.excerpt && (
+                          <span
+                            lang={p.language ?? undefined}
+                            className="mt-1 line-clamp-2 block font-serif text-sm whitespace-pre-line text-muted-foreground"
+                          >
+                            <PoemText text={p.excerpt} truncated={p.hasMore} />
                           </span>
                         )}
-                      </span>
-                      {p.excerpt && (
-                        <span
-                          lang={p.language ?? undefined}
-                          className="mt-1 line-clamp-2 block font-serif text-sm whitespace-pre-line text-muted-foreground"
-                        >
-                          <PoemText text={p.excerpt} truncated={p.hasMore} />
-                        </span>
-                      )}
-                      {p.collection && <CollectionBadgeLine collection={p.collection} className="mt-1" />}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                        {p.collection && <CollectionBadgeLine collection={p.collection} className="mt-1" />}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           ))}
         </div>

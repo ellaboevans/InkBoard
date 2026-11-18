@@ -5,7 +5,7 @@
  * it is stored, even after a reader unlocks it). React hoists these into <head>.
  */
 export function OfflineMarker(
-  props: { save: false } | { save: true; kind: "board" | "poem" | "author" | "collection" | "page"; title: string; author?: string },
+  props: { save: false } | { save: true; kind: "board" | "poem" | "author" | "collection" | "novel" | "chapter" | "page"; title: string; author?: string },
 ) {
   if (!props.save) return <meta name="inkboard-offline" content="never" />;
   return (

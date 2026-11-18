@@ -116,6 +116,18 @@ describe("the share cards (every opengraph-image)", () => {
     for (const n of nodes) expect(n.family, n.text).toBe(ogFontFamily(n.text));
   });
 
+  it("a novel's card (Phase 23b): the drawn cover's title and pen name follow the same rule", () => {
+    const cover = { title: EWE, penName: "Selorm Agbɔ", hue: 140 };
+    const nodes = textNodes(OgCard({ cover, kicker: "A novel by Selorm Agbɔ", title: EWE, quote: "Every Thursday", footer: "3 chapters · ongoing · on InkBoard" }));
+    const texts = nodes.map((n) => n.text);
+    expect(texts).toContain("SELORM AGBƆ");
+    for (const n of nodes) expect(n.family, n.text).toBe(ogFontFamily(n.text));
+    expect(first(nodes.find((n) => n.text === "SELORM AGBƆ")!.family)).toBe("Gentium Book Plus");
+    expect(nodes.filter((n) => n.text === EWE).every((n) => first(n.family) === "Gentium Book Plus")).toBe(true);
+    const english = textNodes(OgCard({ cover: { title: "The Ferry", penName: "Ama Serwaa", hue: 20 }, kicker: "Chapter 4", title: "The Radio" }));
+    for (const n of english) expect(first(n.family), n.text).toBe("Newsreader");
+  });
+
   it("an English card stays in Newsreader throughout", () => {
     const nodes = textNodes(OgCard({ kicker: "by Abla Dzifa", title: "Harmattan", quote: "the dry wind", footer: "Wander the board." }));
     expect(nodes.length).toBeGreaterThanOrEqual(5);

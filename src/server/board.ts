@@ -307,6 +307,34 @@ export async function loadReaderChapter(
 }
 
 /**
+ * Every published chapter readers can open, for the sitemap (Phase 23b):
+ * author, novel and chapter slugs in reading order, plus when each was first
+ * published. Drafts and novels with nothing published never appear; no text.
+ */
+export type SitemapChapter = { authorSlug: string; novelSlug: string; chapterSlug: string; publishedAt: string | null };
+
+export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
+  const rows = await getDb()
+    .select({
+      authorSlug: editors.slug,
+      novelSlug: novels.slug,
+      chapterSlug: chapters.slug,
+      publishedAt: chapters.publishedAt,
+    })
+    .from(chapters)
+    .innerJoin(novels, eq(novels.id, chapters.novelId))
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .where(and(eq(chapters.status, "published"), isNotNull(editors.penName), isNotNull(editors.slug)))
+    .orderBy(asc(editors.slug), asc(novels.slug), asc(chapters.position));
+  return rows.map((r) => ({
+    authorSlug: r.authorSlug!,
+    novelSlug: r.novelSlug,
+    chapterSlug: r.chapterSlug,
+    publishedAt: r.publishedAt?.toISOString() ?? null,
+  }));
+}
+
+/**
  * Does this reader page have anything to show? The proxy (src/proxy.ts) asks
  * before a full page load, so a missing page answers with a real 404 instead
  * of a streamed "not found" under a 200 (docs/PLAN.md, Phase 19). One small

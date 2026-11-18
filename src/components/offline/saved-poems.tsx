@@ -4,6 +4,8 @@ import { RefreshCwIcon } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { PAGES_CACHE_PREFIX, SAVED_INDEX_KEY } from "@/lib/offline/rules";
 
+const READ_KINDS = ["poem", "novel", "chapter"];
+
 type Entry = { url: string; kind: string; title: string | null; author: string | null; savedAt: number };
 type Saved = { poems: Entry[]; board: boolean; from: string | null };
 
@@ -30,7 +32,8 @@ async function load() {
   }
   const all = [...entries.values()];
   snapshot = {
-    poems: all.filter((e) => e.kind === "poem" && e.title).sort((a, b) => b.savedAt - a.savedAt),
+    // Poems, and (Phase 23b) novel and chapter pages: what a reader came to read.
+    poems: all.filter((e) => READ_KINDS.includes(e.kind) && e.title).sort((a, b) => b.savedAt - a.savedAt),
     board: all.some((e) => e.url === "/"),
     // Only same-site paths, so the "try again" link can't point anywhere else.
     from: from && from.startsWith("/") && !from.startsWith("//") ? from : null,
@@ -66,7 +69,7 @@ export function SavedPoems() {
         </h2>
         {saved.poems.length === 0 ? (
           <p className="text-muted-foreground">
-            No poems saved yet. Poems you open while online are kept here for reading offline.
+            No poems saved yet. Poems and chapters you open while online are kept here for reading offline.
           </p>
         ) : (
           <ul className="grid gap-2" data-saved-poems>

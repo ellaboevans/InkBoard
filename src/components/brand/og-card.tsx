@@ -1,4 +1,5 @@
 import { stripPoemMarkdown } from "@/lib/poem-markdown";
+import { coverHex, type CoverSpec } from "@/lib/novel-cover";
 import { BRAND, SITE_NAME } from "@/lib/site";
 import { ogFontFamily, truncate } from "./og-type";
 
@@ -56,13 +57,57 @@ export function LogoMark({ size, tile = BRAND.primary, glyph = BRAND.onPrimary }
   );
 }
 
-/** 1200×630 card: brand row at the top, then a kicker, a big title and an optional quote. */
+/**
+ * A novel's drawn cover on a link card (Phase 23b): the title and pen name on
+ * the paper tone of the author's hue, with a spine, like NovelCover on the
+ * page. Only the novel's title and the pen name: never chapter text.
+ */
+export function OgCover({ title, penName, hue }: CoverSpec) {
+  const ink = coverHex("ink", hue);
+  const shown = truncate(title, 60);
+  const author = penName.toUpperCase();
+  return (
+    <div
+      style={{
+        width: 240,
+        height: 360,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "40px 22px 28px 24px",
+        borderRadius: "6px 14px 14px 6px",
+        borderLeft: `14px solid ${coverHex("spine", hue)}`,
+        background: coverHex("paper", hue),
+        color: ink,
+        boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", fontSize: shown.length > 32 ? 30 : 38, lineHeight: 1.08, fontFamily: ogFontFamily(shown) }}>
+          {shown}
+        </div>
+        <div style={{ width: 64, height: 3, marginTop: 22, background: ink, opacity: 0.6, display: "flex" }} />
+      </div>
+      <div style={{ display: "flex", fontSize: 16, letterSpacing: 2, opacity: 0.85, fontFamily: ogFontFamily(author) }}>
+        {truncate(author, 28)}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 1200×630 card: brand row at the top, then a kicker, a big title and an
+ * optional quote. With a `cover` (novels), the drawn cover stands to the left
+ * of the text and the title is set smaller to fit beside it.
+ */
 export function OgCard({
   kicker,
   title,
   quote,
   footer,
   picture,
+  cover,
 }: {
   kicker?: string;
   title: string;
@@ -70,8 +115,12 @@ export function OgCard({
   footer?: string;
   /** The author's photo or avatar as a data URI (pictureDataUri, src/server/author-picture.ts), drawn round at the top right. */
   picture?: string | null;
+  /** A novel's drawn cover, beside the text (Phase 23b). */
+  cover?: CoverSpec;
 }) {
-  const titleSize = title.length > 60 ? 60 : title.length > 30 ? 76 : 96;
+  const titleSize = cover
+    ? title.length > 40 ? 52 : title.length > 20 ? 64 : 80
+    : title.length > 60 ? 60 : title.length > 30 ? 76 : 96;
   return (
     <div
       style={{
@@ -101,31 +150,34 @@ export function OgCard({
           />
         )}
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        {kicker && (
-          <div style={{ fontSize: 30, color: BRAND.primary, fontStyle: "italic", marginBottom: 16, fontFamily: ogFontFamily(kicker) }}>
-            {kicker}
+      <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 56 }}>
+        {cover && <OgCover {...cover} />}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {kicker && (
+            <div style={{ fontSize: 30, color: BRAND.primary, fontStyle: "italic", marginBottom: 16, fontFamily: ogFontFamily(kicker) }}>
+              {kicker}
+            </div>
+          )}
+          <div style={{ fontSize: titleSize, lineHeight: 1.05, letterSpacing: -1, display: "flex", fontFamily: ogFontFamily(title) }}>
+            {truncate(title, 90)}
           </div>
-        )}
-        <div style={{ fontSize: titleSize, lineHeight: 1.05, letterSpacing: -1, display: "flex", fontFamily: ogFontFamily(title) }}>
-          {truncate(title, 90)}
+          {quote && (
+            <div
+              style={{
+                marginTop: 28,
+                fontSize: 30,
+                lineHeight: 1.4,
+                color: BRAND.muted,
+                fontStyle: "italic",
+                whiteSpace: "pre-wrap",
+                display: "flex",
+                fontFamily: ogFontFamily(quote),
+              }}
+            >
+              {quote}
+            </div>
+          )}
         </div>
-        {quote && (
-          <div
-            style={{
-              marginTop: 28,
-              fontSize: 30,
-              lineHeight: 1.4,
-              color: BRAND.muted,
-              fontStyle: "italic",
-              whiteSpace: "pre-wrap",
-              display: "flex",
-              fontFamily: ogFontFamily(quote),
-            }}
-          >
-            {quote}
-          </div>
-        )}
       </div>
       {footer && <div style={{ fontSize: 26, color: BRAND.muted, display: "flex", fontFamily: ogFontFamily(footer) }}>{footer}</div>}
     </div>

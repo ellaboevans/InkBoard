@@ -21,6 +21,38 @@ describe("which request gets which strategy", () => {
     expect(R.readerKind("/a/odalys-moon/c/harmattan")).toBe("collection");
   });
 
+  it("novel and chapter pages are reader pages (Phase 23b); a novel's own files aren't chapters", () => {
+    for (const [path, kind] of [
+      ["/a/odalys-moon/n/the-ferry", "novel"],
+      ["/a/odalys-moon/n/the-ferry/thursday", "chapter"],
+      ["/a/odalys-moon/n/the-ferry/chapter-2", "chapter"],
+    ] as const) {
+      expect(req(path), path).toBe("reader-page");
+      expect(R.readerKind(path), path).toBe(kind);
+    }
+    for (const path of [
+      "/a/odalys-moon/n",
+      "/a/odalys-moon/n/the-ferry/opengraph-image",
+      "/a/odalys-moon/n/the-ferry/twitter-image",
+      "/a/odalys-moon/n/the-ferry/feed.xml",
+      "/a/odalys-moon/n/the-ferry/thursday/opengraph-image",
+    ]) {
+      expect(R.readerKind(path), path).toBeNull();
+      expect(req(path), path).toBe("online-only");
+    }
+    // Their link cards are images, fetched by crawlers and previews: never handled or stored.
+    expect(req("/a/odalys-moon/n/the-ferry/thursday/opengraph-image", { mode: "no-cors" })).toBe("passthrough");
+  });
+
+  it("a novel or chapter page is saved only with its \"save\" marker; a 404 (a draft, a draft-only novel) drops any copy", () => {
+    const chapter = page('<meta name="inkboard-offline" content="save"/><meta name="inkboard-offline-kind" content="chapter"/><meta name="inkboard-offline-title" content="The Ferry · Chapter 2: The Landing"/><meta name="inkboard-offline-author" content="Ɔdɔ Mensah"/>');
+    expect(R.verdict(200, "text/html; charset=utf-8", chapter)).toBe("save");
+    expect(R.pageMeta(chapter)).toEqual({ kind: "chapter", title: "The Ferry · Chapter 2: The Landing", author: "Ɔdɔ Mensah" });
+    // /missing/chapter and /missing/novel: a 404 with the not-found page, no marker.
+    expect(R.verdict(404, "text/html; charset=utf-8", page("<h1>Chapter not found</h1>"))).toBe("drop");
+    expect(R.verdict(200, "text/html; charset=utf-8", page("<h1>Novel not found</h1>"))).toBe("drop");
+  });
+
   it("the About and Privacy pages are reader pages too (kind \"page\"), and nothing under them is", () => {
     for (const path of ["/about", "/privacy"]) {
       expect(req(path), path).toBe("reader-page");
@@ -142,8 +174,15 @@ describe("what may be stored", () => {
     expect(R.assetUrls(html)).toEqual(["/_next/static/chunks/a1.js", "/_next/static/css/b2.css", "/_next/static/chunks/c3.js"]);
   });
 
-  it("keeps the most recent 50 poems and 30 other pages", () => {
-    expect(R.CAPS).toEqual({ poem: 50, other: 30 });
+  it("keeps the most recent 50 poems, 60 chapters, 30 novel pages and 30 other pages, each counted on its own", () => {
+    expect(R.CAPS).toEqual({ poem: 50, chapter: 60, novel: 30, other: 30 });
+    const chapters = Array.from({ length: 62 }, (_, i) => ({ url: `/a/a/n/b/${i}`, kind: "chapter", savedAt: 100 + i }));
+    const novels = Array.from({ length: 31 }, (_, i) => ({ url: `/a/a/n/${i}`, kind: "novel", savedAt: 200 + i }));
+    const boards = Array.from({ length: 30 }, (_, i) => ({ url: `/a/x${i}`, kind: "author", savedAt: 300 + i }));
+    // Chapters and novels don't push out the others, nor each other.
+    expect(R.overCap([...chapters, ...novels, ...boards]).sort()).toEqual(["/a/a/n/0", "/a/a/n/b/0", "/a/a/n/b/1"].sort());
+    // An unknown or missing kind counts with the others.
+    expect(R.overCap([...boards, { url: "/a/odd", kind: "?", savedAt: 1 }])).toEqual(["/a/odd"]);
     const poems = Array.from({ length: 53 }, (_, i) => ({ url: `/p/a/${i}`, kind: "poem", savedAt: i }));
     const others = Array.from({ length: 31 }, (_, i) => ({ url: `/a/${i}`, kind: "author", savedAt: i }));
     expect(R.overCap([...poems, ...others]).sort()).toEqual(["/a/0", "/p/a/0", "/p/a/1", "/p/a/2"].sort());

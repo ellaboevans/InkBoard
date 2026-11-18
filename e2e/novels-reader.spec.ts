@@ -6,7 +6,9 @@ import { expectBackOnList, signUpAs, sql } from "./helpers";
  * one desktop check: the book card on the board and the author page, the
  * novel page, reading a chapter and the next, "Continue: Chapter n" from
  * this browser's saved place, real 404s for drafts, unpublishing, and no
- * sideways scrolling at 320, 375 and 1280 px.
+ * sideways scrolling at 320, 375 and 1280 px. Round 2: the list view, and
+ * what search engines and link previews get (canonical, descriptions,
+ * JSON-LD, link card images, the sitemap).
  */
 
 test.use({ viewport: { width: 375, height: 812 } });
@@ -120,7 +122,8 @@ test("readers find a novel on the board and the author page, read on, continue w
   await expect(chapterLinks.nth(0)).toContainText("Thursday");
   await expect(chapterLinks.nth(1)).toContainText("The Landing");
   await expect(main).not.toContainText("SECRET");
-  await expect(page.locator('meta[name="inkboard-offline"]')).toHaveAttribute("content", "never");
+  await expect(page.locator('meta[name="inkboard-offline"]')).toHaveAttribute("content", "save");
+  await expect(page.locator('meta[name="inkboard-offline-kind"]')).toHaveAttribute("content", "novel");
   const start = main.getByRole("link", { name: "Start reading" });
   await expect(start).toHaveAttribute("href", `${novelUrl}/thursday`);
 
@@ -137,7 +140,8 @@ test("readers find a novel on the board and the author page, read on, continue w
   await expect(text.getByRole("separator", { name: "Scene break" })).toBeVisible();
   // The UI around the text stays English: the bar and kicker inherit the page's lang.
   expect(await bar.evaluate((el) => el.closest("[lang]")?.getAttribute("lang"))).toBe("en");
-  await expect(page.locator('meta[name="inkboard-offline"]')).toHaveAttribute("content", "never");
+  await expect(page.locator('meta[name="inkboard-offline"]')).toHaveAttribute("content", "save");
+  await expect(page.locator('meta[name="inkboard-offline-kind"]')).toHaveAttribute("content", "chapter");
   // The bar stays at the top while reading.
   expect(await bar.evaluate((el) => getComputedStyle(el.parentElement!).position)).toBe("sticky");
   await noSidewaysScroll(page, "chapter 1");
@@ -257,4 +261,128 @@ test("a phone reads at 19 px with a 1.7 line height, 18 px under 360 px", async 
   expect(parseFloat(phone.line)).toBeCloseTo(19 * 1.7, 1);
   await page.setViewportSize({ width: 320, height: 700 });
   expect((await style()).size).toBe("18px");
+});
+
+/** A PNG's width and height, from its IHDR chunk. */
+function pngSize(buf: Buffer) {
+  expect(buf.subarray(1, 4).toString("latin1")).toBe("PNG");
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+test("the list view lists novels by language; the pages give search engines and link previews what they need", async ({ page, request }) => {
+  test.slow();
+  const id = unique();
+  const email = `reader-seo-${id}@example.com`;
+  const pen = `Seo Novelist ${id}`;
+  await signUpAs(page, email, pen);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  const author = rows[0].slug as string;
+  // Straight to the database: an Akan novel (two published chapters, one untitled, and a draft),
+  // a draft-only novel, and two poems so the board offers Akan and English…
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
+      VALUES ('${rows[0].id}', 'Ɔdɔ ne Ɛkɔm', 'odo', 'Akua waits at the landing for a brother who never came back.', 'ak') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 9 FROM n,
+      (VALUES ('Thursday', 'thursday', E'*Akua* waited at the landing.\n\n* * *\n\nThe ferry came late.', 1, 'published'),
+              ('SECRET DRAFT', 'secret', 'SECRET TEXT', 2, 'draft'),
+              ('', 'chapter', 'Second chapter.', 3, 'published')) AS t(title, slug, body, pos, status)`);
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${rows[0].id}', 'Unready ${id}', 'unready') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position) SELECT id, 'Hidden', 'hidden', 'HIDDEN', 1 FROM n`);
+  await sql(`INSERT INTO poems (editor_id, title, slug, body, status, published_at, language) VALUES
+    ('${rows[0].id}', 'Akan poem ${id}', 'akan-${id}', 'nsuo', 'published', now(), 'ak'),
+    ('${rows[0].id}', 'English poem ${id}', 'english-${id}', 'rain', 'published', now(), 'en')`);
+  // …then a poem through the app, which refreshes the board's cache.
+  await page.goto("/admin/poems/new");
+  await page.getByRole("textbox", { name: "Title" }).fill(`Refresh ${id}`);
+  await page.getByRole("textbox", { name: "Poem" }).fill("a line");
+  await page.getByRole("button", { name: "Publish to board" }).click();
+  await expectBackOnList(page);
+
+  // The list view: "Novels" above "Poems" under the author's heading.
+  const listFor = async (query: string) => {
+    await page.goto(`/${query}`);
+    await expect(page.locator('[aria-label="Poem board"][data-ready="true"]')).toBeAttached();
+    await page.getByRole("button", { name: "List view" }).click();
+    return page.getByRole("region", { name: new RegExp(`^${pen}`) });
+  };
+  let entry = await listFor("");
+  await expect(entry.getByRole("heading", { level: 2 })).toContainText("1 novel · 3 poems");
+  const novels = entry.getByRole("list", { name: "Novels" });
+  const link = novels.getByRole("link");
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveAttribute("href", `/a/${author}/n/odo`);
+  await expect(link).toContainText("Ɔdɔ ne Ɛkɔm");
+  await expect(link).toContainText("Novel · 2 chapters · ongoing");
+  await expect(link.locator('[lang="ak"]').first()).toHaveText("Ɔdɔ ne Ɛkɔm");
+  await expect(entry.getByRole("heading", { level: 3 })).toHaveText(["Novels", "Poems"]);
+  await expect(entry).not.toContainText(/Unready|SECRET|Hidden/);
+  await noSidewaysScroll(page, "list view at 375");
+  // The language filter narrows novels like poems.
+  entry = await listFor("?lang=en");
+  await expect(entry).toBeVisible();
+  await expect(entry.getByRole("list", { name: "Novels" })).toHaveCount(0);
+  await expect(entry).toContainText(`English poem ${id}`);
+  entry = await listFor("?lang=ak");
+  await expect(entry.getByRole("list", { name: "Novels" }).getByRole("link")).toHaveCount(1);
+  await expect(entry).not.toContainText(`English poem ${id}`);
+  await link.click();
+  await expect(page).toHaveURL(`/a/${author}/n/odo`);
+
+  // The novel page: canonical, description (its blurb), Open Graph, link card, JSON-LD (a Book).
+  const novelUrl = `/a/${author}/n/odo`;
+  const head = async () => ({
+    canonical: new URL((await page.locator('link[rel="canonical"]').getAttribute("href"))!).pathname,
+    description: await page.locator('meta[name="description"]').getAttribute("content"),
+    ogUrl: new URL((await page.locator('meta[property="og:url"]').getAttribute("content"))!).pathname,
+    ogSite: await page.locator('meta[property="og:site_name"]').getAttribute("content"),
+    twitter: await page.locator('meta[name="twitter:card"]').getAttribute("content"),
+    ld: (await page.locator('script[type="application/ld+json"]').allTextContents()).map((t) => JSON.parse(t)),
+  });
+  const card = async () => {
+    const og = await page.locator('meta[property="og:image"]').first().getAttribute("content");
+    const res = await request.get(new URL(og!).pathname + new URL(og!).search);
+    expect(res.status(), og!).toBe(200);
+    expect(res.headers()["content-type"]).toBe("image/png");
+    return { path: new URL(og!).pathname, size: pngSize(Buffer.from(await res.body())) };
+  };
+  let h = await head();
+  expect(h).toMatchObject({
+    canonical: novelUrl,
+    description: "Akua waits at the landing for a brother who never came back.",
+    ogUrl: novelUrl,
+    ogSite: "InkBoard",
+    twitter: "summary_large_image",
+  });
+  expect(await page.locator('meta[property="og:type"]').getAttribute("content")).toBe("book");
+  const book = h.ld.find((x) => x["@type"] === "Book");
+  expect(book).toMatchObject({ name: "Ɔdɔ ne Ɛkɔm", inLanguage: "ak", author: { name: pen } });
+  expect(book.hasPart.map((c: { position: number; name: string }) => [c.position, c.name])).toEqual([[1, "Thursday"], [2, "Chapter 2"]]);
+  expect(JSON.stringify(h.ld)).not.toMatch(/SECRET|Hidden|Unready/);
+  expect(await card()).toEqual({ path: `${novelUrl}/opengraph-image`, size: { width: 1200, height: 630 } });
+
+  // The chapter page: description from its first lines (plain text), JSON-LD (a Chapter of the Book).
+  await page.goto(`${novelUrl}/thursday`);
+  h = await head();
+  expect(h).toMatchObject({
+    canonical: `${novelUrl}/thursday`,
+    description: "Akua waited at the landing. The ferry came late.",
+    ogUrl: `${novelUrl}/thursday`,
+    ogSite: "InkBoard",
+    twitter: "summary_large_image",
+  });
+  const chapter = h.ld.find((x) => x["@type"] === "Chapter");
+  expect(chapter).toMatchObject({
+    name: "Thursday",
+    position: 1,
+    inLanguage: "ak",
+    isPartOf: { "@type": "Book", name: "Ɔdɔ ne Ɛkɔm", inLanguage: "ak" },
+  });
+  expect(await card()).toEqual({ path: `${novelUrl}/thursday/opengraph-image`, size: { width: 1200, height: 630 } });
+  // The untitled chapter's card answers too.
+  expect((await request.get(`${novelUrl}/chapter/opengraph-image`)).headers()["content-type"]).toBe("image/png");
+
+  // The sitemap: the novel and its published chapters, nothing else of it.
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  for (const path of [novelUrl, `${novelUrl}/thursday`, `${novelUrl}/chapter`]) expect(sitemap, path).toContain(`${path}</loc>`);
+  for (const path of [`${novelUrl}/secret`, `/a/${author}/n/unready`]) expect(sitemap, path).not.toContain(path);
 });

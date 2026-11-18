@@ -711,7 +711,7 @@ function World({
 }
 
 /** "1 novel · 3 poems", "4 poems", "1 novel": what a section holds (no "0 poems" for a novelist). */
-function worksCount(section: Pick<BoardSection, "novels" | "poems">, separator: string) {
+export function worksCount(section: Pick<BoardSection, "novels" | "poems">, separator: string) {
   const parts = [];
   if (section.novels.length > 0) parts.push(pluralCount(section.novels.length, "novel"));
   if (section.poems.length > 0 || section.novels.length === 0) parts.push(pluralCount(section.poems.length, "poem"));

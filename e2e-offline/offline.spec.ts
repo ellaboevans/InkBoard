@@ -15,6 +15,8 @@ const F = JSON.parse(readFileSync(FIXTURES_FILE, "utf8")) as {
   unpublish: Poem;
   unread: Poem;
   secret: Poem;
+  /** Phase 23b: a novel with published chapters (`chapter` is the first) and a draft one. */
+  novel: { slug: string; chapter: string; draft: string };
 };
 const url = (p: Poem) => `/p/offline-poet/${p.slug}`;
 
@@ -299,4 +301,36 @@ test("the About and Privacy pages are saved, and open offline", async ({ context
   await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
   await indicator(page);
   expect(await saved(page)).not.toContain("/a/nobody-here");
+});
+
+test("a chapter read online opens offline after a reload; its novel page too; a draft chapter is never saved (Phase 23b)", async ({ context, page }) => {
+  await withWorker(page);
+  const novelPath = `/a/offline-poet/n/${F.novel.slug}`;
+  const chapterPath = `${novelPath}/${F.novel.chapter}`;
+  // A draft chapter is a 404: nothing to save.
+  expect((await page.goto(`${novelPath}/${F.novel.draft}`))!.status()).toBe(404);
+  await page.goto(novelPath);
+  await expect(page.getByRole("heading", { level: 1, name: "The Ferry at Yeji" })).toBeVisible();
+  await page.getByRole("link", { name: "Start reading" }).click();
+  await expect(page).toHaveURL(new RegExp(`${chapterPath}$`));
+  await expect(page.getByRole("main").locator("[data-chapter-text] p").first()).toHaveText("The ferry came late.");
+  await expect.poll(() => saved(page)).toEqual(expect.arrayContaining([novelPath, chapterPath]));
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "Thursday" })).toBeVisible();
+  await expect(page.getByRole("main").locator("[data-chapter-text] p")).toHaveText(["The ferry came late.", "Akua waited at the landing."]);
+  await expect(page.getByRole("navigation", { name: "Novel" })).toContainText("Chapter 1 of 2");
+  await indicator(page);
+  // Back to the novel page, from its saved copy; "Continue" still comes from this browser.
+  await page.getByRole("navigation", { name: "Novel" }).getByRole("link", { name: "The Ferry at Yeji" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "The Ferry at Yeji" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Continue: Chapter 1 · Thursday" })).toBeVisible();
+
+  // The offline page lists the chapter and the novel; the draft was never stored, under any address.
+  await page.goto("/offline");
+  const list = page.locator("[data-saved-poems]");
+  await expect(list).toContainText("The Ferry at Yeji · Chapter 1: Thursday");
+  expect(await saved(page)).not.toContain(`${novelPath}/${F.novel.draft}`);
+  expect((await cacheContents(page, "DRAFT CHAPTER TEXT")).found).toBe(false);
 });

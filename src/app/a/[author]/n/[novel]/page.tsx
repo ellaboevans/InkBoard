@@ -6,7 +6,10 @@ import { Suspense } from "react";
 import { AuthorPicture } from "@/components/author/author-picture";
 import { NovelCover } from "@/components/novel/novel-cover";
 import { ChapterList, ContinueReading, type ChapterLink } from "@/components/novel/novel-reading";
+import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SaveForOffline } from "@/components/offline/save-for-offline";
+import { JsonLd } from "@/components/seo/json-ld";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { sectionHue } from "@/lib/board-layout";
@@ -14,7 +17,8 @@ import type { NovelPage } from "@/lib/board-types";
 import { shortDuration } from "@/lib/novel-limits";
 import { pluralCount } from "@/lib/plural";
 import { languageName } from "@/lib/poem-languages";
-import { BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
+import { novelDescription, novelJsonLd, novelPath } from "@/lib/novel-seo";
+import { BASE_OPEN_GRAPH } from "@/lib/site";
 import { getNovelPage } from "@/server/board-cache";
 
 /*
@@ -23,21 +27,15 @@ import { getNovelPage } from "@/server/board-cache";
  * published chapters with their reading times, and "Start reading" /
  * "Continue: Chapter n" from this browser's saved place. A static shell with
  * the cached (BOARD_TAG) data behind Suspense; nothing here reads cookies,
- * and the saved place is read in the browser only (ContinueReading).
- *
- * Not saved offline yet (save={false}); offline, link cards, JSON-LD and the
- * sitemap come in the next round.
+ * and the saved place is read in the browser only (ContinueReading), so the
+ * page is the same for everyone and is saved for offline reading (kind
+ * "novel"). Its link card is opengraph-image.tsx; JSON-LD is a Book with its
+ * published chapters (src/lib/novel-seo.ts).
  */
 
 type Props = PageProps<"/a/[author]/n/[novel]">;
 
-const novelUrl = (n: Pick<NovelPage, "authorSlug" | "slug">) => `/a/${n.authorSlug}/n/${n.slug}`;
-
-function description(n: NovelPage) {
-  const blurb = n.fullBlurb?.replace(/\s+/g, " ").trim();
-  if (blurb) return blurb.length > 160 ? `${blurb.slice(0, 157).trimEnd()}…` : blurb;
-  return `A novel by ${n.penName} on ${SITE_NAME}, ${pluralCount(n.chapterCount, "chapter")} so far.`;
-}
+const novelUrl = (n: Pick<NovelPage, "authorSlug" | "slug">) => novelPath(n.authorSlug, n.slug);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { author, novel } = await params;
@@ -45,19 +43,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!n) return { title: "Novel not found", robots: { index: false } };
   const url = novelUrl(n);
   const title = `${n.title}: a novel by ${n.penName}`;
+  const description = novelDescription(n);
   return {
     title,
-    description: description(n),
+    description,
     alternates: { canonical: url },
     authors: [{ name: n.penName, url: `/a/${n.authorSlug}` }],
-    openGraph: { ...BASE_OPEN_GRAPH, type: "book", url, title, description: description(n) },
-    twitter: { card: "summary_large_image", title, description: description(n) },
+    openGraph: { ...BASE_OPEN_GRAPH, type: "book", url, title, description },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
 export default function NovelPublicPage({ params }: Props) {
   return (
     <main className="flex-1 bg-background">
+      {/* "You're offline · showing saved poems", as on the other reader pages. */}
+      <OfflineIndicator className="pointer-events-none fixed inset-x-4 bottom-4 z-30" />
       <div className="mx-auto max-w-5xl px-5 py-8 sm:px-6 sm:py-10">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/">
@@ -102,8 +103,10 @@ async function Novel({ params }: Pick<Props, "params">) {
 
   return (
     <>
-      {/* Not saved for offline reading yet (Phase 23b): the next round adds the novel kinds. */}
-      <OfflineMarker save={false} />
+      {/* Saved for offline reading, like the other reader pages (only rendered when the novel exists). */}
+      <OfflineMarker save kind="novel" title={n.title} author={n.penName} />
+      <SaveForOffline path={base} />
+      <JsonLd data={novelJsonLd(n)} />
       <div className="mt-6 grid grid-cols-[112px_minmax(0,1fr)] items-start gap-x-[18px] gap-y-5 sm:mt-7 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-x-10">
         <NovelCover
           title={n.title}

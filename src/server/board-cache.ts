@@ -8,6 +8,8 @@ import {
   loadNovelPage,
   loadReaderChapter,
   loadReaderPoem,
+  loadSitemapChapters,
+  type SitemapChapter,
 } from "./board";
 import { BOARD_TAG } from "./cache-tags";
 import { loadAuthorFeed, loadSiteFeed } from "./feeds";
@@ -81,4 +83,12 @@ export async function getReaderChapter(authorSlug: string, novelSlug: string, ch
   cacheTag(BOARD_TAG);
   cacheLife("hours");
   return loadReaderChapter(authorSlug, novelSlug, chapterSlug);
+}
+
+/** Published chapters for the sitemap (Phase 23b); same tag, so publishes and unpublishes show. */
+export async function getSitemapChapters(): Promise<SitemapChapter[]> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadSitemapChapters();
 }

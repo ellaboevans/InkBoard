@@ -14,6 +14,7 @@ import { getDb } from "@/db";
 import { editors } from "@/db/schema";
 import { createSession } from "@/server/auth/sessions";
 import { createPoem } from "@/server/poems";
+import { createChapter, createNovel } from "@/server/novels";
 
 import { FIXTURES_FILE, PRIVATE_LINE, PRIVATE_PASSWORD } from "./constants";
 
@@ -44,10 +45,22 @@ async function main() {
   const unpublish = await poem("Harbour Lights", "The boats come in like tired dogs,\nnosing the pier for a place to sleep.");
   const unread = await poem("Salt", "It gets into everything here,\nthe hinges, the bread, the letters");
   const secret = await poem("Old Letters", PRIVATE_LINE, "private");
+  // A novel (Phase 23b): two published chapters and a draft.
+  const novel = await createNovel(editor.id, { title: "The Ferry at Yeji", language: "en" });
+  if (!novel.ok) throw new Error(`novel: ${JSON.stringify(novel)}`);
+  const chapter = async (title: string, body: string, status: "draft" | "published") => {
+    const res = await createChapter(editor.id, novel.novel.id, { title, body, status });
+    if (!res.ok) throw new Error(`${title}: ${JSON.stringify(res)}`);
+    return res.chapter;
+  };
+  const chapterOne = await chapter("Thursday", "The ferry came late.\n\n* * *\n\nAkua waited at the landing.", "published");
+  await chapter("The Landing", "Kwabena did not come back.", "published");
+  const draftChapter = await chapter("Not Yet", "DRAFT CHAPTER TEXT", "draft");
   const { token } = await createSession(editor.id);
 
   await mkdir(path.dirname(FIXTURES_FILE), { recursive: true });
-  await writeFile(FIXTURES_FILE, JSON.stringify({ token, read, unpublish, unread, secret }, null, 2));
+  const novelFixture = { slug: novel.novel.slug, chapter: chapterOne.slug, draft: draftChapter.slug };
+  await writeFile(FIXTURES_FILE, JSON.stringify({ token, read, unpublish, unread, secret, novel: novelFixture }, null, 2));
   console.log("offline fixtures ready");
   process.exit(0);
 }

@@ -1217,3 +1217,33 @@ test("chapter text settings: the open control, the default and the largest sans 
     await page.evaluate(() => localStorage.removeItem("inkboard-reading-text"));
   }
 });
+
+test("writer's stats: empty and with links, a novel and followers, phone and desktop", async ({ page }) => {
+  test.slow();
+  const id = unique();
+  const email = `a11y-stats-${id}@example.com`;
+  await signUpAs(page, email, `Stats A11y ${id}`);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin/stats");
+    await expect(page.getByRole("main").getByText("No shared links yet.")).toBeVisible();
+    await scan(page, `stats: empty at ${width}px`);
+  }
+  const { rows } = await sql(`SELECT id FROM editors WHERE email = '${email}'`);
+  const ed = rows[0].id as string;
+  await sql(`WITH p AS (INSERT INTO poems (editor_id, title, slug, body, status, published_at) VALUES ('${ed}', 'Ŋutifafa', 'nutifafa', 'a line', 'published', now()) RETURNING id)
+    INSERT INTO short_links (poem_id, code, visits) SELECT id, 'k${id.slice(-5).replace(/[^2-9b-df-hj-np-tv-xz]/g, "k")}', 12 FROM p`);
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, visibility, password_hash) VALUES ('${ed}', 'Ʋu la', 'vu', 'private', 'scrypt$1$1$1$x$y') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count) SELECT id, 'Ŋkeke', 'nkeke', 'Text.', 1, 'published', now(), 1200 FROM n`);
+  for (let i = 0; i < 4; i++) {
+    await sql(`WITH s AS (INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES ('https://fcm.googleapis.com/fcm/send/a11y-${id}-${i}', 'k', 'a') RETURNING id)
+      INSERT INTO push_follows (subscription_id, editor_id) SELECT id, '${ed}' FROM s`);
+  }
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin/stats");
+    await expect(page.getByRole("main").locator("[data-link-row]")).toHaveCount(1);
+    await expect(page.getByRole("main").locator('[data-stat="followers"]')).toHaveText("4");
+    await scan(page, `stats: with data at ${width}px`);
+  }
+});

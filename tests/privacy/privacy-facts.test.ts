@@ -1,3 +1,4 @@
+import { FOLLOWER_THRESHOLD } from "@/lib/writer-stats";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -50,9 +51,10 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   revisionsKept: REVISIONS_KEPT,
   chapterVersionsKept: CHAPTER_REVISIONS_KEPT,
   readingPlacesKept: READING_PLACES_MAX,
+  followerThreshold: FOLLOWER_THRESHOLD,
   recoveryCodesPerSet: RECOVERY_CODES_PER_SET,
 };
-const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "chapterVersionsKept", "readingPlacesKept", "recoveryCodesPerSet"]);
+const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "chapterVersionsKept", "readingPlacesKept", "followerThreshold", "recoveryCodesPerSet"]);
 
 const page = readFileSync("src/app/privacy/page.tsx", "utf8");
 

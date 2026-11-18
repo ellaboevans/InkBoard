@@ -129,7 +129,9 @@ export default function PrivacyPage() {
               device, issued by its push service (Google, Apple, Mozilla or Microsoft), and we store that address, the
               keys that encrypt messages to it, when we last sent to it, whether you want every new poem or only those by
               writers you follow, and which writers you follow. New chapters of novels are sent only to the writers’
-              followers. We don’t store your name, email or location, and the address isn’t linked to an account.
+              followers. We don’t store your name, email or location, and the address isn’t linked to an account. A
+              writer sees only how many devices follow them, as one number on their stats (below{" "}
+              {F.followerThreshold} it says &ldquo;fewer than {F.followerThreshold}&rdquo;), never anything about a device.
             </p>
             <p>
               To keep to our limits on how often we notify you, we note which notifications went to each address, and a
@@ -148,8 +150,8 @@ export default function PrivacyPage() {
             <p>
               A picture of a public poem carries a short address (like /s/k3x9qm) that leads to the poem, and a picture
               of a passage from a public novel’s chapter one that leads to the chapter. We count visits through it: one
-              number per poem or chapter, which only its writer sees (a poem’s on their dashboard, a chapter’s in their
-              JSON download). To count each network once {F.shareVisitRepeat} per poem or chapter, we use the same kind
+              number per poem or chapter, which only its writer sees (on their dashboard and stats, and in their JSON
+              download). To count each network once {F.shareVisitRepeat} per poem or chapter, we use the same kind
               of counter as below, named after the poem or chapter and the IP address (for IPv6, only its network part). Nothing else about who visited is kept, and no
               cookie is set. Link previews (such as WhatsApp drawing a preview) and browsers fetching ahead aren’t
               counted.

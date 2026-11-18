@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpenIcon, FileTextIcon, LibraryIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
+import { BarChart3Icon, BookOpenIcon, FileTextIcon, LibraryIcon, SettingsIcon, UserRoundIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   SidebarGroup,
@@ -15,6 +15,7 @@ const ITEMS = [
   { title: "Poems", href: "/admin", icon: FileTextIcon, match: (p: string) => p === "/admin" || p.startsWith("/admin/poems") },
   { title: "Novels", href: "/admin/novels", icon: BookOpenIcon, match: (p: string) => p.startsWith("/admin/novels") },
   { title: "Collections", href: "/admin/collections", icon: LibraryIcon, match: (p: string) => p.startsWith("/admin/collections") },
+  { title: "Stats", href: "/admin/stats", icon: BarChart3Icon, match: (p: string) => p.startsWith("/admin/stats") },
   { title: "Profile", href: "/admin/profile", icon: UserRoundIcon, match: (p: string) => p.startsWith("/admin/profile") },
   { title: "Settings", href: "/admin/settings", icon: SettingsIcon, match: (p: string) => p.startsWith("/admin/settings") },
 ];

@@ -50,6 +50,8 @@ export const PRIVACY_FACTS = {
   chapterVersionsKept: "10",
   /** READING_PLACES_MAX (src/lib/reading-place.ts): novels whose place a browser remembers. */
   readingPlacesKept: "50",
+  /** FOLLOWER_THRESHOLD (src/lib/writer-stats.ts): below this many following devices a writer's stats say "fewer than". */
+  followerThreshold: "3",
   /** RECOVERY_CODES_PER_SET (src/lib/recovery-code-format.ts) */
   recoveryCodesPerSet: "10",
 } as const;

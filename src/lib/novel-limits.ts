@@ -28,3 +28,19 @@ export const CHAPTER_REVISIONS_KEPT = 10;
 export function chapterDisplayTitle(title: string, n: number): string {
   return title.trim() || `Chapter ${n}`;
 }
+
+/** Reading speed for the reading times readers and writers see (words per minute). */
+export const WORDS_PER_MINUTE = 230;
+
+/** Minutes to read `words` words: at least 1 for any text, 0 for none. */
+export function readingMinutes(words: number): number {
+  return words > 0 ? Math.max(1, Math.round(words / WORDS_PER_MINUTE)) : 0;
+}
+
+/** A short reading time: "16 min", "1 h", "3 h 40 min". */
+export function shortDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}

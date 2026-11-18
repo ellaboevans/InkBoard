@@ -11,6 +11,35 @@ describe("readerPathFromPathname", () => {
     expect(readerPathFromPathname("/p/%C9%94d%C9%94/x")).toEqual({ kind: "poem", author: "ɔdɔ", poem: "x" });
   });
 
+  it("recognises novel and chapter pages (Phase 23b)", () => {
+    expect(readerPathFromPathname("/a/ama/n/the-ferry")).toEqual({ kind: "novel", author: "ama", novel: "the-ferry" });
+    expect(readerPathFromPathname("/a/ama/n/the-ferry/")).toEqual({ kind: "novel", author: "ama", novel: "the-ferry" });
+    expect(readerPathFromPathname("/a/ama/n/the-ferry/thursday")).toEqual({
+      kind: "chapter",
+      author: "ama",
+      novel: "the-ferry",
+      chapter: "thursday",
+    });
+    expect(readerPathFromPathname("/a/ama/n/%C9%94d%C9%94/chapter-2/")).toEqual({
+      kind: "chapter",
+      author: "ama",
+      novel: "ɔdɔ",
+      chapter: "chapter-2",
+    });
+  });
+
+  it("leaves a novel's own files (link cards, feed: a later round) to their routes", () => {
+    for (const path of [
+      "/a/ama/n",
+      "/a/ama/n/the-ferry/opengraph-image",
+      "/a/ama/n/the-ferry/twitter-image",
+      "/a/ama/n/the-ferry/feed.xml",
+      "/a/ama/n/the-ferry/thursday/opengraph-image",
+    ]) {
+      expect(readerPathFromPathname(path), path).toBeNull();
+    }
+  });
+
   it("ignores every other route under /a and /p, and anything else", () => {
     for (const path of [
       "/",

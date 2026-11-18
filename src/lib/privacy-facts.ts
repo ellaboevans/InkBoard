@@ -44,12 +44,14 @@ export const PRIVACY_FACTS = {
   revisionsKept: "20",
   /** CHAPTER_REVISIONS_KEPT (src/lib/novel-limits.ts): versions kept per chapter, the current one included. */
   chapterVersionsKept: "10",
+  /** READING_PLACES_MAX (src/lib/reading-place.ts): novels whose place a browser remembers. */
+  readingPlacesKept: "50",
   /** RECOVERY_CODES_PER_SET (src/lib/recovery-code-format.ts) */
   recoveryCodesPerSet: "10",
 } as const;
 
 /** The date at the top of the Privacy page: change it whenever the page's facts change. */
-export const PRIVACY_UPDATED = "2026-11-17";
+export const PRIVACY_UPDATED = "2026-11-18";
 
 const WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3 };
 const UNIT_SECONDS: Record<string, number> = { minute: 60, hour: 3600, day: 86400, year: 365 * 86400 };

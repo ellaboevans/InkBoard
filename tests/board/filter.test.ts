@@ -6,7 +6,7 @@ import {
   withLanguageParam,
 } from "@/lib/board-filter";
 import { layoutBoard } from "@/lib/board-layout";
-import type { BoardPoem, BoardSection } from "@/lib/board-types";
+import type { BoardNovel, BoardPoem, BoardSection } from "@/lib/board-types";
 
 const poem = (id: string, language: string | null, visibility: BoardPoem["visibility"] = "public"): BoardPoem => ({
   id,
@@ -18,12 +18,25 @@ const poem = (id: string, language: string | null, visibility: BoardPoem["visibi
   hasMore: false,
   collection: null,
 });
-const section = (editorId: string, poems: BoardPoem[]): BoardSection => ({
+const section = (editorId: string, poems: BoardPoem[], novels: BoardNovel[] = []): BoardSection => ({
   editorId,
   penName: editorId,
   slug: editorId,
   picture: { avatarId: "a01", photoKey: null },
+  novels,
   poems,
+});
+const novel = (id: string, language: string | null): BoardNovel => ({
+  id,
+  title: id,
+  slug: id,
+  language,
+  status: "ongoing",
+  blurb: null,
+  chapterCount: 1,
+  wordCount: 10,
+  readingMinutes: 1,
+  updatedAt: null,
 });
 
 const board = [
@@ -86,6 +99,33 @@ describe("filterSectionsByLanguage", () => {
       { editorId: "c", poems: [{ id: "c1" }] },
     ]);
     expect(layout).toEqual(compact);
+  });
+});
+
+describe("filterSectionsByLanguage with novels (Phase 23b)", () => {
+  const withNovels = [
+    section("a", [poem("a1", "en")], [novel("n-ee", "ee"), novel("n-en", "en")]),
+    section("b", [], [novel("only-ee", "ee")]),
+    section("c", [poem("c1", "ee")]),
+  ];
+
+  it("keeps a novel by its language like a poem, and an author with only a novel in it", () => {
+    const ewe = filterSectionsByLanguage(withNovels, "ee");
+    expect(ewe.map((s) => [s.editorId, s.novels.map((n) => n.id), s.poems.map((p) => p.id)])).toEqual([
+      ["a", ["n-ee"], []],
+      ["b", ["only-ee"], []],
+      ["c", [], ["c1"]],
+    ]);
+  });
+
+  it("puts a section's books in its first card slots, then its poems", () => {
+    const [box] = layoutBoard([withNovels[0]]).sections;
+    expect(box.books.map((b) => b.novelId)).toEqual(["n-ee", "n-en"]);
+    expect(box.cards.map((c) => c.poemId)).toEqual(["a1"]);
+    // Three slots in one row of three: the books, then the poem.
+    const xs = [...box.books, ...box.cards].map((c) => c.x);
+    expect(xs).toEqual([...xs].sort((p, q) => p - q));
+    expect(new Set([...box.books, ...box.cards].map((c) => c.y)).size).toBe(1);
   });
 });
 

@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useOnceToast } from "@/hooks/use-once-toast";
 import { chapterDraftKey, parseDraft, serializeDraft, shouldOfferDraft, type ChapterDraft } from "@/lib/chapter-draft";
-import { CHAPTER_BODY_MAX, CHAPTER_TITLE_MAX, chapterDisplayTitle } from "@/lib/novel-limits";
+import { CHAPTER_BODY_MAX, CHAPTER_TITLE_MAX, chapterDisplayTitle, readingMinutes } from "@/lib/novel-limits";
 import { notify, withErrorToast } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import { toggleEmphasis, type TextEdit } from "@/lib/poem-markdown";
@@ -458,7 +458,7 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
           <FieldError id="body-error" message={errors.body} />
           <p id="chapter-count" className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
             <span>
-              {pluralCount(words, "word")} · about {pluralCount(Math.max(1, Math.round(words / 230)), "minute")} to read
+              {pluralCount(words, "word")} · about {pluralCount(Math.max(1, readingMinutes(words)), "minute")} to read
             </span>
             <span className={body.length > CHAPTER_BODY_MAX * 0.9 ? "text-destructive" : undefined}>
               {body.length.toLocaleString("en")} of {CHAPTER_BODY_MAX.toLocaleString("en")} characters

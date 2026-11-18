@@ -30,9 +30,15 @@ const WCAG = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const unique = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 async function scan(page: Page, screen: string, include?: string) {
-  // Measure final colours, not a menu or drawer mid-animation (ignores looping spinners).
+  // Measure final colours, not a menu or drawer mid-animation (ignores looping
+  // spinners, and scroll-driven ones like a chapter's progress bar, which
+  // "run" for as long as the page is open: their time is the scroll position).
   await page.waitForFunction(() =>
-    document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+    document
+      .getAnimations()
+      .every(
+        (a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity || a.timeline !== document.timeline,
+      ),
   );
   let builder = new AxeBuilder({ page }).withTags(WCAG);
   if (include) builder = builder.include(include);
@@ -288,6 +294,53 @@ test("novels in the dashboard: the list, a novel's page, the chapter editor (wri
   await page.getByRole("button", { name: "Delete chapter" }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await scan(page, "chapter editor: delete chapter dialog");
+});
+
+test("novels for readers: the book card, author page, novel page (start and continue) and chapter page, phone and desktop", async ({ page }) => {
+  const id = unique();
+  const email = `a11y-reader-novel-${id}@example.com`;
+  await signUpAs(page, email, `Reading Novelist ${id}`);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  const author = rows[0].slug as string;
+  // Two published chapters (one untitled) and a draft, written straight to the database…
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
+      VALUES ('${rows[0].id}', 'Ɔdɔ ne Ɛkɔm', 'odo', 'A long blurb.
+With a second paragraph.', 'ak') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
+    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 40 FROM n,
+      (VALUES ('Thursday', 'thursday', E'The ferry came *late*.\n\n* * *\n\nAkua waited.\nA kept line.', 1, 'published'),
+              ('', 'chapter', 'Second chapter text.', 2, 'published'),
+              ('Draft', 'draft', 'Draft text.', 3, 'draft')) AS t(title, slug, body, pos, status)`);
+  // …then a poem through the app, which refreshes the board's cache.
+  await publish(page, `Beside the novel ${id}`, "a line");
+
+  await openBoard(page);
+  await expect(page.getByRole("link", { name: "Ɔdɔ ne Ɛkɔm (novel)" })).toBeAttached();
+  await scan(page, "board: a section with a book card");
+  await page.goto(`/a/${author}`);
+  await expect(page.getByRole("region", { name: "Novels" })).toBeVisible();
+  await scan(page, "author page: with a novel");
+  const novelUrl = `/a/${author}/n/odo`;
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    // A fresh start each time: no saved place in this browser.
+    await page.evaluate(() => localStorage.removeItem("inkboard-reading"));
+    await page.goto(novelUrl);
+    await expect(page.getByRole("link", { name: "Start reading" })).toBeVisible();
+    await scan(page, `novel page: start reading, ${width}px`);
+    await page.goto(`${novelUrl}/thursday`);
+    await expect(page.getByRole("navigation", { name: "Novel" })).toContainText("Chapter 1 of 2");
+    await scan(page, `chapter page: first chapter, ${width}px`);
+    await page.goto(`${novelUrl}/chapter`);
+    await expect(page.getByRole("heading", { level: 1, name: "Chapter 2" })).toBeVisible();
+    await scan(page, `chapter page: last chapter, untitled, ${width}px`);
+    await page.goto(novelUrl);
+    await expect(page.getByRole("link", { name: "Continue: Chapter 2" })).toBeVisible();
+    await scan(page, `novel page: continue, ${width}px`);
+  }
+  await page.goto(`${novelUrl}/draft`);
+  await expect(page.getByRole("heading", { level: 1, name: "Chapter not found" })).toBeVisible();
+  await scan(page, "chapter not found");
 });
 
 test("admin screens", async ({ page }) => {

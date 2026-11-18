@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cardTitleClass, PoemCardFace } from "./poem-card-face";
+import { BookCardFace } from "@/components/novel/book-card-face";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -31,7 +32,7 @@ import {
   type BoardLayout,
   type Rect,
 } from "@/lib/board-layout";
-import type { BoardPoem, BoardSection } from "@/lib/board-types";
+import type { BoardNovel, BoardPoem, BoardSection } from "@/lib/board-types";
 import type { SearchResults } from "@/lib/search-types";
 import { notify } from "@/lib/notify";
 import { SubscribeButton } from "@/components/feeds/subscribe-button";
@@ -392,6 +393,7 @@ export function BoardCanvas({
   const [authorsOpen, setAuthorsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const total = sections.reduce((n, s) => n + s.poems.length, 0);
+  const novelTotal = sections.reduce((n, s) => n + s.novels.length, 0);
   /** "Ewe" while the board is filtered to a language, for the help text. */
   const activeLanguage = filter.options.find((o) => o.code === filter.active)?.name;
   const router = useRouter();
@@ -480,7 +482,8 @@ export function BoardCanvas({
         className="absolute inset-0 cursor-grab touch-none overflow-clip opacity-0 outline-none select-none [background-image:radial-gradient(var(--canvas-dot)_1px,transparent_1px)] data-[panning=true]:cursor-grabbing data-[ready=true]:opacity-100 data-[ready=true]:transition-opacity focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <p id="board-help" className="sr-only">
-          {pluralCount(total, activeLanguage ? `${activeLanguage} poem` : "poem")} by{" "}
+          {pluralCount(total, activeLanguage ? `${activeLanguage} poem` : "poem")}
+          {novelTotal > 0 && <> and {pluralCount(novelTotal, "novel")}</>} by{" "}
           {pluralCount(sections.length, "author")}. Drag or use the arrow keys
           to move around, plus and minus to zoom, zero to see everything. Tab
           moves between authors and poems. A list view is also available.
@@ -511,6 +514,7 @@ export function BoardCanvas({
           <span className="font-serif text-lg leading-none">InkBoard</span>
           <span className="hidden text-xs text-muted-foreground sm:inline">
             {pluralCount(sections.length, "author")} · {pluralCount(total, "poem")}
+            {novelTotal > 0 && <> · {pluralCount(novelTotal, "novel")}</>}
           </span>
         </Link>
         <div data-board-toolbar className="pointer-events-auto flex flex-wrap justify-end gap-2">
@@ -657,7 +661,7 @@ function World({
         return (
           <section
             key={section.editorId}
-            aria-label={`${section.penName}, ${pluralCount(section.poems.length, "poem")}`}
+            aria-label={`${section.penName}, ${worksCount(section, " and ")}`}
             style={{ ["--hue" as string]: hue }}
           >
             <div
@@ -677,9 +681,7 @@ function World({
             >
               <AuthorPicture picture={section.picture} size={40} loading="lazy" className="size-10 self-center" />
               <h2 className="min-w-0 truncate font-serif text-[28px] leading-tight">{section.penName}</h2>
-              <span className="shrink-0 text-sm text-muted-foreground">
-                {pluralCount(section.poems.length, "poem")}
-              </span>
+              <span className="shrink-0 text-sm text-muted-foreground">{worksCount(section, " · ")}</span>
             </button>
             {/* Overview label: legible when zoomed far out. */}
             <div
@@ -694,6 +696,10 @@ function World({
                 {section.penName}
               </span>
             </div>
+            {/* Books first (Phase 23b): each takes one card slot, laid out by layoutBoard. */}
+            {section.novels.map((novel, j) => (
+              <BookCard key={novel.id} novel={novel} section={section} hue={hue} rect={box.books[j]} />
+            ))}
             {section.poems.map((poem, j) => (
               <PoemCard key={poem.id} poem={poem} authorSlug={section.slug} rect={box.cards[j]} />
             ))}
@@ -701,6 +707,39 @@ function World({
         );
       }),
     [sections, layout, onZoomToSection],
+  );
+}
+
+/** "1 novel · 3 poems", "4 poems", "1 novel": what a section holds (no "0 poems" for a novelist). */
+function worksCount(section: Pick<BoardSection, "novels" | "poems">, separator: string) {
+  const parts = [];
+  if (section.novels.length > 0) parts.push(pluralCount(section.novels.length, "novel"));
+  if (section.poems.length > 0 || section.novels.length === 0) parts.push(pluralCount(section.poems.length, "poem"));
+  return parts.join(separator);
+}
+
+/** A novel's book card: a link to the novel page (a full page, never the poem overlay). */
+function BookCard({ novel, section, hue, rect }: { novel: BoardNovel; section: BoardSection; hue: number; rect: Rect }) {
+  return (
+    <BookCardFace
+      className="absolute group-data-[lod=overview]/world:opacity-25"
+      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
+      novel={novel}
+      penName={section.penName}
+      hue={hue}
+      title={
+        <Link
+          href={`/a/${section.slug}/n/${novel.slug}`}
+          draggable={false}
+          data-novel-id={novel.id}
+          data-rect={`${rect.x},${rect.y},${rect.w},${rect.h}`}
+          className={cardTitleClass}
+        >
+          {novel.title}
+          <span className="sr-only"> (novel)</span>
+        </Link>
+      }
+    />
   );
 }
 
@@ -790,7 +829,7 @@ function AuthorsPanel({
                 >
                   <span className="size-2 shrink-0 rounded-full section-dot" aria-hidden />
                   <span className="truncate font-serif text-[15px]">{s.penName}</span>
-                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">{s.poems.length}</span>
+                  <span className="ml-auto text-xs text-muted-foreground tabular-nums">{s.novels.length + s.poems.length}</span>
                 </button>
               </li>
             ))}

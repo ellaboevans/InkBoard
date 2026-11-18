@@ -181,7 +181,11 @@ export default function PrivacyPage() {
               notifications. <code className={code}>inkboard:special-letters-tab</code> remembers the writer’s last tab of
               special letters. <code className={code}>inkboard-chapter-draft:…</code>, one per chapter, keeps the title
               and text of a chapter a writer is editing on that device until it’s saved to {SITE_NAME} (or the writer
-              discards it), so a dropped connection or a closed tab doesn’t lose their work. It never leaves the browser.
+              discards it), so a dropped connection or a closed tab doesn’t lose their work. It never leaves the browser.{" "}
+              <code className={code}>inkboard-reading</code> remembers, for each novel you read, which chapter you opened
+              last and when, so the novel’s page can offer to continue where you stopped. It keeps the{" "}
+              {F.readingPlacesKept} novels you opened most recently and forgets older ones. It’s never sent to{" "}
+              {SITE_NAME}, and no cookie carries it.
             </li>
             <li>
               <strong className="font-medium">For notifications.</strong> If they’re on, your browser also keeps your
@@ -232,8 +236,10 @@ export default function PrivacyPage() {
             <p>
               Each novel’s title, blurb, language and whether it’s ongoing or complete, and each of its chapters: its
               title, text, place in the book, word count, and whether it’s a draft or published and when. We keep the{" "}
-              {F.chapterVersionsKept} most recent versions of each chapter, which only you can see. They stay until you
-              delete them or your account. While you write a chapter, your browser also keeps a copy of it on your device
+              {F.chapterVersionsKept} most recent versions of each chapter, which only you can see. Readers see a novel once
+              one of its chapters is published, and then only its published chapters: drafts, their titles and their number
+              stay with you. Everything stays until you
+              delete it or your account. While you write a chapter, your browser also keeps a copy of it on your device
               (see “On your device”).
             </p>
           </Sub>

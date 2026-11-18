@@ -1,6 +1,7 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { refresh, updateTag } from "next/cache";
+import { BOARD_TAG } from "@/server/cache-tags";
 import { redirect, RedirectType } from "next/navigation";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import {
@@ -22,9 +23,13 @@ import {
  * session to novels.ts, which scopes every query by it; ids from the client
  * are only ever looked up within the editor's own novels and chapters.
  *
- * Readers see nothing of novels yet (the reader pages come in Phase 23b), so
- * nothing here invalidates BOARD_TAG. When reader pages land, every action
- * that changes what they show must call updateTag like poems' actions do.
+ * Readers see novels (Phase 23b): the board's book cards, the author page,
+ * the novel page and the chapter pages, all cached under BOARD_TAG. So every
+ * successful change that could reach them refreshes it, as poems' actions do:
+ * novel details, chapter saves (publish, unpublish, edits), moves, reorders
+ * and deletes. Only creating is left out: a new novel has no chapter and a
+ * new chapter is an empty draft, so readers can't see either. A failed or
+ * foreign write refreshes nothing.
  */
 
 const str = (formData: FormData, key: string) => {
@@ -58,6 +63,7 @@ export async function updateNovelAction(novelId: string, _prev: NovelFormState, 
   const editor = await requireOnboardedEditor();
   const res = await updateNovel(editor.id, novelId, novelInput(formData));
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: GONE } };
+  updateTag(BOARD_TAG);
   refresh();
   return { savedAt: Date.now() };
 }
@@ -65,6 +71,7 @@ export async function updateNovelAction(novelId: string, _prev: NovelFormState, 
 export async function deleteNovelAction(novelId: string): Promise<void> {
   const editor = await requireOnboardedEditor();
   const deleted = await deleteNovel(editor.id, novelId);
+  if (deleted) updateTag(BOARD_TAG);
   refresh();
   // Replace: Back must not return to a novel that's gone.
   redirect(deleted ? "/admin/novels?deleted=1" : "/admin/novels", RedirectType.replace);
@@ -99,6 +106,7 @@ export async function saveChapterAction(chapterId: string, _prev: ChapterFormSta
     status: str(formData, "status"),
   });
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: CHAPTER_GONE } };
+  updateTag(BOARD_TAG); // publish, unpublish, or an edit readers may see
   refresh(); // the novel page's list, History, the status badge
   return { savedAt: Date.now(), status: res.chapter.status, publishedNow: res.publishedNow };
 }
@@ -106,6 +114,7 @@ export async function saveChapterAction(chapterId: string, _prev: ChapterFormSta
 export async function deleteChapterAction(novelId: string, chapterId: string): Promise<void> {
   const editor = await requireOnboardedEditor();
   const deleted = await deleteChapter(editor.id, chapterId);
+  if (deleted) updateTag(BOARD_TAG);
   refresh();
   // Replace: Back must not reopen the deleted chapter's editor.
   redirect(`/admin/novels/${novelId}${deleted ? "?chapter-deleted=1" : ""}`, RedirectType.replace);
@@ -121,6 +130,7 @@ export async function moveChapterAction(
   const editor = await requireOnboardedEditor();
   const res = await moveChapter(editor.id, novelId, chapterId, direction);
   if (!res.ok) return { ok: false, error: "This chapter or novel no longer exists or isn't yours." };
+  updateTag(BOARD_TAG); // readers number published chapters in this order
   refresh();
   return res;
 }
@@ -131,6 +141,7 @@ export type ReorderActionResult = { ok: true } | { ok: false; error: string };
 export async function reorderChaptersAction(novelId: string, chapterIds: string[]): Promise<ReorderActionResult> {
   const editor = await requireOnboardedEditor();
   const res = await reorderChapters(editor.id, novelId, chapterIds);
+  if (res.ok) updateTag(BOARD_TAG);
   refresh(); // on failure, shows the current order
   if (!res.ok) {
     return { ok: false, error: "stale" in res ? "The chapters changed in the meantime. Here is their current order." : GONE };

@@ -1,7 +1,9 @@
 /**
  * Deterministic catalogue layout for the board (R9): each author gets a
- * "shelf" (section) holding a grid of poem cards; shelves are packed into
- * rows, A–Z, with a row width chosen to keep the whole board roughly 16:10.
+ * "shelf" (section) holding a grid of cards; shelves are packed into rows,
+ * A–Z, with a row width chosen to keep the whole board roughly 16:10.
+ * A novel's book card (Phase 23b) takes one ordinary card slot: books fill
+ * the section's first slots, then the poems follow in the same grid.
  * All values are in world units (px at 100% zoom).
  */
 
@@ -16,10 +18,12 @@ export const MAX_COLS = 4;
 
 export type Rect = { x: number; y: number; w: number; h: number };
 export type CardBox = Rect & { poemId: string };
-export type SectionBox = Rect & { editorId: string; cols: number; cards: CardBox[] };
+export type BookBox = Rect & { novelId: string };
+/** `books[i]` is the section's i-th novel and `cards[j]` its j-th poem, in their input order. */
+export type SectionBox = Rect & { editorId: string; cols: number; books: BookBox[]; cards: CardBox[] };
 export type BoardLayout = { sections: SectionBox[]; bounds: Rect };
 
-type Input = { editorId: string; poems: { id: string }[] };
+type Input = { editorId: string; novels?: { id: string }[]; poems: { id: string }[] };
 
 /** Columns for a section: roughly square-ish, wider than tall, at most 4. */
 export function columnsFor(count: number): number {
@@ -39,7 +43,7 @@ function sectionSize(count: number) {
 }
 
 export function layoutBoard(sections: Input[]): BoardLayout {
-  const sizes = sections.map((s) => sectionSize(s.poems.length));
+  const sizes = sections.map((s) => sectionSize((s.novels?.length ?? 0) + s.poems.length));
   if (sizes.length === 0) {
     return { sections: [], bounds: { x: 0, y: 0, w: 0, h: 0 } };
   }
@@ -64,14 +68,16 @@ export function layoutBoard(sections: Input[]): BoardLayout {
       y += rowHeight + SECTION_GAP;
       rowHeight = 0;
     }
-    const cards = section.poems.map((poem, j) => ({
-      poemId: poem.id,
+    // Slot `j` of the section's grid, row by row.
+    const slot = (j: number): Rect => ({
       x: x + SECTION_PAD + (j % cols) * (CARD_W + CARD_GAP),
       y: y + SECTION_HEADER + Math.floor(j / cols) * (CARD_H + CARD_GAP),
       w: CARD_W,
       h: CARD_H,
-    }));
-    boxes.push({ editorId: section.editorId, x, y, w, h, cols, cards });
+    });
+    const books = (section.novels ?? []).map((novel, j) => ({ novelId: novel.id, ...slot(j) }));
+    const cards = section.poems.map((poem, j) => ({ poemId: poem.id, ...slot(books.length + j) }));
+    boxes.push({ editorId: section.editorId, x, y, w, h, cols, books, cards });
     maxX = Math.max(maxX, x + w);
     rowHeight = Math.max(rowHeight, h);
     x += w + SECTION_GAP;

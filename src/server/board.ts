@@ -1,18 +1,23 @@
 import "server-only";
 import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { authorPicture, type AuthorPicture } from "@/lib/author-picture";
-import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
-import { collections, editors, poems, shortLinks } from "@/db/schema";
+import { chapters, collections, editors, novels, poems, shortLinks } from "@/db/schema";
 import type {
   AuthorCollection,
   AuthorPage,
+  BoardNovel,
   BoardSection,
   CollectionBadge,
   CollectionPage,
+  NovelPage,
+  ReaderChapter,
+  ReaderChapterSummary,
   ReaderCollection,
   ReaderPoem,
 } from "@/lib/board-types";
+import { chapterDisplayTitle, readingMinutes } from "@/lib/novel-limits";
 import type { ReaderPath } from "@/lib/reader-paths";
 
 /*
@@ -67,13 +72,35 @@ function badge(r: {
 }
 
 export async function loadBoardSections(): Promise<BoardSection[]> {
-  const rows = await getDb()
+  const db = getDb();
+  const onboarded = and(isNotNull(editors.penName), isNotNull(editors.slug));
+  // Authors with something published (a poem, or a novel's chapter), in
+  // catalogue order: A–Z by pen name. Sorted here in SQL, once, so a section
+  // made only of novels lands in the same order as any other.
+  const authors = await db
     .select({
       editorId: editors.id,
       penName: editors.penName,
       authorSlug: editors.slug,
       avatar: editors.avatar,
       photoKey: editors.photoKey,
+    })
+    .from(editors)
+    .where(
+      and(
+        onboarded,
+        or(
+          sql`EXISTS (SELECT 1 FROM ${poems} WHERE ${poems.editorId} = ${editors.id} AND ${poems.status} = 'published')`,
+          sql`EXISTS (SELECT 1 FROM ${novels} JOIN ${chapters} ON ${chapters.novelId} = ${novels.id}
+            WHERE ${novels.editorId} = ${editors.id} AND ${chapters.status} = 'published')`,
+        ),
+      ),
+    )
+    .orderBy(asc(sql`lower(${editors.penName})`), asc(editors.id));
+
+  const rows = await db
+    .select({
+      editorId: poems.editorId,
       id: poems.id,
       title: poems.title,
       slug: poems.slug,
@@ -85,35 +112,23 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
     .leftJoin(collections, eq(collections.id, poems.collectionId))
-    .where(
-      and(
-        eq(poems.status, "published"),
-        isNotNull(editors.penName),
-        isNotNull(editors.slug),
-      ),
-    )
-    // Catalogue order: authors A–Z, newest poems first within a section.
-    .orderBy(
-      asc(sql`lower(${editors.penName})`),
-      asc(editors.id),
-      desc(poems.publishedAt),
-      asc(poems.title),
-    );
+    .where(and(eq(poems.status, "published"), onboarded))
+    // Newest poems first within a section.
+    .orderBy(desc(poems.publishedAt), asc(poems.title));
 
-  const sections: BoardSection[] = [];
+  const sections = new Map<string, BoardSection>();
+  for (const a of authors) {
+    sections.set(a.editorId, {
+      editorId: a.editorId,
+      penName: a.penName!,
+      slug: a.authorSlug!,
+      picture: authorPicture({ id: a.editorId, avatar: a.avatar, photoKey: a.photoKey }),
+      novels: [],
+      poems: [],
+    });
+  }
   for (const row of rows) {
-    let section = sections.at(-1);
-    if (!section || section.editorId !== row.editorId) {
-      section = {
-        editorId: row.editorId,
-        penName: row.penName!,
-        slug: row.authorSlug!,
-        picture: authorPicture({ id: row.editorId, avatar: row.avatar, photoKey: row.photoKey }),
-        poems: [],
-      };
-      sections.push(section);
-    }
-    section.poems.push({
+    sections.get(row.editorId)?.poems.push({
       id: row.id,
       title: row.title,
       slug: row.slug,
@@ -124,7 +139,171 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       collection: badge(row),
     });
   }
-  return sections;
+  for (const { editorId, novel } of await loadNovelCards(onboarded)) sections.get(editorId)?.novels.push(novel);
+  return [...sections.values()];
+}
+
+// ---- novels (Phase 23b) ---------------------------------------------------------------
+//
+// Readers see a novel only once it has a published chapter, and only its
+// published chapters: every query below joins chapters with
+// status = 'published', and counts, numbers and reading times are computed
+// over those rows alone, so a draft never shows, not even as a gap in the
+// numbering or a word in the total. Novels are all public for now; when
+// private novels come, chapter text must be selected with CASE WHEN like
+// poems' (N1).
+
+/** How long the board's and author page's blurb may be: about three lines of the card. */
+const CARD_BLURB_CHARS = 280;
+
+/** Book cards for every novel matching `where` (on editors/novels) with a published chapter, newest chapter first. */
+async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: string; novel: BoardNovel }[]> {
+  const rows = await getDb()
+    .select({
+      editorId: novels.editorId,
+      id: novels.id,
+      title: novels.title,
+      slug: novels.slug,
+      language: novels.language,
+      status: novels.status,
+      blurb: sql<string | null>`NULLIF(left(split_part(${novels.blurb}, E'\n', 1), ${CARD_BLURB_CHARS}), '')`,
+      chapterCount: sql<number>`count(${chapters.id})::int`,
+      wordCount: sql<number>`coalesce(sum(${chapters.wordCount}), 0)::int`,
+      updatedAt: sql<Date | null>`max(${chapters.publishedAt})`.mapWith(chapters.publishedAt),
+    })
+    .from(novels)
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .innerJoin(chapters, and(eq(chapters.novelId, novels.id), eq(chapters.status, "published")))
+    .where(where)
+    .groupBy(novels.id)
+    .orderBy(desc(sql`max(${chapters.publishedAt})`), asc(novels.title), asc(novels.id));
+  return rows.map(({ editorId, updatedAt, ...n }) => ({
+    editorId,
+    novel: { ...n, readingMinutes: readingMinutes(n.wordCount), updatedAt: updatedAt?.toISOString() ?? null },
+  }));
+}
+
+/** The novel by author + novel slug, with its published chapters (no text), or null if it has none. */
+async function loadNovelWithChapters(authorSlug: string, novelSlug: string) {
+  const db = getDb();
+  const [n] = await db
+    .select({
+      id: novels.id,
+      title: novels.title,
+      slug: novels.slug,
+      language: novels.language,
+      status: novels.status,
+      blurb: novels.blurb,
+      editorId: editors.id,
+      penName: editors.penName,
+      authorSlug: editors.slug,
+      avatar: editors.avatar,
+      photoKey: editors.photoKey,
+    })
+    .from(novels)
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName), eq(novels.slug, novelSlug)))
+    .limit(1);
+  if (!n) return null;
+  const rows = await db
+    .select({
+      id: chapters.id,
+      title: chapters.title,
+      slug: chapters.slug,
+      wordCount: chapters.wordCount,
+      publishedAt: chapters.publishedAt,
+    })
+    .from(chapters)
+    .where(and(eq(chapters.novelId, n.id), eq(chapters.status, "published")))
+    .orderBy(asc(chapters.position));
+  if (rows.length === 0) return null;
+  const list = rows.map((c, i): ReaderChapterSummary & { id: string } => ({
+    id: c.id,
+    number: i + 1,
+    title: c.title,
+    displayTitle: chapterDisplayTitle(c.title, i + 1),
+    slug: c.slug,
+    wordCount: c.wordCount,
+    readingMinutes: readingMinutes(c.wordCount),
+    publishedAt: c.publishedAt?.toISOString() ?? null,
+  }));
+  return { novel: n, chapters: list };
+}
+
+/** A chapter summary for readers: the row id stays on the server. */
+function withoutId({ number, title, displayTitle, slug, wordCount, readingMinutes, publishedAt }: ReaderChapterSummary): ReaderChapterSummary {
+  return { number, title, displayTitle, slug, wordCount, readingMinutes, publishedAt };
+}
+
+/**
+ * A novel's public page: its published chapters in reading order, numbered
+ * 1..n without drafts, with words and reading time over those chapters. Null
+ * for an unknown or not-yet-onboarded author, an unknown slug (another
+ * author's novel included), or a novel with no published chapter.
+ */
+export async function loadNovelPage(authorSlug: string, novelSlug: string): Promise<NovelPage | null> {
+  const found = await loadNovelWithChapters(authorSlug, novelSlug);
+  if (!found) return null;
+  const { novel: n, chapters: list } = found;
+  const wordCount = list.reduce((sum, c) => sum + c.wordCount, 0);
+  const updatedAt = list.reduce<string | null>((max, c) => (c.publishedAt && (!max || c.publishedAt > max) ? c.publishedAt : max), null);
+  const firstParagraph = n.blurb?.split("\n")[0].slice(0, CARD_BLURB_CHARS) || null;
+  return {
+    id: n.id,
+    title: n.title,
+    slug: n.slug,
+    language: n.language,
+    status: n.status,
+    blurb: firstParagraph,
+    fullBlurb: n.blurb,
+    chapterCount: list.length,
+    wordCount,
+    readingMinutes: readingMinutes(wordCount),
+    updatedAt,
+    penName: n.penName!,
+    authorSlug: n.authorSlug!,
+    editorId: n.editorId,
+    picture: authorPicture({ id: n.editorId, avatar: n.avatar, photoKey: n.photoKey }),
+    chapters: list.map(withoutId),
+  };
+}
+
+/**
+ * A published chapter with its text, its number among the published chapters
+ * and its published neighbours. Null when the novel has nothing published or
+ * the chapter is a draft, deleted or unknown: the same null, so a draft looks
+ * exactly like a chapter that never existed.
+ */
+export async function loadReaderChapter(
+  authorSlug: string,
+  novelSlug: string,
+  chapterSlug: string,
+): Promise<ReaderChapter | null> {
+  const found = await loadNovelWithChapters(authorSlug, novelSlug);
+  if (!found) return null;
+  const { novel: n, chapters: list } = found;
+  const i = list.findIndex((c) => c.slug === chapterSlug);
+  if (i < 0) return null;
+  const [row] = await getDb()
+    .select({ body: chapters.body })
+    .from(chapters)
+    .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), eq(chapters.status, "published")))
+    .limit(1);
+  // Unpublished between the two queries: not found, like any draft.
+  if (!row) return null;
+  const near = (c: (typeof list)[number] | undefined) =>
+    c ? { number: c.number, displayTitle: c.displayTitle, slug: c.slug } : null;
+  return {
+    ...withoutId(list[i]),
+    body: row.body,
+    of: list.length,
+    novel: { id: n.id, title: n.title, slug: n.slug, language: n.language, status: n.status },
+    penName: n.penName!,
+    authorSlug: n.authorSlug!,
+    editorId: n.editorId,
+    prev: near(list[i - 1]),
+    next: near(list[i + 1]),
+  };
 }
 
 /**
@@ -132,7 +311,8 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
  * before a full page load, so a missing page answers with a real 404 instead
  * of a streamed "not found" under a 200 (docs/PLAN.md, Phase 19). One small
  * indexed query, with exactly the null cases of loadAuthorPage,
- * loadReaderPoem and loadCollectionPage (a test compares them).
+ * loadReaderPoem, loadCollectionPage, loadNovelPage and loadReaderChapter
+ * (a test compares them).
  */
 export async function readerPathExists(path: ReaderPath): Promise<boolean> {
   const db = getDb();
@@ -147,6 +327,24 @@ export async function readerPathExists(path: ReaderPath): Promise<boolean> {
       .from(poems)
       .innerJoin(editors, eq(editors.id, poems.editorId))
       .where(and(author, eq(poems.slug, path.poem), eq(poems.status, "published")))
+      .limit(1);
+    return rows.length > 0;
+  }
+  if (path.kind === "novel" || path.kind === "chapter") {
+    // A novel exists for readers once it has a published chapter; a chapter only while it's published.
+    const rows = await db
+      .select({ one: sql`1` })
+      .from(novels)
+      .innerJoin(editors, eq(editors.id, novels.editorId))
+      .innerJoin(
+        chapters,
+        and(
+          eq(chapters.novelId, novels.id),
+          eq(chapters.status, "published"),
+          path.kind === "chapter" ? eq(chapters.slug, path.chapter) : undefined,
+        ),
+      )
+      .where(and(author, eq(novels.slug, path.novel)))
       .limit(1);
     return rows.length > 0;
   }
@@ -354,6 +552,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
     links: Array.isArray(author.links) ? author.links : [],
     poems: list,
     collections: await loadAuthorCollections(author.editorId),
+    novels: (await loadNovelCards(eq(novels.editorId, author.editorId))).map((r) => r.novel),
   };
 }
 

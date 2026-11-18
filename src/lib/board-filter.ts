@@ -38,7 +38,11 @@ export function parseLanguageFilter(
   return options.find((o) => o.code === raw)?.code ?? null;
 }
 
-/** Only `language`'s poems; authors left with none drop out. Null = everything. */
+/**
+ * Only `language`'s poems and novels (Phase 23b: a novel's language counts
+ * like a poem's); authors left with neither drop out. Null = everything.
+ * The choices themselves (boardLanguages) come from poems.
+ */
 export function filterSectionsByLanguage(
   sections: BoardSection[],
   language: string | null,
@@ -46,7 +50,8 @@ export function filterSectionsByLanguage(
   if (!language) return sections;
   return sections.flatMap((s) => {
     const poems = s.poems.filter((p) => p.language === language);
-    return poems.length ? [{ ...s, poems }] : [];
+    const novels = s.novels.filter((n) => n.language === language);
+    return poems.length || novels.length ? [{ ...s, novels, poems }] : [];
   });
 }
 

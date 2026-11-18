@@ -1,8 +1,16 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
-import { collections, editors, poems } from "@/db/schema";
+import { chapters, collections, editors, novels, poems } from "@/db/schema";
 import type { ReaderPath } from "@/lib/reader-paths";
-import { loadAuthorPage, loadCollectionPage, loadReaderPoem, readerPathExists } from "@/server/board";
+import {
+  loadAuthorPage,
+  loadCollectionPage,
+  loadNovelPage,
+  loadReaderChapter,
+  loadReaderPoem,
+  readerPathExists,
+} from "@/server/board";
 
 /*
  * The proxy's existence check (docs/PLAN.md, Phase 19) must say "missing"
@@ -38,6 +46,32 @@ beforeEach(async () => {
     poem({ slug: "draft", status: "draft", publishedAt: null, collectionId: drafts.id, collectionPosition: 1 }),
     poem({ slug: "by-kofi", editorId: kofi.id }),
   ]);
+
+  // Novels (Phase 23b): one with published chapters and drafts, one with drafts only, one of Kofi's.
+  const [book] = await db.insert(novels).values({ editorId: ama.id, title: "Book", slug: "book" }).returning();
+  const [unready] = await db.insert(novels).values({ editorId: ama.id, title: "Unready", slug: "unready" }).returning();
+  await db.insert(novels).values({ editorId: ama.id, title: "Empty", slug: "empty-novel" });
+  const [kofiBook] = await db.insert(novels).values({ editorId: kofi.id, title: "K", slug: "kofi-book" }).returning();
+  const chapter = (novelId: string, slug: string, position: number, published: boolean, everPublished = published) => ({
+    novelId,
+    slug,
+    position,
+    title: slug,
+    body: "text",
+    status: published ? ("published" as const) : ("draft" as const),
+    publishedAt: everPublished ? new Date() : null,
+  });
+  await db.insert(chapters).values([
+    chapter(book.id, "one", 1, true),
+    chapter(book.id, "draft", 2, false),
+    chapter(book.id, "pulled", 3, false, true),
+    chapter(unready.id, "first", 1, false),
+    chapter(kofiBook.id, "k1", 1, true),
+  ]);
+  // Not onboarded, with a published chapter: still nothing for readers.
+  const [ghost] = await db.select().from(editors).where(eq(editors.slug, "not-onboarded"));
+  const [ghostBook] = await db.insert(novels).values({ editorId: ghost.id, title: "G", slug: "ghost-book" }).returning();
+  await db.insert(chapters).values(chapter(ghostBook.id, "g1", 1, true));
 });
 
 const cases: ReaderPath[] = [
@@ -56,11 +90,31 @@ const cases: ReaderPath[] = [
   { kind: "collection", author: "ama", collection: "kofis" },
   { kind: "collection", author: "kofi", collection: "kofis" },
   { kind: "collection", author: "ama", collection: "nope" },
+  { kind: "novel", author: "ama", novel: "book" },
+  { kind: "novel", author: "ama", novel: "unready" },
+  { kind: "novel", author: "ama", novel: "empty-novel" },
+  { kind: "novel", author: "ama", novel: "kofi-book" },
+  { kind: "novel", author: "kofi", novel: "kofi-book" },
+  { kind: "novel", author: "not-onboarded", novel: "ghost-book" },
+  { kind: "novel", author: "ama", novel: "nope" },
+  { kind: "novel", author: "nobody", novel: "book" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "one" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "draft" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "pulled" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "nope" },
+  { kind: "chapter", author: "ama", novel: "unready", chapter: "first" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "k1" },
+  { kind: "chapter", author: "ama", novel: "kofi-book", chapter: "k1" },
+  { kind: "chapter", author: "kofi", novel: "kofi-book", chapter: "k1" },
+  { kind: "chapter", author: "kofi", novel: "book", chapter: "one" },
+  { kind: "chapter", author: "not-onboarded", novel: "ghost-book", chapter: "g1" },
 ];
 
 async function pageHasContent(p: ReaderPath) {
   if (p.kind === "author") return (await loadAuthorPage(p.author)) !== null;
   if (p.kind === "poem") return (await loadReaderPoem(p.author, p.poem)) !== null;
+  if (p.kind === "novel") return (await loadNovelPage(p.author, p.novel)) !== null;
+  if (p.kind === "chapter") return (await loadReaderChapter(p.author, p.novel, p.chapter)) !== null;
   return (await loadCollectionPage(p.author, p.collection)) !== null;
 }
 
@@ -76,5 +130,13 @@ describe("readerPathExists", () => {
     expect(await readerPathExists({ kind: "poem", author: "ama", poem: "draft" })).toBe(false);
     expect(await readerPathExists({ kind: "collection", author: "ama", collection: "drafts" })).toBe(false);
     expect(await readerPathExists({ kind: "author", author: "not-onboarded" })).toBe(false);
+  });
+
+  it("finds a novel only with a published chapter, and a chapter only while it's published (Phase 23b)", async () => {
+    expect(await readerPathExists({ kind: "novel", author: "ama", novel: "book" })).toBe(true);
+    expect(await readerPathExists({ kind: "novel", author: "ama", novel: "unready" })).toBe(false);
+    expect(await readerPathExists({ kind: "chapter", author: "ama", novel: "book", chapter: "one" })).toBe(true);
+    expect(await readerPathExists({ kind: "chapter", author: "ama", novel: "book", chapter: "draft" })).toBe(false);
+    expect(await readerPathExists({ kind: "chapter", author: "ama", novel: "book", chapter: "pulled" })).toBe(false);
   });
 });

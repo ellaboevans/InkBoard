@@ -120,6 +120,46 @@
   }
 }
 
+/* A chapter's text (src/app/a/[author]/n/[novel]/[chapter]/page.tsx, Phase 23b):
+   the book convention, paragraphs with a first-line indent and no gap, except
+   the first one and the first after a scene break. Hyphenation follows the
+   text's `lang`: where the browser has no dictionary (Twi, Ewe) it simply
+   doesn't hyphenate. */
+@layer components {
+  .chapter-prose > p {
+    text-indent: 1.5em;
+    hyphens: auto;
+    text-wrap: pretty;
+  }
+  .chapter-prose > p:first-child,
+  .chapter-prose > [data-scene-break] + p {
+    text-indent: 0;
+  }
+  .chapter-prose > [data-scene-break] {
+    font-size: 1.4em;
+    line-height: 1;
+  }
+  /* How far through the chapter: driven by the page's scroll where browsers
+     support it; elsewhere the bar isn't shown at all. */
+  .chapter-progress {
+    display: none;
+  }
+  @supports (animation-timeline: scroll()) {
+    .chapter-progress {
+      display: block;
+    }
+    .chapter-progress > span {
+      transform: scaleX(0);
+      animation: chapter-progress linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+@keyframes chapter-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
 /* Board search: briefly ring the section or card the camera flew to. */
 @keyframes board-highlight {
   0%, 60% { box-shadow: 0 0 0 4px var(--background), 0 0 0 7px var(--primary); }

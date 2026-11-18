@@ -1,0 +1,165 @@
+import { ArrowLeftIcon } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { AuthorPicture } from "@/components/author/author-picture";
+import { NovelCover } from "@/components/novel/novel-cover";
+import { ChapterList, ContinueReading, type ChapterLink } from "@/components/novel/novel-reading";
+import { OfflineMarker } from "@/components/offline/offline-marker";
+import { SiteLinks } from "@/components/site-links";
+import { Button } from "@/components/ui/button";
+import { sectionHue } from "@/lib/board-layout";
+import type { NovelPage } from "@/lib/board-types";
+import { shortDuration } from "@/lib/novel-limits";
+import { pluralCount } from "@/lib/plural";
+import { languageName } from "@/lib/poem-languages";
+import { BASE_OPEN_GRAPH, SITE_NAME } from "@/lib/site";
+import { getNovelPage } from "@/server/board-cache";
+
+/*
+ * A novel's public page (docs/PLAN.md, Phase 23b; docs/mockups/novels/
+ * novel-page.html): the drawn cover, title, author, blurb, status, the
+ * published chapters with their reading times, and "Start reading" /
+ * "Continue: Chapter n" from this browser's saved place. A static shell with
+ * the cached (BOARD_TAG) data behind Suspense; nothing here reads cookies,
+ * and the saved place is read in the browser only (ContinueReading).
+ *
+ * Not saved offline yet (save={false}); offline, link cards, JSON-LD and the
+ * sitemap come in the next round.
+ */
+
+type Props = PageProps<"/a/[author]/n/[novel]">;
+
+const novelUrl = (n: Pick<NovelPage, "authorSlug" | "slug">) => `/a/${n.authorSlug}/n/${n.slug}`;
+
+function description(n: NovelPage) {
+  const blurb = n.fullBlurb?.replace(/\s+/g, " ").trim();
+  if (blurb) return blurb.length > 160 ? `${blurb.slice(0, 157).trimEnd()}…` : blurb;
+  return `A novel by ${n.penName} on ${SITE_NAME}, ${pluralCount(n.chapterCount, "chapter")} so far.`;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { author, novel } = await params;
+  const n = await getNovelPage(author, novel);
+  if (!n) return { title: "Novel not found", robots: { index: false } };
+  const url = novelUrl(n);
+  const title = `${n.title}: a novel by ${n.penName}`;
+  return {
+    title,
+    description: description(n),
+    alternates: { canonical: url },
+    authors: [{ name: n.penName, url: `/a/${n.authorSlug}` }],
+    openGraph: { ...BASE_OPEN_GRAPH, type: "book", url, title, description: description(n) },
+    twitter: { card: "summary_large_image", title, description: description(n) },
+  };
+}
+
+export default function NovelPublicPage({ params }: Props) {
+  return (
+    <main className="flex-1 bg-background">
+      <div className="mx-auto max-w-5xl px-5 py-8 sm:px-6 sm:py-10">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link href="/">
+            <ArrowLeftIcon />
+            Back to the board
+          </Link>
+        </Button>
+        <Suspense fallback={<div className="mt-7 h-80 animate-pulse rounded-2xl bg-muted" />}>
+          <Novel params={params} />
+        </Suspense>
+        {/* Static, in the shell: what InkBoard is, for readers arriving from a shared link. */}
+        <SiteLinks className="mt-16 border-t pt-6" />
+      </div>
+    </main>
+  );
+}
+
+const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+const longFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+
+async function Novel({ params }: Pick<Props, "params">) {
+  const { author, novel } = await params;
+  const n = await getNovelPage(author, novel);
+  if (!n) notFound();
+  const base = novelUrl(n);
+  const lang = n.language ?? undefined;
+  const chapters: ChapterLink[] = n.chapters.map((c) => ({
+    number: c.number,
+    displayTitle: c.displayTitle,
+    slug: c.slug,
+    time: shortDuration(c.readingMinutes),
+    date: c.publishedAt ? dayFormat.format(new Date(c.publishedAt)) : null,
+  }));
+  // [lead-in, the part that stays on one line]: "updated" may wrap, "17 November 2026" doesn't.
+  const language = languageName(n.language);
+  const facts: [string, string][] = [
+    ["", pluralCount(n.chapterCount, "chapter")],
+    ["about ", shortDuration(n.readingMinutes)],
+  ];
+  if (language) facts.push(["in ", language]);
+  if (n.updatedAt) facts.push(["updated ", longFormat.format(new Date(n.updatedAt))]);
+
+  return (
+    <>
+      {/* Not saved for offline reading yet (Phase 23b): the next round adds the novel kinds. */}
+      <OfflineMarker save={false} />
+      <div className="mt-6 grid grid-cols-[112px_minmax(0,1fr)] items-start gap-x-[18px] gap-y-5 sm:mt-7 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-x-10">
+        <NovelCover
+          title={n.title}
+          penName={n.penName}
+          hue={sectionHue(n.editorId)}
+          lang={n.language}
+          className="w-[112px] text-base sm:row-span-3 sm:w-[220px] sm:text-[30px]"
+        />
+        <div className="min-w-0">
+          <p className="inline-flex items-center rounded-full border border-current px-2 py-px text-[11px] text-primary">
+            Novel · {n.status}
+          </p>
+          <h1 lang={lang} className="mt-1.5 mb-3 font-serif text-[30px] leading-[1.08] tracking-[-0.01em] break-words sm:text-5xl">
+            {n.title}
+          </h1>
+          <p className="flex items-center gap-2.5">
+            <AuthorPicture picture={n.picture} size={32} loading="eager" className="size-8" />
+            <span className="min-w-0">
+              by{" "}
+              <Link
+                href={`/a/${n.authorSlug}`}
+                className="underline underline-offset-4 focus-visible:rounded-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              >
+                {n.penName}
+              </Link>
+            </span>
+          </p>
+          <p data-novel-facts className="mt-2.5 text-sm text-muted-foreground">
+            {facts.map(([lead, value], i) => (
+              <span key={i}>
+                {i > 0 && " · "}
+                {lead}
+                <span className="whitespace-nowrap">{value}</span>
+              </span>
+            ))}
+          </p>
+        </div>
+        {n.fullBlurb && (
+          <p
+            lang={lang}
+            className="col-span-2 max-w-[34em] font-serif text-lg leading-relaxed whitespace-pre-line sm:col-span-1 sm:col-start-2 sm:text-[19px]"
+          >
+            {n.fullBlurb}
+          </p>
+        )}
+        <div className="col-span-2 sm:col-span-1 sm:col-start-2">
+          <ContinueReading novelId={n.id} base={base} chapters={chapters} />
+        </div>
+      </div>
+
+      <section aria-labelledby="chapters-heading" id="chapters" className="mt-10 scroll-mt-6 sm:mt-14">
+        <h2 id="chapters-heading" className="mb-3 font-serif text-[28px] leading-tight">
+          Chapters
+        </h2>
+        <ChapterList novelId={n.id} base={base} chapters={chapters} />
+      </section>
+    </>
+  );
+}

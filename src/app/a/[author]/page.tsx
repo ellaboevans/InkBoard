@@ -7,7 +7,8 @@ import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face"
 import { Button } from "@/components/ui/button";
 import { SiteLinks } from "@/components/site-links";
 import { AuthorPicture } from "@/components/author/author-picture";
-import { CARD_H } from "@/lib/board-layout";
+import { CARD_H, sectionHue } from "@/lib/board-layout";
+import { BookCardFace } from "@/components/novel/book-card-face";
 import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink } from "@/components/feeds/feed-link";
 import { FollowAuthorToggle } from "@/components/notifications/notifications-setting";
@@ -113,6 +114,7 @@ async function Author({ params }: Pick<Props, "params">) {
             {a.tagline && <p className="mt-2 text-lg text-muted-foreground">{a.tagline}</p>}
           </div>
           <p className="text-sm text-muted-foreground">
+            {a.novels.length > 0 && <>{pluralCount(a.novels.length, "novel")} · </>}
             {pluralCount(a.poems.length, "poem")}
             {privateCount > 0 && <> · {privateCount} password protected</>}
             {first && <> · on InkBoard since {yearFormat.format(new Date(first))}</>}
@@ -145,6 +147,34 @@ async function Author({ params }: Pick<Props, "params">) {
         </div>
       </header>
 
+      {a.novels.length > 0 && (
+        <section aria-labelledby="novels-heading" className="grid gap-5">
+          <h2 id="novels-heading" className="font-serif text-2xl">
+            Novels
+          </h2>
+          {/* minmax(0,1fr): a long title must truncate, not widen the page on phones. */}
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {a.novels.map((n) => (
+              <li key={n.id} className="relative">
+                <BookCardFace
+                  className="relative"
+                  style={{ height: CARD_H }}
+                  novel={n}
+                  penName={a.penName}
+                  hue={sectionHue(a.editorId)}
+                  title={
+                    <Link href={`/a/${a.slug}/n/${n.slug}`} className={cardTitleClass}>
+                      {n.title}
+                      <span className="sr-only"> (novel)</span>
+                    </Link>
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {a.collections.length > 0 && (
         <section aria-labelledby="collections-heading" className="grid gap-4">
           <h2 id="collections-heading" className="font-serif text-2xl">
@@ -173,45 +203,48 @@ async function Author({ params }: Pick<Props, "params">) {
         </section>
       )}
 
-      <section aria-labelledby="poems-heading" className="grid gap-5">
-        <h2 id="poems-heading" className="font-serif text-2xl">
-          Poems
-        </h2>
-        {a.poems.length === 0 ? (
-          <p className="rounded-xl border border-dashed bg-card px-4 py-10 text-center text-muted-foreground">
-            No published poems yet.
-          </p>
-        ) : (
-          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {a.poems.map((p) => (
-              <li key={p.id} className="relative">
-                {p.pinned && (
-                  <span className="absolute -top-2.5 left-4 z-20 flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
-                    <PinIcon className="size-3" aria-hidden />
-                    Pinned
-                  </span>
-                )}
-                <PoemCardFace
-                  className="relative"
-                  style={{ height: CARD_H }}
-                  isPrivate={p.visibility === "private"}
-                  excerpt={p.excerpt}
-                  lang={p.language}
-                  collection={p.collection}
-                  hasMore={p.hasMore}
-                  title={
-                    <Link href={`/p/${a.slug}/${p.slug}`} className={cardTitleClass}>
-                      {p.title}
-                      {p.pinned && <span className="sr-only"> (pinned)</span>}
-                      {p.visibility === "private" && <span className="sr-only"> (password protected)</span>}
-                    </Link>
-                  }
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* A novelist with no poems yet gets no empty "Poems" section. */}
+      {(a.poems.length > 0 || a.novels.length === 0) && (
+        <section aria-labelledby="poems-heading" className="grid gap-5">
+          <h2 id="poems-heading" className="font-serif text-2xl">
+            Poems
+          </h2>
+          {a.poems.length === 0 ? (
+            <p className="rounded-xl border border-dashed bg-card px-4 py-10 text-center text-muted-foreground">
+              No published poems yet.
+            </p>
+          ) : (
+            <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {a.poems.map((p) => (
+                <li key={p.id} className="relative">
+                  {p.pinned && (
+                    <span className="absolute -top-2.5 left-4 z-20 flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                      <PinIcon className="size-3" aria-hidden />
+                      Pinned
+                    </span>
+                  )}
+                  <PoemCardFace
+                    className="relative"
+                    style={{ height: CARD_H }}
+                    isPrivate={p.visibility === "private"}
+                    excerpt={p.excerpt}
+                    lang={p.language}
+                    collection={p.collection}
+                    hasMore={p.hasMore}
+                    title={
+                      <Link href={`/p/${a.slug}/${p.slug}`} className={cardTitleClass}>
+                        {p.title}
+                        {p.pinned && <span className="sr-only"> (pinned)</span>}
+                        {p.visibility === "private" && <span className="sr-only"> (password protected)</span>}
+                      </Link>
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

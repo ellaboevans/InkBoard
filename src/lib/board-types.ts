@@ -26,7 +26,70 @@ export type BoardSection = {
   slug: string;
   /** Photo or avatar, beside the section's label (Phase 22). */
   picture: AuthorPicture;
+  /** Novels with at least one published chapter: book cards, placed before the poems (Phase 23b). */
+  novels: BoardNovel[];
   poems: BoardPoem[];
+};
+
+/**
+ * A novel as readers see it in lists (docs/PLAN.md, Phase 23b): the board's
+ * book card and the author page. Counts, words and dates come from published
+ * chapters only, so drafts never show, not even as a number.
+ */
+export type BoardNovel = {
+  id: string;
+  title: string;
+  slug: string;
+  /** BCP 47 tag (src/lib/poem-languages.ts) for `lang` on the title and blurb; null = not set. */
+  language: string | null;
+  status: "ongoing" | "complete";
+  /** The blurb's first paragraph, cut short for the card; null = none. */
+  blurb: string | null;
+  /** Published chapters. Always at least 1: a novel with none isn't shown. */
+  chapterCount: number;
+  /** Over published chapters. */
+  wordCount: number;
+  readingMinutes: number;
+  /** The latest published chapter's first publish (ISO). */
+  updatedAt: string | null;
+};
+
+/** A published chapter in reading order: `number` is 1..n over published chapters only. */
+export type ReaderChapterSummary = {
+  number: number;
+  /** As written; may be empty. `displayTitle` is what readers see ("Chapter n" when empty). */
+  title: string;
+  displayTitle: string;
+  slug: string;
+  wordCount: number;
+  readingMinutes: number;
+  publishedAt: string | null;
+};
+
+/** A novel's public page (/a/[author]/n/[novel]). Never the email; no draft, no chapter text. */
+export type NovelPage = BoardNovel & {
+  /** The whole blurb (the card's `blurb` is only its start). */
+  fullBlurb: string | null;
+  penName: string;
+  authorSlug: string;
+  editorId: string;
+  /** Photo or avatar, in the byline. */
+  picture: AuthorPicture;
+  chapters: ReaderChapterSummary[];
+};
+
+/** A published chapter's page (/a/[author]/n/[novel]/[chapter]). */
+export type ReaderChapter = ReaderChapterSummary & {
+  /** The chapter's text (prose, src/lib/prose.ts). Novels are all public for now. */
+  body: string;
+  /** Published chapters in the novel ("Chapter n of m"). */
+  of: number;
+  novel: { id: string; title: string; slug: string; language: string | null; status: "ongoing" | "complete" };
+  penName: string;
+  authorSlug: string;
+  editorId: string;
+  prev: Pick<ReaderChapterSummary, "number" | "displayTitle" | "slug"> | null;
+  next: Pick<ReaderChapterSummary, "number" | "displayTitle" | "slug"> | null;
 };
 
 /** A neighbour in a collection: title only, like a board card (never text). */
@@ -79,6 +142,8 @@ export type AuthorPage = {
   poems: (BoardPoem & { pinned: boolean; publishedAt: string | null })[];
   /** Collections with at least one published poem, A–Z. */
   collections: AuthorCollection[];
+  /** Novels with at least one published chapter, most recently updated first (Phase 23b). */
+  novels: BoardNovel[];
 };
 
 export type AuthorCollection = { title: string; slug: string; intro: string | null; poemCount: number };

@@ -1,7 +1,14 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { AuthorPage, BoardSection, CollectionPage, ReaderPoem } from "@/lib/board-types";
-import { loadAuthorPage, loadBoardSections, loadCollectionPage, loadReaderPoem } from "./board";
+import type { AuthorPage, BoardSection, CollectionPage, NovelPage, ReaderChapter, ReaderPoem } from "@/lib/board-types";
+import {
+  loadAuthorPage,
+  loadBoardSections,
+  loadCollectionPage,
+  loadNovelPage,
+  loadReaderChapter,
+  loadReaderPoem,
+} from "./board";
 import { BOARD_TAG } from "./cache-tags";
 import { loadAuthorFeed, loadSiteFeed } from "./feeds";
 
@@ -58,4 +65,20 @@ export async function getCollectionPage(authorSlug: string, collectionSlug: stri
   cacheTag(BOARD_TAG);
   cacheLife("hours");
   return loadCollectionPage(authorSlug, collectionSlug);
+}
+
+/** A novel's public page (Phase 23b); null when it has no published chapter. */
+export async function getNovelPage(authorSlug: string, novelSlug: string): Promise<NovelPage | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadNovelPage(authorSlug, novelSlug);
+}
+
+/** A published chapter with its text (Phase 23b); null for drafts and anything missing. */
+export async function getReaderChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ReaderChapter | null> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  cacheLife("hours");
+  return loadReaderChapter(authorSlug, novelSlug, chapterSlug);
 }

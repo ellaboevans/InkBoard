@@ -17,6 +17,7 @@ import { SHARE_VISIT_WINDOW_SECONDS } from "@/lib/share-image/visits";
 import { PHOTO_CACHE_SECONDS } from "@/lib/photo-limits";
 import { CHAPTER_REVISIONS_KEPT } from "@/lib/novel-limits";
 import { PHOTO_ORPHAN_GRACE_HOURS } from "@/server/profile-photos";
+import { READING_PLACES_MAX } from "@/lib/reading-place";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19) states how long things last.
@@ -45,9 +46,10 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   photoOrphanCleanup: PHOTO_ORPHAN_GRACE_HOURS * 3600,
   revisionsKept: REVISIONS_KEPT,
   chapterVersionsKept: CHAPTER_REVISIONS_KEPT,
+  readingPlacesKept: READING_PLACES_MAX,
   recoveryCodesPerSet: RECOVERY_CODES_PER_SET,
 };
-const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "chapterVersionsKept", "recoveryCodesPerSet"]);
+const COUNTS = new Set<keyof typeof PRIVACY_FACTS>(["revisionsKept", "chapterVersionsKept", "readingPlacesKept", "recoveryCodesPerSet"]);
 
 const page = readFileSync("src/app/privacy/page.tsx", "utf8");
 

@@ -14,7 +14,8 @@ import { countShareVisit, resolveShortCode } from "@/server/short-links";
  *    bounced to /sign-in. The real check (is the session valid?) happens in
  *    the Data Access Layer (src/server/auth/dal.ts) on every request.
  *
- * 2. Reader pages (/a/x, /a/x/c/y, /p/x/y): real 404s (docs/PLAN.md, Phase 19).
+ * 2. Reader pages (/a/x, /a/x/c/y, /p/x/y, and the novel pages /a/x/n/y and
+ *    /a/x/n/y/z of Phase 23b): real 404s (docs/PLAN.md, Phase 19).
  *    Under Cache Components the prerendered shell is sent first, which starts
  *    a 200 response; a `notFound()` inside the page then still renders "not
  *    found" (with noindex), but the status can no longer change. Next's docs
@@ -124,6 +125,22 @@ export const config = {
     },
     {
       source: "/a/:author/c/:collection",
+      missing: [
+        { type: "header", key: "rsc" },
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "next-router-segment-prefetch" },
+      ],
+    },
+    {
+      source: "/a/:author/n/:novel",
+      missing: [
+        { type: "header", key: "rsc" },
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "next-router-segment-prefetch" },
+      ],
+    },
+    {
+      source: "/a/:author/n/:novel/:chapter",
       missing: [
         { type: "header", key: "rsc" },
         { type: "header", key: "next-router-prefetch" },

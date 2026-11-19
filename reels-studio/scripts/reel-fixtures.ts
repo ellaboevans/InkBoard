@@ -6,7 +6,7 @@
  *   DATABASE_URL=…/poemhub_dev_elm_reel pnpm exec tsx --conditions=react-server \
  *     reels-studio/scripts/reel-fixtures.ts <setup|sessions>
  *
- * Refuses any database but poemhub_dev_elm_reel.
+ * Refuses any database but poemhub_dev_elm_reel (the Reel) and poemhub_dev_elm_wn (What's new).
  */
 import { config } from "dotenv";
 config({ path: [".env.local", ".env"], quiet: true });
@@ -21,7 +21,7 @@ import { ensureChapterShortCode, ensureShortCode } from "@/server/short-links";
 import { DEMO_AUTHORS, SEED_EXTRAS } from "../../video/scripts/demo-content";
 
 const url = process.env.DATABASE_URL ?? "";
-if (!/\/poemhub_dev_elm_reel$/.test(url)) throw new Error(`Refusing ${url}: reel fixtures run only on poemhub_dev_elm_reel`);
+if (!/\/poemhub_dev_elm_(reel|wn)$/.test(url)) throw new Error(`Refusing ${url}: reel fixtures run only on poemhub_dev_elm_reel or poemhub_dev_elm_wn`);
 
 const db = () => getDb();
 const PHONE_UA =

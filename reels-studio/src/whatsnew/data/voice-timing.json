@@ -1,0 +1,2460 @@
+{
+ "lines": [
+  {
+   "id": "cold-1",
+   "file": "line00.wav",
+   "duration": 1.224,
+   "heard": "Poems as pictures.",
+   "words": [
+    {
+     "text": "Poems",
+     "start": 0.0,
+     "end": 0.27
+    },
+    {
+     "text": "as",
+     "start": 0.3,
+     "end": 0.42
+    },
+    {
+     "text": "pictures.",
+     "start": 0.63,
+     "end": 0.93
+    }
+   ]
+  },
+  {
+   "id": "cold-2",
+   "file": "line01.wav",
+   "duration": 1.765,
+   "heard": "Photos, follows and novels.",
+   "words": [
+    {
+     "text": "Photos,",
+     "start": 0.0,
+     "end": 0.238
+    },
+    {
+     "text": "follows",
+     "start": 0.67,
+     "end": 0.823
+    },
+    {
+     "text": "and",
+     "start": 0.84,
+     "end": 1.057
+    },
+    {
+     "text": "novels.",
+     "start": 1.1,
+     "end": 1.4
+    }
+   ]
+  },
+  {
+   "id": "cold-3",
+   "file": "line02.wav",
+   "duration": 1.351,
+   "heard": "Stats only you can see.",
+   "words": [
+    {
+     "text": "Stats",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "only",
+     "start": 0.34,
+     "end": 0.445
+    },
+    {
+     "text": "you",
+     "start": 0.48,
+     "end": 0.68
+    },
+    {
+     "text": "can",
+     "start": 0.79,
+     "end": 0.84
+    },
+    {
+     "text": "see.",
+     "start": 0.86,
+     "end": 1.16
+    }
+   ]
+  },
+  {
+   "id": "title",
+   "file": "line03.wav",
+   "duration": 1.445,
+   "heard": "Here's what's new in Ink Board.",
+   "words": [
+    {
+     "text": "Here's",
+     "start": 0.0,
+     "end": 0.252
+    },
+    {
+     "text": "what's",
+     "start": 0.28,
+     "end": 0.514
+    },
+    {
+     "text": "new",
+     "start": 0.54,
+     "end": 0.64
+    },
+    {
+     "text": "in",
+     "start": 0.66,
+     "end": 0.765
+    },
+    {
+     "text": "InkBoard.",
+     "start": 0.8,
+     "end": 1.156
+    }
+   ]
+  },
+  {
+   "id": "ch1",
+   "file": "line04.wav",
+   "duration": 2.213,
+   "heard": "Chapter one. Share a poem as an image. Chapter one.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.241
+    },
+    {
+     "text": "one.",
+     "start": 0.26,
+     "end": 0.477
+    },
+    {
+     "text": "Share",
+     "start": 0.9,
+     "end": 1.008
+    },
+    {
+     "text": "a",
+     "start": 1.14,
+     "end": 1.19
+    },
+    {
+     "text": "poem",
+     "start": 1.21,
+     "end": 1.298
+    },
+    {
+     "text": "as",
+     "start": 1.32,
+     "end": 1.53
+    },
+    {
+     "text": "an",
+     "start": 1.6,
+     "end": 1.69
+    },
+    {
+     "text": "image.",
+     "start": 1.72,
+     "end": 2.02
+    }
+   ]
+  },
+  {
+   "id": "s1",
+   "file": "line05.wav",
+   "duration": 2.831,
+   "heard": "Every public poem now has a Share as image button.",
+   "words": [
+    {
+     "text": "Every",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "public",
+     "start": 0.32,
+     "end": 0.457
+    },
+    {
+     "text": "poem",
+     "start": 0.7,
+     "end": 0.75
+    },
+    {
+     "text": "now",
+     "start": 0.76,
+     "end": 1.03
+    },
+    {
+     "text": "has",
+     "start": 1.08,
+     "end": 1.28
+    },
+    {
+     "text": "a",
+     "start": 1.42,
+     "end": 1.47
+    },
+    {
+     "text": "Share",
+     "start": 1.47,
+     "end": 1.636
+    },
+    {
+     "text": "as",
+     "start": 1.66,
+     "end": 1.915
+    },
+    {
+     "text": "image",
+     "start": 2.15,
+     "end": 2.216
+    },
+    {
+     "text": "button.",
+     "start": 2.24,
+     "end": 2.57
+    }
+   ]
+  },
+  {
+   "id": "s2",
+   "file": "line06.wav",
+   "duration": 2.292,
+   "heard": "Pick a design. Page, Ink or Board. Board. Board.",
+   "words": [
+    {
+     "text": "Pick",
+     "start": 0.0,
+     "end": 0.105
+    },
+    {
+     "text": "a",
+     "start": 0.12,
+     "end": 0.17
+    },
+    {
+     "text": "design:",
+     "start": 0.18,
+     "end": 0.418
+    },
+    {
+     "text": "Page,",
+     "start": 0.96,
+     "end": 1.078
+    },
+    {
+     "text": "Ink",
+     "start": 1.42,
+     "end": 1.487
+    },
+    {
+     "text": "or",
+     "start": 1.63,
+     "end": 1.695
+    },
+    {
+     "text": "Board.",
+     "start": 1.87,
+     "end": 2.17
+    }
+   ]
+  },
+  {
+   "id": "s3",
+   "file": "line07.wav",
+   "duration": 3.547,
+   "heard": "Story size fills a phone screen. Chat size fits a message. Chat size fits a message. Chat size fits a message.",
+   "words": [
+    {
+     "text": "Story",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "size",
+     "start": 0.2,
+     "end": 0.462
+    },
+    {
+     "text": "fills",
+     "start": 0.5,
+     "end": 0.806
+    },
+    {
+     "text": "a",
+     "start": 0.84,
+     "end": 0.93
+    },
+    {
+     "text": "phone",
+     "start": 1.11,
+     "end": 1.164
+    },
+    {
+     "text": "screen.",
+     "start": 1.18,
+     "end": 1.547
+    },
+    {
+     "text": "Chat",
+     "start": 2.16,
+     "end": 2.21
+    },
+    {
+     "text": "size",
+     "start": 2.31,
+     "end": 2.37
+    },
+    {
+     "text": "fits",
+     "start": 2.4,
+     "end": 2.768
+    },
+    {
+     "text": "a",
+     "start": 2.87,
+     "end": 2.92
+    },
+    {
+     "text": "message.",
+     "start": 2.94,
+     "end": 3.293
+    }
+   ]
+  },
+  {
+   "id": "s4",
+   "file": "line08.wav",
+   "duration": 3.839,
+   "heard": "Want just a few lines? Choose them, and the picture shows only those. The picture shows only those.",
+   "words": [
+    {
+     "text": "Want",
+     "start": 0.0,
+     "end": 0.158
+    },
+    {
+     "text": "just",
+     "start": 0.28,
+     "end": 0.355
+    },
+    {
+     "text": "a",
+     "start": 0.38,
+     "end": 0.45
+    },
+    {
+     "text": "few",
+     "start": 0.58,
+     "end": 0.637
+    },
+    {
+     "text": "lines?",
+     "start": 0.66,
+     "end": 0.912
+    },
+    {
+     "text": "Choose",
+     "start": 1.68,
+     "end": 1.73
+    },
+    {
+     "text": "them,",
+     "start": 1.86,
+     "end": 1.91
+    },
+    {
+     "text": "and",
+     "start": 2.16,
+     "end": 2.21
+    },
+    {
+     "text": "the",
+     "start": 2.21,
+     "end": 2.283
+    },
+    {
+     "text": "picture",
+     "start": 2.36,
+     "end": 2.43
+    },
+    {
+     "text": "shows",
+     "start": 2.51,
+     "end": 2.872
+    },
+    {
+     "text": "only",
+     "start": 2.92,
+     "end": 3.182
+    },
+    {
+     "text": "those.",
+     "start": 3.34,
+     "end": 3.64
+    }
+   ]
+  },
+  {
+   "id": "s5",
+   "file": "line09.wav",
+   "duration": 2.587,
+   "heard": "Every picture prints a short link back to the poem.",
+   "words": [
+    {
+     "text": "Every",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "picture",
+     "start": 0.33,
+     "end": 0.534
+    },
+    {
+     "text": "prints",
+     "start": 0.56,
+     "end": 0.945
+    },
+    {
+     "text": "a",
+     "start": 0.98,
+     "end": 1.04
+    },
+    {
+     "text": "short",
+     "start": 1.1,
+     "end": 1.298
+    },
+    {
+     "text": "link",
+     "start": 1.32,
+     "end": 1.53
+    },
+    {
+     "text": "back",
+     "start": 1.74,
+     "end": 1.79
+    },
+    {
+     "text": "to",
+     "start": 1.82,
+     "end": 1.985
+    },
+    {
+     "text": "the",
+     "start": 2.04,
+     "end": 2.09
+    },
+    {
+     "text": "poem.",
+     "start": 2.21,
+     "end": 2.51
+    }
+   ]
+  },
+  {
+   "id": "ch2",
+   "file": "line10.wav",
+   "duration": 1.902,
+   "heard": "Chapter two. Profile photos. Chapter two. Profile photos. Chapter two. Profile photos. Chapter two. Profile photos. Chapter two. Profile photos. Chapter two. Profile photos.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.167
+    },
+    {
+     "text": "two.",
+     "start": 0.27,
+     "end": 0.48
+    },
+    {
+     "text": "Profile",
+     "start": 0.94,
+     "end": 1.01
+    },
+    {
+     "text": "photos.",
+     "start": 1.1,
+     "end": 1.46
+    }
+   ]
+  },
+  {
+   "id": "p1",
+   "file": "line11.wav",
+   "duration": 3.023,
+   "heard": "Writers can now use a photo instead of an avatar.",
+   "words": [
+    {
+     "text": "Writers",
+     "start": 0.0,
+     "end": 0.204
+    },
+    {
+     "text": "can",
+     "start": 0.22,
+     "end": 0.553
+    },
+    {
+     "text": "now",
+     "start": 0.62,
+     "end": 0.82
+    },
+    {
+     "text": "use",
+     "start": 0.86,
+     "end": 1.06
+    },
+    {
+     "text": "a",
+     "start": 1.1,
+     "end": 1.15
+    },
+    {
+     "text": "photo",
+     "start": 1.35,
+     "end": 1.442
+    },
+    {
+     "text": "instead",
+     "start": 1.48,
+     "end": 2.056
+    },
+    {
+     "text": "of",
+     "start": 2.15,
+     "end": 2.265
+    },
+    {
+     "text": "an",
+     "start": 2.32,
+     "end": 2.38
+    },
+    {
+     "text": "avatar.",
+     "start": 2.59,
+     "end": 2.89
+    }
+   ]
+  },
+  {
+   "id": "p2",
+   "file": "line12.wav",
+   "duration": 2.637,
+   "heard": "Choose a picture, then drag or zoom to crop it.",
+   "words": [
+    {
+     "text": "Choose",
+     "start": 0.0,
+     "end": 0.147
+    },
+    {
+     "text": "a",
+     "start": 0.16,
+     "end": 0.23
+    },
+    {
+     "text": "picture,",
+     "start": 0.37,
+     "end": 0.579
+    },
+    {
+     "text": "then",
+     "start": 1.12,
+     "end": 1.19
+    },
+    {
+     "text": "drag",
+     "start": 1.2,
+     "end": 1.392
+    },
+    {
+     "text": "or",
+     "start": 1.42,
+     "end": 1.675
+    },
+    {
+     "text": "zoom",
+     "start": 1.76,
+     "end": 1.9
+    },
+    {
+     "text": "to",
+     "start": 1.92,
+     "end": 2.1
+    },
+    {
+     "text": "crop",
+     "start": 2.16,
+     "end": 2.3
+    },
+    {
+     "text": "it.",
+     "start": 2.47,
+     "end": 2.637
+    }
+   ]
+  },
+  {
+   "id": "p3",
+   "file": "line13.wav",
+   "duration": 3.059,
+   "heard": "It shows on your section of the board and on your author page. It shows on your section of the board page.",
+   "words": [
+    {
+     "text": "It",
+     "start": 0.0,
+     "end": 0.06
+    },
+    {
+     "text": "shows",
+     "start": 0.11,
+     "end": 0.224
+    },
+    {
+     "text": "on",
+     "start": 0.24,
+     "end": 0.45
+    },
+    {
+     "text": "your",
+     "start": 0.52,
+     "end": 0.608
+    },
+    {
+     "text": "section",
+     "start": 0.62,
+     "end": 0.843
+    },
+    {
+     "text": "of",
+     "start": 0.93,
+     "end": 1.04
+    },
+    {
+     "text": "the",
+     "start": 1.1,
+     "end": 1.167
+    },
+    {
+     "text": "board,",
+     "start": 1.26,
+     "end": 1.432
+    },
+    {
+     "text": "and",
+     "start": 1.46,
+     "end": 1.877
+    },
+    {
+     "text": "on",
+     "start": 1.96,
+     "end": 2.05
+    },
+    {
+     "text": "your",
+     "start": 2.08,
+     "end": 2.168
+    },
+    {
+     "text": "author",
+     "start": 2.18,
+     "end": 2.363
+    },
+    {
+     "text": "page.",
+     "start": 2.44,
+     "end": 2.74
+    }
+   ]
+  },
+  {
+   "id": "ch3",
+   "file": "line14.wav",
+   "duration": 1.786,
+   "heard": "Chapter three. Follow an author. Chapter. Chapter.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.167
+    },
+    {
+     "text": "three.",
+     "start": 0.26,
+     "end": 0.54
+    },
+    {
+     "text": "Follow",
+     "start": 0.98,
+     "end": 1.068
+    },
+    {
+     "text": "an",
+     "start": 1.08,
+     "end": 1.26
+    },
+    {
+     "text": "author.",
+     "start": 1.55,
+     "end": 1.786
+    }
+   ]
+  },
+  {
+   "id": "f1",
+   "file": "line15.wav",
+   "duration": 2.148,
+   "heard": "Readers can follow the writers they like.",
+   "words": [
+    {
+     "text": "Readers",
+     "start": 0.0,
+     "end": 0.26
+    },
+    {
+     "text": "can",
+     "start": 0.28,
+     "end": 0.58
+    },
+    {
+     "text": "follow",
+     "start": 0.82,
+     "end": 0.897
+    },
+    {
+     "text": "the",
+     "start": 0.92,
+     "end": 1.103
+    },
+    {
+     "text": "writers",
+     "start": 1.14,
+     "end": 1.363
+    },
+    {
+     "text": "they",
+     "start": 1.38,
+     "end": 1.66
+    },
+    {
+     "text": "like.",
+     "start": 1.67,
+     "end": 1.97
+    }
+   ]
+  },
+  {
+   "id": "f2",
+   "file": "line16.wav",
+   "duration": 3.748,
+   "heard": "when a new poem or a new chapter goes up, a notification arrives. when a new poem arrives.",
+   "words": [
+    {
+     "text": "When",
+     "start": 0.0,
+     "end": 0.07
+    },
+    {
+     "text": "a",
+     "start": 0.08,
+     "end": 0.13
+    },
+    {
+     "text": "new",
+     "start": 0.16,
+     "end": 0.26
+    },
+    {
+     "text": "poem",
+     "start": 0.37,
+     "end": 0.508
+    },
+    {
+     "text": "or",
+     "start": 0.54,
+     "end": 0.81
+    },
+    {
+     "text": "a",
+     "start": 0.9,
+     "end": 0.95
+    },
+    {
+     "text": "new",
+     "start": 1.0,
+     "end": 1.083
+    },
+    {
+     "text": "chapter",
+     "start": 1.18,
+     "end": 1.341
+    },
+    {
+     "text": "goes",
+     "start": 1.46,
+     "end": 1.675
+    },
+    {
+     "text": "up,",
+     "start": 1.72,
+     "end": 1.855
+    },
+    {
+     "text": "a",
+     "start": 2.22,
+     "end": 2.29
+    },
+    {
+     "text": "notification",
+     "start": 2.36,
+     "end": 2.552
+    },
+    {
+     "text": "arrives.",
+     "start": 2.78,
+     "end": 3.284
+    }
+   ]
+  },
+  {
+   "id": "f3",
+   "file": "line17.wav",
+   "duration": 3.68,
+   "heard": "More from the same writer joins that notification, quietly. quietly.",
+   "words": [
+    {
+     "text": "More",
+     "start": 0.0,
+     "end": 0.158
+    },
+    {
+     "text": "from",
+     "start": 0.18,
+     "end": 0.373
+    },
+    {
+     "text": "the",
+     "start": 0.4,
+     "end": 0.5
+    },
+    {
+     "text": "same",
+     "start": 0.52,
+     "end": 0.712
+    },
+    {
+     "text": "writer",
+     "start": 0.74,
+     "end": 1.015
+    },
+    {
+     "text": "joins",
+     "start": 1.04,
+     "end": 1.634
+    },
+    {
+     "text": "that",
+     "start": 1.95,
+     "end": 2.0
+    },
+    {
+     "text": "notification,",
+     "start": 2.09,
+     "end": 2.595
+    },
+    {
+     "text": "quietly.",
+     "start": 3.13,
+     "end": 3.43
+    }
+   ]
+  },
+  {
+   "id": "ch4",
+   "file": "line18.wav",
+   "duration": 2.227,
+   "heard": "Chapter four. Novels, for writers. Chapter four. Novels, for writers. Chapter four. Novels, for writers. Chapter four. Novels, for writers. Chapter four. Novels, for writers. Chapter four. Novels, for writers.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.167
+    },
+    {
+     "text": "four.",
+     "start": 0.27,
+     "end": 0.53
+    },
+    {
+     "text": "Novels,",
+     "start": 0.99,
+     "end": 1.423
+    },
+    {
+     "text": "for",
+     "start": 1.46,
+     "end": 1.54
+    },
+    {
+     "text": "writers.",
+     "start": 1.54,
+     "end": 1.84
+    }
+   ]
+  },
+  {
+   "id": "w1",
+   "file": "line19.wav",
+   "duration": 3.043,
+   "heard": "Start a novel with a title, a language and a status.",
+   "words": [
+    {
+     "text": "Start",
+     "start": 0.0,
+     "end": 0.162
+    },
+    {
+     "text": "a",
+     "start": 0.18,
+     "end": 0.24
+    },
+    {
+     "text": "novel",
+     "start": 0.3,
+     "end": 0.534
+    },
+    {
+     "text": "with",
+     "start": 0.61,
+     "end": 0.753
+    },
+    {
+     "text": "a",
+     "start": 0.84,
+     "end": 0.89
+    },
+    {
+     "text": "title,",
+     "start": 0.92,
+     "end": 1.11
+    },
+    {
+     "text": "a",
+     "start": 1.64,
+     "end": 1.69
+    },
+    {
+     "text": "language",
+     "start": 1.69,
+     "end": 2.018
+    },
+    {
+     "text": "and",
+     "start": 2.04,
+     "end": 2.273
+    },
+    {
+     "text": "a",
+     "start": 2.42,
+     "end": 2.47
+    },
+    {
+     "text": "status.",
+     "start": 2.4699999999999998,
+     "end": 2.77
+    }
+   ]
+  },
+  {
+   "id": "w2",
+   "file": "line20.wav",
+   "duration": 3.032,
+   "heard": "The blurb is like the back of a book. Readers see it first.",
+   "words": [
+    {
+     "text": "The",
+     "start": 0.0,
+     "end": 0.067
+    },
+    {
+     "text": "blurb",
+     "start": 0.16,
+     "end": 0.368
+    },
+    {
+     "text": "is",
+     "start": 0.4,
+     "end": 0.535
+    },
+    {
+     "text": "like",
+     "start": 0.58,
+     "end": 0.72
+    },
+    {
+     "text": "the",
+     "start": 0.74,
+     "end": 0.84
+    },
+    {
+     "text": "back",
+     "start": 0.92,
+     "end": 1.018
+    },
+    {
+     "text": "of",
+     "start": 1.11,
+     "end": 1.16
+    },
+    {
+     "text": "a",
+     "start": 1.18,
+     "end": 1.23
+    },
+    {
+     "text": "book:",
+     "start": 1.32,
+     "end": 1.432
+    },
+    {
+     "text": "readers",
+     "start": 1.94,
+     "end": 2.051
+    },
+    {
+     "text": "see",
+     "start": 2.06,
+     "end": 2.36
+    },
+    {
+     "text": "it",
+     "start": 2.42,
+     "end": 2.51
+    },
+    {
+     "text": "first.",
+     "start": 2.64,
+     "end": 2.94
+    }
+   ]
+  },
+  {
+   "id": "w3",
+   "file": "line21.wav",
+   "duration": 2.471,
+   "heard": "Upload a cover, and crop it to the shape of a book.",
+   "words": [
+    {
+     "text": "Upload",
+     "start": 0.0,
+     "end": 0.22
+    },
+    {
+     "text": "a",
+     "start": 0.34,
+     "end": 0.39
+    },
+    {
+     "text": "cover,",
+     "start": 0.39,
+     "end": 0.592
+    },
+    {
+     "text": "and",
+     "start": 0.92,
+     "end": 1.003
+    },
+    {
+     "text": "crop",
+     "start": 1.02,
+     "end": 1.16
+    },
+    {
+     "text": "it",
+     "start": 1.18,
+     "end": 1.315
+    },
+    {
+     "text": "to",
+     "start": 1.41,
+     "end": 1.46
+    },
+    {
+     "text": "the",
+     "start": 1.48,
+     "end": 1.547
+    },
+    {
+     "text": "shape",
+     "start": 1.56,
+     "end": 1.74
+    },
+    {
+     "text": "of",
+     "start": 1.76,
+     "end": 1.91
+    },
+    {
+     "text": "a",
+     "start": 1.96,
+     "end": 2.01
+    },
+    {
+     "text": "book.",
+     "start": 2.13,
+     "end": 2.43
+    }
+   ]
+  },
+  {
+   "id": "w4",
+   "file": "line22.wav",
+   "duration": 3.835,
+   "heard": "Write each chapter here. The Drop cap button gives it a large first letter.",
+   "words": [
+    {
+     "text": "Write",
+     "start": 0.0,
+     "end": 0.144
+    },
+    {
+     "text": "each",
+     "start": 0.16,
+     "end": 0.265
+    },
+    {
+     "text": "chapter",
+     "start": 0.28,
+     "end": 0.596
+    },
+    {
+     "text": "here.",
+     "start": 0.69,
+     "end": 0.9
+    },
+    {
+     "text": "The",
+     "start": 1.48,
+     "end": 1.53
+    },
+    {
+     "text": "Drop",
+     "start": 1.53,
+     "end": 1.672
+    },
+    {
+     "text": "cap",
+     "start": 1.88,
+     "end": 1.93
+    },
+    {
+     "text": "button",
+     "start": 2.2,
+     "end": 2.363
+    },
+    {
+     "text": "gives",
+     "start": 2.4,
+     "end": 2.526
+    },
+    {
+     "text": "it",
+     "start": 2.54,
+     "end": 2.66
+    },
+    {
+     "text": "a",
+     "start": 2.7,
+     "end": 2.75
+    },
+    {
+     "text": "large",
+     "start": 2.76,
+     "end": 2.994
+    },
+    {
+     "text": "first",
+     "start": 3.02,
+     "end": 3.272
+    },
+    {
+     "text": "letter.",
+     "start": 3.52,
+     "end": 3.82
+    }
+   ]
+  },
+  {
+   "id": "w5",
+   "file": "line23.wav",
+   "duration": 3.101,
+   "heard": "Publish chapters one at a time, and move them into order.",
+   "words": [
+    {
+     "text": "Publish",
+     "start": 0.0,
+     "end": 0.297
+    },
+    {
+     "text": "chapters",
+     "start": 0.41,
+     "end": 0.564
+    },
+    {
+     "text": "one",
+     "start": 0.68,
+     "end": 0.98
+    },
+    {
+     "text": "at",
+     "start": 1.06,
+     "end": 1.165
+    },
+    {
+     "text": "a",
+     "start": 1.2,
+     "end": 1.25
+    },
+    {
+     "text": "time,",
+     "start": 1.34,
+     "end": 1.558
+    },
+    {
+     "text": "and",
+     "start": 1.92,
+     "end": 2.053
+    },
+    {
+     "text": "move",
+     "start": 2.08,
+     "end": 2.202
+    },
+    {
+     "text": "them",
+     "start": 2.22,
+     "end": 2.395
+    },
+    {
+     "text": "into",
+     "start": 2.42,
+     "end": 2.613
+    },
+    {
+     "text": "order.",
+     "start": 2.72,
+     "end": 3.02
+    }
+   ]
+  },
+  {
+   "id": "ch5",
+   "file": "line24.wav",
+   "duration": 2.275,
+   "heard": "Chapter five. Novels, for readers.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.149
+    },
+    {
+     "text": "five.",
+     "start": 0.26,
+     "end": 0.58
+    },
+    {
+     "text": "Novels,",
+     "start": 1.06,
+     "end": 1.482
+    },
+    {
+     "text": "for",
+     "start": 1.52,
+     "end": 1.61
+    },
+    {
+     "text": "readers.",
+     "start": 1.61,
+     "end": 1.91
+    }
+   ]
+  },
+  {
+   "id": "r1",
+   "file": "line25.wav",
+   "duration": 2.065,
+   "heard": "Novels sit on the board as book cards. Novels sit on the board as book cards",
+   "words": [
+    {
+     "text": "Novels",
+     "start": 0.0,
+     "end": 0.403
+    },
+    {
+     "text": "sit",
+     "start": 0.44,
+     "end": 0.557
+    },
+    {
+     "text": "on",
+     "start": 0.58,
+     "end": 0.67
+    },
+    {
+     "text": "the",
+     "start": 0.7,
+     "end": 0.783
+    },
+    {
+     "text": "board",
+     "start": 0.88,
+     "end": 0.998
+    },
+    {
+     "text": "as",
+     "start": 1.02,
+     "end": 1.185
+    },
+    {
+     "text": "book",
+     "start": 1.24,
+     "end": 1.415
+    },
+    {
+     "text": "cards.",
+     "start": 1.58,
+     "end": 1.88
+    }
+   ]
+  },
+  {
+   "id": "r2",
+   "file": "line26.wav",
+   "duration": 3.067,
+   "heard": "Each one has its own page, with the blurb and the chapters.",
+   "words": [
+    {
+     "text": "Each",
+     "start": 0.0,
+     "end": 0.123
+    },
+    {
+     "text": "one",
+     "start": 0.14,
+     "end": 0.273
+    },
+    {
+     "text": "has",
+     "start": 0.3,
+     "end": 0.433
+    },
+    {
+     "text": "its",
+     "start": 0.46,
+     "end": 0.577
+    },
+    {
+     "text": "own",
+     "start": 0.6,
+     "end": 0.717
+    },
+    {
+     "text": "page,",
+     "start": 0.74,
+     "end": 1.002
+    },
+    {
+     "text": "with",
+     "start": 1.46,
+     "end": 1.6
+    },
+    {
+     "text": "the",
+     "start": 1.62,
+     "end": 1.72
+    },
+    {
+     "text": "blurb",
+     "start": 1.82,
+     "end": 2.028
+    },
+    {
+     "text": "and",
+     "start": 2.06,
+     "end": 2.21
+    },
+    {
+     "text": "the",
+     "start": 2.24,
+     "end": 2.307
+    },
+    {
+     "text": "chapters.",
+     "start": 2.39,
+     "end": 2.69
+    }
+   ]
+  },
+  {
+   "id": "r3",
+   "file": "line27.wav",
+   "duration": 2.36,
+   "heard": "Chapters open with the writer's drop cap.",
+   "words": [
+    {
+     "text": "Chapters",
+     "start": 0.0,
+     "end": 0.281
+    },
+    {
+     "text": "open",
+     "start": 0.32,
+     "end": 0.615
+    },
+    {
+     "text": "with",
+     "start": 0.74,
+     "end": 1.098
+    },
+    {
+     "text": "the",
+     "start": 1.16,
+     "end": 1.243
+    },
+    {
+     "text": "writer's",
+     "start": 1.26,
+     "end": 1.631
+    },
+    {
+     "text": "drop",
+     "start": 1.74,
+     "end": 1.818
+    },
+    {
+     "text": "cap.",
+     "start": 2.01,
+     "end": 2.31
+    }
+   ]
+  },
+  {
+   "id": "r4",
+   "file": "line28.wav",
+   "duration": 3.104,
+   "heard": "Ehvay, Chwee and Gah keep every letter and tone mark.",
+   "words": [
+    {
+     "text": "Ewe,",
+     "start": 0.0,
+     "end": 0.324
+    },
+    {
+     "text": "Twi",
+     "start": 0.58,
+     "end": 1.012
+    },
+    {
+     "text": "and",
+     "start": 1.06,
+     "end": 1.11
+    },
+    {
+     "text": "Ga",
+     "start": 1.11,
+     "end": 1.3
+    },
+    {
+     "text": "keep",
+     "start": 1.55,
+     "end": 1.602
+    },
+    {
+     "text": "every",
+     "start": 1.81,
+     "end": 1.874
+    },
+    {
+     "text": "letter",
+     "start": 1.9,
+     "end": 2.212
+    },
+    {
+     "text": "and",
+     "start": 2.24,
+     "end": 2.39
+    },
+    {
+     "text": "tone",
+     "start": 2.42,
+     "end": 2.578
+    },
+    {
+     "text": "mark.",
+     "start": 2.6,
+     "end": 2.9
+    }
+   ]
+  },
+  {
+   "id": "r5",
+   "file": "line29.wav",
+   "duration": 3.009,
+   "heard": "On a phone, Text settings change the size and the font.",
+   "words": [
+    {
+     "text": "On",
+     "start": 0.0,
+     "end": 0.06
+    },
+    {
+     "text": "a",
+     "start": 0.14,
+     "end": 0.19
+    },
+    {
+     "text": "phone,",
+     "start": 0.29,
+     "end": 0.392
+    },
+    {
+     "text": "Text",
+     "start": 0.85,
+     "end": 0.918
+    },
+    {
+     "text": "settings",
+     "start": 1.03,
+     "end": 1.24
+    },
+    {
+     "text": "change",
+     "start": 1.48,
+     "end": 1.535
+    },
+    {
+     "text": "the",
+     "start": 1.56,
+     "end": 1.827
+    },
+    {
+     "text": "size",
+     "start": 1.85,
+     "end": 2.09
+    },
+    {
+     "text": "and",
+     "start": 2.12,
+     "end": 2.387
+    },
+    {
+     "text": "the",
+     "start": 2.44,
+     "end": 2.507
+    },
+    {
+     "text": "font.",
+     "start": 2.66,
+     "end": 2.96
+    }
+   ]
+  },
+  {
+   "id": "r6",
+   "file": "line30.wav",
+   "duration": 3.018,
+   "heard": "come back later, and Ink Board remembers where you stopped. you stopped.",
+   "words": [
+    {
+     "text": "Come",
+     "start": 0.0,
+     "end": 0.123
+    },
+    {
+     "text": "back",
+     "start": 0.14,
+     "end": 0.315
+    },
+    {
+     "text": "later,",
+     "start": 0.46,
+     "end": 0.664
+    },
+    {
+     "text": "and",
+     "start": 1.09,
+     "end": 1.14
+    },
+    {
+     "text": "InkBoard",
+     "start": 1.27,
+     "end": 1.594
+    },
+    {
+     "text": "remembers",
+     "start": 1.62,
+     "end": 1.922
+    },
+    {
+     "text": "where",
+     "start": 1.94,
+     "end": 2.282
+    },
+    {
+     "text": "you",
+     "start": 2.29,
+     "end": 2.42
+    },
+    {
+     "text": "stopped.",
+     "start": 2.44,
+     "end": 2.74
+    }
+   ]
+  },
+  {
+   "id": "r7",
+   "file": "line31.wav",
+   "duration": 3.783,
+   "heard": "Save a whole novel to read offline, or follow it in a feed reader.",
+   "words": [
+    {
+     "text": "Save",
+     "start": 0.0,
+     "end": 0.158
+    },
+    {
+     "text": "a",
+     "start": 0.18,
+     "end": 0.24
+    },
+    {
+     "text": "whole",
+     "start": 0.3,
+     "end": 0.444
+    },
+    {
+     "text": "novel",
+     "start": 0.46,
+     "end": 0.784
+    },
+    {
+     "text": "to",
+     "start": 0.89,
+     "end": 1.03
+    },
+    {
+     "text": "read",
+     "start": 1.1,
+     "end": 1.24
+    },
+    {
+     "text": "offline,",
+     "start": 1.41,
+     "end": 1.539
+    },
+    {
+     "text": "or",
+     "start": 2.28,
+     "end": 2.34
+    },
+    {
+     "text": "follow",
+     "start": 2.54,
+     "end": 2.653
+    },
+    {
+     "text": "it",
+     "start": 2.68,
+     "end": 2.845
+    },
+    {
+     "text": "in",
+     "start": 2.9,
+     "end": 2.99
+    },
+    {
+     "text": "a",
+     "start": 3.02,
+     "end": 3.07
+    },
+    {
+     "text": "feed",
+     "start": 3.14,
+     "end": 3.23
+    },
+    {
+     "text": "reader.",
+     "start": 3.23,
+     "end": 3.53
+    }
+   ]
+  },
+  {
+   "id": "ch6",
+   "file": "line32.wav",
+   "duration": 1.91,
+   "heard": "Chapter six. Private novels. Chapter six. Private novels. Chapter six.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.167
+    },
+    {
+     "text": "six.",
+     "start": 0.27,
+     "end": 0.513
+    },
+    {
+     "text": "Private",
+     "start": 1.01,
+     "end": 1.183
+    },
+    {
+     "text": "novels.",
+     "start": 1.2,
+     "end": 1.5
+    }
+   ]
+  },
+  {
+   "id": "v1",
+   "file": "line33.wav",
+   "duration": 3.237,
+   "heard": "A novel can be private, with one password for the whole book.",
+   "words": [
+    {
+     "text": "A",
+     "start": 0.0,
+     "end": 0.05
+    },
+    {
+     "text": "novel",
+     "start": 0.06,
+     "end": 0.312
+    },
+    {
+     "text": "can",
+     "start": 0.34,
+     "end": 0.557
+    },
+    {
+     "text": "be",
+     "start": 0.6,
+     "end": 0.675
+    },
+    {
+     "text": "private,",
+     "start": 0.79,
+     "end": 1.016
+    },
+    {
+     "text": "with",
+     "start": 1.46,
+     "end": 1.548
+    },
+    {
+     "text": "one",
+     "start": 1.56,
+     "end": 1.743
+    },
+    {
+     "text": "password",
+     "start": 1.78,
+     "end": 2.136
+    },
+    {
+     "text": "for",
+     "start": 2.21,
+     "end": 2.427
+    },
+    {
+     "text": "the",
+     "start": 2.48,
+     "end": 2.563
+    },
+    {
+     "text": "whole",
+     "start": 2.58,
+     "end": 2.724
+    },
+    {
+     "text": "book.",
+     "start": 2.89,
+     "end": 3.19
+    }
+   ]
+  },
+  {
+   "id": "v2",
+   "file": "line34.wav",
+   "duration": 3.065,
+   "heard": "Readers still see the title, the cover and the chapter list.",
+   "words": [
+    {
+     "text": "Readers",
+     "start": 0.0,
+     "end": 0.223
+    },
+    {
+     "text": "still",
+     "start": 0.24,
+     "end": 0.528
+    },
+    {
+     "text": "see",
+     "start": 0.56,
+     "end": 0.727
+    },
+    {
+     "text": "the",
+     "start": 0.76,
+     "end": 0.86
+    },
+    {
+     "text": "title,",
+     "start": 0.94,
+     "end": 1.15
+    },
+    {
+     "text": "the",
+     "start": 1.64,
+     "end": 1.69
+    },
+    {
+     "text": "cover",
+     "start": 1.72,
+     "end": 1.84
+    },
+    {
+     "text": "and",
+     "start": 1.86,
+     "end": 2.093
+    },
+    {
+     "text": "the",
+     "start": 2.14,
+     "end": 2.223
+    },
+    {
+     "text": "chapter",
+     "start": 2.29,
+     "end": 2.444
+    },
+    {
+     "text": "list.",
+     "start": 2.58,
+     "end": 2.88
+    }
+   ]
+  },
+  {
+   "id": "v3",
+   "file": "line35.wav",
+   "duration": 2.447,
+   "heard": "Unlock it once, and every chapter opens.",
+   "words": [
+    {
+     "text": "Unlock",
+     "start": 0.0,
+     "end": 0.22
+    },
+    {
+     "text": "it",
+     "start": 0.24,
+     "end": 0.375
+    },
+    {
+     "text": "once,",
+     "start": 0.42,
+     "end": 0.578
+    },
+    {
+     "text": "and",
+     "start": 0.99,
+     "end": 1.04
+    },
+    {
+     "text": "every",
+     "start": 1.16,
+     "end": 1.276
+    },
+    {
+     "text": "chapter",
+     "start": 1.45,
+     "end": 1.616
+    },
+    {
+     "text": "opens.",
+     "start": 1.76,
+     "end": 2.06
+    }
+   ]
+  },
+  {
+   "id": "ch7",
+   "file": "line36.wav",
+   "duration": 1.868,
+   "heard": "Chapter seven. Share a passage. A passage. A passage.",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.167
+    },
+    {
+     "text": "seven.",
+     "start": 0.26,
+     "end": 0.558
+    },
+    {
+     "text": "Share",
+     "start": 1.0,
+     "end": 1.09
+    },
+    {
+     "text": "a",
+     "start": 1.1,
+     "end": 1.17
+    },
+    {
+     "text": "passage.",
+     "start": 1.29,
+     "end": 1.59
+    }
+   ]
+  },
+  {
+   "id": "q1",
+   "file": "line37.wav",
+   "duration": 3.043,
+   "heard": "At the end of a chapter, tick the paragraphs you want to quote.",
+   "words": [
+    {
+     "text": "At",
+     "start": 0.0,
+     "end": 0.06
+    },
+    {
+     "text": "the",
+     "start": 0.08,
+     "end": 0.15
+    },
+    {
+     "text": "end",
+     "start": 0.15,
+     "end": 0.347
+    },
+    {
+     "text": "of",
+     "start": 0.38,
+     "end": 0.485
+    },
+    {
+     "text": "a",
+     "start": 0.52,
+     "end": 0.57
+    },
+    {
+     "text": "chapter,",
+     "start": 0.61,
+     "end": 0.969
+    },
+    {
+     "text": "tick",
+     "start": 1.43,
+     "end": 1.48
+    },
+    {
+     "text": "the",
+     "start": 1.63,
+     "end": 2.017
+    },
+    {
+     "text": "paragraphs",
+     "start": 2.12,
+     "end": 2.17
+    },
+    {
+     "text": "you",
+     "start": 2.21,
+     "end": 2.303
+    },
+    {
+     "text": "want",
+     "start": 2.34,
+     "end": 2.445
+    },
+    {
+     "text": "to",
+     "start": 2.46,
+     "end": 2.55
+    },
+    {
+     "text": "quote.",
+     "start": 2.65,
+     "end": 2.95
+    }
+   ]
+  },
+  {
+   "id": "q2",
+   "file": "line38.wav",
+   "duration": 2.817,
+   "heard": "Trim the start and the end, sentence by sentence.",
+   "words": [
+    {
+     "text": "Trim",
+     "start": 0.0,
+     "end": 0.175
+    },
+    {
+     "text": "the",
+     "start": 0.2,
+     "end": 0.3
+    },
+    {
+     "text": "start",
+     "start": 0.45,
+     "end": 0.554
+    },
+    {
+     "text": "and",
+     "start": 0.58,
+     "end": 0.73
+    },
+    {
+     "text": "the",
+     "start": 0.76,
+     "end": 0.86
+    },
+    {
+     "text": "end,",
+     "start": 0.88,
+     "end": 1.097
+    },
+    {
+     "text": "sentence",
+     "start": 1.57,
+     "end": 1.685
+    },
+    {
+     "text": "by",
+     "start": 1.7,
+     "end": 1.985
+    },
+    {
+     "text": "sentence.",
+     "start": 2.08,
+     "end": 2.436
+    }
+   ]
+  },
+  {
+   "id": "q3",
+   "file": "line39.wav",
+   "duration": 2.37,
+   "heard": "The count keeps you under six hundred characters.",
+   "words": [
+    {
+     "text": "The",
+     "start": 0.0,
+     "end": 0.067
+    },
+    {
+     "text": "count",
+     "start": 0.13,
+     "end": 0.278
+    },
+    {
+     "text": "keeps",
+     "start": 0.55,
+     "end": 0.624
+    },
+    {
+     "text": "you",
+     "start": 0.74,
+     "end": 0.827
+    },
+    {
+     "text": "under",
+     "start": 0.86,
+     "end": 1.022
+    },
+    {
+     "text": "600",
+     "start": 1.04,
+     "end": 1.559
+    },
+    {
+     "text": "characters.",
+     "start": 1.68,
+     "end": 1.98
+    }
+   ]
+  },
+  {
+   "id": "q4",
+   "file": "line40.wav",
+   "duration": 2.576,
+   "heard": "And the passage becomes a picture, ready to share.",
+   "words": [
+    {
+     "text": "And",
+     "start": 0.0,
+     "end": 0.067
+    },
+    {
+     "text": "the",
+     "start": 0.08,
+     "end": 0.147
+    },
+    {
+     "text": "passage",
+     "start": 0.22,
+     "end": 0.401
+    },
+    {
+     "text": "becomes",
+     "start": 0.42,
+     "end": 0.81
+    },
+    {
+     "text": "a",
+     "start": 0.84,
+     "end": 0.93
+    },
+    {
+     "text": "picture,",
+     "start": 1.14,
+     "end": 1.373
+    },
+    {
+     "text": "ready",
+     "start": 1.81,
+     "end": 1.9
+    },
+    {
+     "text": "to",
+     "start": 1.92,
+     "end": 2.07
+    },
+    {
+     "text": "share.",
+     "start": 2.12,
+     "end": 2.42
+    }
+   ]
+  },
+  {
+   "id": "ch8",
+   "file": "line41.wav",
+   "duration": 2.001,
+   "heard": "Chapter eight. Stats for writers. Writers. th",
+   "words": [
+    {
+     "text": "Chapter",
+     "start": 0.0,
+     "end": 0.186
+    },
+    {
+     "text": "eight.",
+     "start": 0.27,
+     "end": 0.488
+    },
+    {
+     "text": "Stats",
+     "start": 0.97,
+     "end": 1.044
+    },
+    {
+     "text": "for",
+     "start": 1.18,
+     "end": 1.277
+    },
+    {
+     "text": "writers.",
+     "start": 1.3,
+     "end": 1.6
+    }
+   ]
+  },
+  {
+   "id": "t1",
+   "file": "line42.wav",
+   "duration": 2.156,
+   "heard": "stats shows how many devices follow you.",
+   "words": [
+    {
+     "text": "Stats",
+     "start": 0.0,
+     "end": 0.144
+    },
+    {
+     "text": "shows",
+     "start": 0.31,
+     "end": 0.448
+    },
+    {
+     "text": "how",
+     "start": 0.7,
+     "end": 0.75
+    },
+    {
+     "text": "many",
+     "start": 0.78,
+     "end": 0.903
+    },
+    {
+     "text": "devices",
+     "start": 0.92,
+     "end": 1.291
+    },
+    {
+     "text": "follow",
+     "start": 1.32,
+     "end": 1.687
+    },
+    {
+     "text": "you,",
+     "start": 1.72,
+     "end": 2.02
+    }
+   ]
+  },
+  {
+   "id": "t2",
+   "file": "line43.wav",
+   "duration": 1.935,
+   "heard": "How often your shared links were opened, How often their shared links were opened, How often their shared links were opened,",
+   "words": [
+    {
+     "text": "how",
+     "start": 0.0,
+     "end": 0.133
+    },
+    {
+     "text": "often",
+     "start": 0.16,
+     "end": 0.466
+    },
+    {
+     "text": "your",
+     "start": 0.5,
+     "end": 0.622
+    },
+    {
+     "text": "shared",
+     "start": 0.64,
+     "end": 0.842
+    },
+    {
+     "text": "links",
+     "start": 0.86,
+     "end": 1.094
+    },
+    {
+     "text": "were",
+     "start": 1.12,
+     "end": 1.312
+    },
+    {
+     "text": "opened,",
+     "start": 1.43,
+     "end": 1.73
+    }
+   ]
+  },
+  {
+   "id": "t3",
+   "file": "line44.wav",
+   "duration": 2.265,
+   "heard": "and the words and reading time of each novel.",
+   "words": [
+    {
+     "text": "and",
+     "start": 0.0,
+     "end": 0.067
+    },
+    {
+     "text": "the",
+     "start": 0.08,
+     "end": 0.147
+    },
+    {
+     "text": "words",
+     "start": 0.16,
+     "end": 0.376
+    },
+    {
+     "text": "and",
+     "start": 0.4,
+     "end": 0.667
+    },
+    {
+     "text": "reading",
+     "start": 0.69,
+     "end": 0.869
+    },
+    {
+     "text": "time",
+     "start": 0.88,
+     "end": 1.195
+    },
+    {
+     "text": "of",
+     "start": 1.24,
+     "end": 1.405
+    },
+    {
+     "text": "each",
+     "start": 1.46,
+     "end": 1.618
+    },
+    {
+     "text": "novel.",
+     "start": 1.71,
+     "end": 2.01
+    }
+   ]
+  },
+  {
+   "id": "t4",
+   "file": "line45.wav",
+   "duration": 5.602,
+   "heard": "Every number is explained. No page views, no tracking, only what Ink Board already keeps. No page views, no tracking, only what Ink Board keeps. No page views, no tracking, only what eyes we call this.",
+   "words": [
+    {
+     "text": "Every",
+     "start": 0.0,
+     "end": 0.18
+    },
+    {
+     "text": "number",
+     "start": 0.2,
+     "end": 0.438
+    },
+    {
+     "text": "is",
+     "start": 0.46,
+     "end": 0.61
+    },
+    {
+     "text": "explained.",
+     "start": 0.78,
+     "end": 0.981
+    },
+    {
+     "text": "No",
+     "start": 1.86,
+     "end": 1.91
+    },
+    {
+     "text": "page",
+     "start": 1.99,
+     "end": 2.088
+    },
+    {
+     "text": "views,",
+     "start": 2.37,
+     "end": 2.42
+    },
+    {
+     "text": "no",
+     "start": 2.64,
+     "end": 2.76
+    },
+    {
+     "text": "tracking:",
+     "start": 2.96,
+     "end": 3.175
+    },
+    {
+     "text": "only",
+     "start": 3.76,
+     "end": 3.92
+    },
+    {
+     "text": "what",
+     "start": 3.96,
+     "end": 4.135
+    },
+    {
+     "text": "InkBoard",
+     "start": 4.3,
+     "end": 4.614
+    },
+    {
+     "text": "already",
+     "start": 4.64,
+     "end": 4.937
+    },
+    {
+     "text": "keeps.",
+     "start": 5.13,
+     "end": 5.43
+    }
+   ]
+  },
+  {
+   "id": "end",
+   "file": "line46.wav",
+   "duration": 4.149,
+   "heard": "That's what's new. Start writing free at try ink board dot elabo dot me. That's what's new. That's what's new.",
+   "words": [
+    {
+     "text": "That's",
+     "start": 0.0,
+     "end": 0.198
+    },
+    {
+     "text": "what's",
+     "start": 0.29,
+     "end": 0.436
+    },
+    {
+     "text": "new.",
+     "start": 0.46,
+     "end": 0.593
+    },
+    {
+     "text": "Start",
+     "start": 1.3,
+     "end": 1.35
+    },
+    {
+     "text": "writing",
+     "start": 1.35,
+     "end": 1.541
+    },
+    {
+     "text": "free",
+     "start": 1.56,
+     "end": 1.805
+    },
+    {
+     "text": "at",
+     "start": 1.84,
+     "end": 2.02
+    },
+    {
+     "text": "tryinkboard.elabo.me",
+     "start": 2.13,
+     "end": 3.94
+    }
+   ]
+  }
+ ]
+}

@@ -1,9 +1,12 @@
-InkBoard launch Reel: credits
+InkBoard videos: credits
 
-File to post:
-  platform-launch-reel.mp4   Instagram Reels, TikTok, YouTube Shorts (1080x1920, 60 fps, 0:35)
+Files to post (not in git; copy them by hand):
+  platform-launch-reel.mp4     Instagram Reels, TikTok, YouTube Shorts (1080x1920, 60 fps, 0:35)
+  whats-new-walkthrough.mp4    "What's new in InkBoard", YouTube and the website (1920x1080, 30 fps, 2:53)
+  whats-new-walkthrough.srt    its captions (upload them with the video)
+  whats-new-cover.jpg          its thumbnail (1920x1080)
 
-Required credit (the music licence requires it in every post's caption or description):
+Required credit, for both videos (the music licence requires it in every post's caption or description):
 
   Music: "Inspired" by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0
   https://creativecommons.org/licenses/by/4.0/

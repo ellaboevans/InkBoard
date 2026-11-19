@@ -1,0 +1,242 @@
+{
+ "_": "What's new in InkBoard: the narration. id = what scenes key off; chapter = a chapter card (its caption is the card); hold = the least time (s) the line's beat lasts. Built into data/script.json by scripts/wn-build.mjs.",
+ "voice": "af_heart",
+ "speed": 1.04,
+ "lines": [
+  {
+   "id": "cold-1",
+   "text": "Poems as pictures.",
+   "hold": 1.95
+  },
+  {
+   "id": "cold-2",
+   "text": "Photos, follows and novels.",
+   "hold": 2.05
+  },
+  {
+   "id": "cold-3",
+   "text": "Stats only you can see.",
+   "hold": 1.65
+  },
+  {
+   "id": "title",
+   "text": "Here's what's new in InkBoard.",
+   "hold": 3.2
+  },
+  {
+   "id": "ch1",
+   "chapter": "Share a poem as an image",
+   "text": "Chapter one. Share a poem as an image."
+  },
+  {
+   "id": "s1",
+   "text": "Every public poem now has a Share as image button.",
+   "hold": 3.05
+  },
+  {
+   "id": "s2",
+   "text": "Pick a design: Page, Ink or Board.",
+   "hold": 3.65
+  },
+  {
+   "id": "s3",
+   "text": "Story size fills a phone screen. Chat size fits a message.",
+   "hold": 3.65
+  },
+  {
+   "id": "s4",
+   "text": "Want just a few lines? Choose them, and the picture shows only those.",
+   "hold": 4.25
+  },
+  {
+   "id": "s5",
+   "text": "Every picture prints a short link back to the poem.",
+   "hold": 3.25
+  },
+  {
+   "id": "ch2",
+   "chapter": "Profile photos",
+   "text": "Chapter two. Profile photos."
+  },
+  {
+   "id": "p1",
+   "text": "Writers can now use a photo instead of an avatar.",
+   "hold": 2.65
+  },
+  {
+   "id": "p2",
+   "text": "Choose a picture, then drag or zoom to crop it.",
+   "hold": 3.25
+  },
+  {
+   "id": "p3",
+   "text": "It shows on your section of the board, and on your author page.",
+   "hold": 4.05
+  },
+  {
+   "id": "ch3",
+   "chapter": "Follow an author",
+   "text": "Chapter three. Follow an author."
+  },
+  {
+   "id": "f1",
+   "text": "Readers can follow the writers they like.",
+   "hold": 2.85
+  },
+  {
+   "id": "f2",
+   "text": "When a new poem or a new chapter goes up, a notification arrives.",
+   "hold": 3.65
+  },
+  {
+   "id": "f3",
+   "text": "More from the same writer joins that notification, quietly.",
+   "hold": 3.25
+  },
+  {
+   "id": "ch4",
+   "chapter": "Novels for writers",
+   "text": "Chapter four. Novels, for writers."
+  },
+  {
+   "id": "w1",
+   "text": "Start a novel with a title, a language and a status.",
+   "hold": 3.85
+  },
+  {
+   "id": "w2",
+   "text": "The blurb is like the back of a book: readers see it first.",
+   "hold": 3.25
+  },
+  {
+   "id": "w3",
+   "text": "Upload a cover, and crop it to the shape of a book.",
+   "hold": 3.65
+  },
+  {
+   "id": "w4",
+   "text": "Write each chapter here. The Drop cap button gives it a large first letter.",
+   "hold": 4.65
+  },
+  {
+   "id": "w5",
+   "text": "Publish chapters one at a time, and move them into order.",
+   "hold": 4.25
+  },
+  {
+   "id": "ch5",
+   "chapter": "Novels for readers",
+   "text": "Chapter five. Novels, for readers."
+  },
+  {
+   "id": "r1",
+   "text": "Novels sit on the board as book cards.",
+   "hold": 2.65
+  },
+  {
+   "id": "r2",
+   "text": "Each one has its own page, with the blurb and the chapters.",
+   "hold": 3.25
+  },
+  {
+   "id": "r3",
+   "text": "Chapters open with the writer's drop cap.",
+   "hold": 2.65
+  },
+  {
+   "id": "r4",
+   "text": "Ewe, Twi and Ga keep every letter and tone mark.",
+   "hold": 3.45
+  },
+  {
+   "id": "r5",
+   "text": "On a phone, Text settings change the size and the font.",
+   "hold": 4.05
+  },
+  {
+   "id": "r6",
+   "text": "Come back later, and InkBoard remembers where you stopped.",
+   "hold": 3.25
+  },
+  {
+   "id": "r7",
+   "text": "Save a whole novel to read offline, or follow it in a feed reader.",
+   "hold": 4.85
+  },
+  {
+   "id": "ch6",
+   "chapter": "Private novels",
+   "text": "Chapter six. Private novels."
+  },
+  {
+   "id": "v1",
+   "text": "A novel can be private, with one password for the whole book.",
+   "hold": 3.25
+  },
+  {
+   "id": "v2",
+   "text": "Readers still see the title, the cover and the chapter list.",
+   "hold": 3.05
+  },
+  {
+   "id": "v3",
+   "text": "Unlock it once, and every chapter opens.",
+   "hold": 4.05
+  },
+  {
+   "id": "ch7",
+   "chapter": "Share a passage",
+   "text": "Chapter seven. Share a passage."
+  },
+  {
+   "id": "q1",
+   "text": "At the end of a chapter, tick the paragraphs you want to quote.",
+   "hold": 3.85
+  },
+  {
+   "id": "q2",
+   "text": "Trim the start and the end, sentence by sentence.",
+   "hold": 3.45
+  },
+  {
+   "id": "q3",
+   "text": "The count keeps you under 600 characters.",
+   "hold": 2.65
+  },
+  {
+   "id": "q4",
+   "text": "And the passage becomes a picture, ready to share.",
+   "hold": 3.25
+  },
+  {
+   "id": "ch8",
+   "chapter": "Stats for writers",
+   "text": "Chapter eight. Stats for writers."
+  },
+  {
+   "id": "t1",
+   "text": "Stats shows how many devices follow you,",
+   "hold": 2.65
+  },
+  {
+   "id": "t2",
+   "text": "how often your shared links were opened,",
+   "hold": 2.65
+  },
+  {
+   "id": "t3",
+   "text": "and the words and reading time of each novel.",
+   "hold": 3.05
+  },
+  {
+   "id": "t4",
+   "text": "Every number is explained. No page views, no tracking: only what InkBoard already keeps.",
+   "hold": 5.25
+  },
+  {
+   "id": "end",
+   "text": "That's what's new. Start writing free at tryinkboard.elabo.me",
+   "hold": 6.0
+  }
+ ]
+}

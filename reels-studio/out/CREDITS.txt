@@ -1,0 +1,12 @@
+InkBoard launch Reel: credits
+
+File to post:
+  platform-launch-reel.mp4   Instagram Reels, TikTok, YouTube Shorts (1080x1920, 60 fps, 0:35)
+
+Required credit (the music licence requires it in every post's caption or description):
+
+  Music: "Inspired" by Kevin MacLeod (incompetech.com), licensed under CC BY 4.0
+  https://creativecommons.org/licenses/by/4.0/
+
+Voice: generated with Kokoro (open-source text-to-speech, Apache 2.0), voice "af_heart". No credit required.
+Fonts: Newsreader, Geist, Geist Mono, Gentium Book Plus and Andika (SIL Open Font License). No credit required.

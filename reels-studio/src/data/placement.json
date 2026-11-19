@@ -1,0 +1,17 @@
+{
+  "_": "When each voice line starts, in seconds from the start of the reel (scripts/mix.py and the captions both read this).",
+  "hook": 0.15,
+  "meet": 1.62,
+  "signin": 3.12,
+  "letters": 5.12,
+  "publish": 7.95,
+  "posters": 10.1,
+  "share": 12.15,
+  "novels": 15.1,
+  "read": 17.6,
+  "passage": 20.6,
+  "private": 23.1,
+  "follow": 25.6,
+  "all": 28.25,
+  "cta": 31.3
+}

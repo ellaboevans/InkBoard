@@ -1,0 +1,14 @@
+# Heavy or regenerated: never committed.
+node_modules/
+captures/
+build/
+.remotion/
+tmp/
+public/captures/
+public/audio/
+# Third-party agent skills: reinstall from the sources in skills-lock.json.
+.agents/
+.claude/
+out/*
+# The credits stay in git; the video is kept out (copy: ~/Movies/InkBoard-video/reel/).
+!out/CREDITS.txt

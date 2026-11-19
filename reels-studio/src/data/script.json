@@ -1,0 +1,346 @@
+{
+  "voice": "af_heart",
+  "speed": 1.08,
+  "lines": [
+    {
+      "id": "hook",
+      "words": [
+        [
+          "Poetry",
+          "Poetry"
+        ],
+        [
+          "deserves",
+          "deserves"
+        ],
+        [
+          "better.",
+          "better."
+        ]
+      ]
+    },
+    {
+      "id": "meet",
+      "words": [
+        [
+          "Meet",
+          "Meet"
+        ],
+        [
+          "InkBoard.",
+          "Ink Board."
+        ]
+      ]
+    },
+    {
+      "id": "signin",
+      "words": [
+        [
+          "No",
+          "No"
+        ],
+        [
+          "passwords.",
+          "passwords."
+        ],
+        [
+          "Just",
+          "Just"
+        ],
+        [
+          "write.",
+          "write."
+        ]
+      ]
+    },
+    {
+      "id": "letters",
+      "words": [
+        [
+          "Ewe,",
+          "Ehvay,"
+        ],
+        [
+          "Twi,",
+          "Chwee,"
+        ],
+        [
+          "Ga",
+          "and Gah,"
+        ],
+        [
+          "built",
+          "built"
+        ],
+        [
+          "in.",
+          "in."
+        ]
+      ]
+    },
+    {
+      "id": "publish",
+      "words": [
+        [
+          "Live",
+          "Live"
+        ],
+        [
+          "in",
+          "in"
+        ],
+        [
+          "one",
+          "one"
+        ],
+        [
+          "tap.",
+          "tap."
+        ]
+      ]
+    },
+    {
+      "id": "posters",
+      "words": [
+        [
+          "Poems",
+          "Poems"
+        ],
+        [
+          "into",
+          "into"
+        ],
+        [
+          "posters.",
+          "posters."
+        ]
+      ]
+    },
+    {
+      "id": "share",
+      "words": [
+        [
+          "Share",
+          "Share"
+        ],
+        [
+          "anywhere,",
+          "anywhere,"
+        ],
+        [
+          "with",
+          "with",
+          "page"
+        ],
+        [
+          "a",
+          "a"
+        ],
+        [
+          "short",
+          "short"
+        ],
+        [
+          "link.",
+          "link."
+        ]
+      ]
+    },
+    {
+      "id": "novels",
+      "words": [
+        [
+          "Now",
+          "Now,"
+        ],
+        [
+          "write",
+          "write"
+        ],
+        [
+          "novels,",
+          "novels,"
+        ],
+        [
+          "chapter",
+          "chapter",
+          "page"
+        ],
+        [
+          "by",
+          "by"
+        ],
+        [
+          "chapter.",
+          "chapter."
+        ]
+      ]
+    },
+    {
+      "id": "read",
+      "words": [
+        [
+          "Read",
+          "Read"
+        ],
+        [
+          "your",
+          "your"
+        ],
+        [
+          "way.",
+          "way."
+        ],
+        [
+          "Pick",
+          "Pick",
+          "page"
+        ],
+        [
+          "a",
+          "a"
+        ],
+        [
+          "size",
+          "size"
+        ],
+        [
+          "and",
+          "and"
+        ],
+        [
+          "a",
+          "a"
+        ],
+        [
+          "font.",
+          "font."
+        ]
+      ]
+    },
+    {
+      "id": "passage",
+      "words": [
+        [
+          "Quote",
+          "Quote"
+        ],
+        [
+          "any",
+          "any"
+        ],
+        [
+          "passage,",
+          "passage,"
+        ],
+        [
+          "as",
+          "as",
+          "page"
+        ],
+        [
+          "a",
+          "a"
+        ],
+        [
+          "picture.",
+          "picture."
+        ]
+      ]
+    },
+    {
+      "id": "private",
+      "words": [
+        [
+          "Lock",
+          "Lock"
+        ],
+        [
+          "what's",
+          "what's"
+        ],
+        [
+          "private,",
+          "private,"
+        ],
+        [
+          "behind",
+          "behind",
+          "page"
+        ],
+        [
+          "a",
+          "a"
+        ],
+        [
+          "password.",
+          "password."
+        ]
+      ]
+    },
+    {
+      "id": "follow",
+      "words": [
+        [
+          "Readers",
+          "Readers"
+        ],
+        [
+          "follow.",
+          "follow."
+        ],
+        [
+          "You",
+          "You"
+        ],
+        [
+          "see.",
+          "see."
+        ]
+      ]
+    },
+    {
+      "id": "all",
+      "words": [
+        [
+          "All",
+          "All"
+        ],
+        [
+          "in",
+          "in"
+        ],
+        [
+          "one",
+          "one"
+        ],
+        [
+          "place.",
+          "place."
+        ]
+      ]
+    },
+    {
+      "id": "cta",
+      "words": [
+        [
+          "Start",
+          "Start"
+        ],
+        [
+          "writing",
+          "writing"
+        ],
+        [
+          "free",
+          "free,"
+        ],
+        [
+          "tryinkboard.elabo.me",
+          "at try ink board dot elabo dot me.",
+          "page"
+        ]
+      ]
+    }
+  ]
+}

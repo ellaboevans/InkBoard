@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     // Video walkthrough recordings, renders and builds (video/README.md)
     "video/.out/**",
+    // The launch Reel's Remotion project has its own dependencies (reels-studio/README.md)
+    "reels-studio/**",
   ]),
 ]);
 

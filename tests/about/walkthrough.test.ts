@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -37,6 +39,17 @@ describe("the walkthrough setting", () => {
     expect(mp4.origin).toBe(VIDEO_HOST_ORIGIN);
     expect(mp4.pathname).toMatch(/\.mp4$/);
     if (WALKTHROUGH_VIDEO.hls) expect(new URL(WALKTHROUGH_VIDEO.hls).origin).toBe(VIDEO_HOST_ORIGIN);
+  });
+
+  it("has its small copy on the video host and its captions on our own origin (Phase 31)", () => {
+    for (const video of [WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO]) {
+      if (!video) continue;
+      if (video.mp4Small) expect(new URL(video.mp4Small).origin).toBe(VIDEO_HOST_ORIGIN);
+      if (!video.captions) continue;
+      // A path on our origin (no CORS, `media-src 'self'`), never the video host, and the file is committed.
+      expect(video.captions.src).toMatch(/^\/captions\/[a-z0-9-]+\.[a-z]{2}\.vtt$/);
+      expect(existsSync(path.resolve("public", video.captions.src.slice(1)))).toBe(true);
+    }
   });
 });
 
@@ -115,6 +128,25 @@ describe("with a video", () => {
       expect(out, name).toContain(`aria-label="${name}"`);
     }
     expect(out).not.toMatch(/<iframe|<select/);
+    // No captions given: no CC button and no <track>.
+    expect(out).not.toContain('aria-label="Captions"');
+    expect(out).not.toContain("<track");
+  });
+
+  it("with captions: a CC toggle, off, and a <track> from our own origin, not loaded until turned on", () => {
+    const captions = { src: "/captions/inkboard-walkthrough.en.vtt", lang: "en", label: "English" };
+    const out = renderToStaticMarkup(createElement(MediaPlayer, { sources: VIDEO, captions, label: WALKTHROUGH_COPY.player }));
+    expect(out).toMatch(/<button[^>]*aria-label="Captions"[^>]*aria-pressed="false"/);
+    const track = out.match(/<track [^>]*>/)![0];
+    expect(track).toContain('kind="captions"');
+    expect(track).toContain(`src="${captions.src}"`);
+    expect(track).toContain('srcLang="en"');
+    expect(track).toContain('label="English"');
+    // Not `default`: a track that isn't turned on loads nothing.
+    expect(track).not.toContain("default");
+    // Our own origin: the <video> needs no crossorigin, and the CSP's media-src 'self' already covers it.
+    expect(out).not.toContain("crossOrigin");
+    expect(out).not.toContain("data-captions=");
   });
 
   it("allows exactly the host's origin in media-src, and changes nothing else in the CSP", () => {

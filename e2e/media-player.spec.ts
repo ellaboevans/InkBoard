@@ -21,6 +21,12 @@ import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/li
  * (`webkit-iphone`, tests tagged @webkit) runs the crash regression and Try
  * again only.
  *
+ * Phase 31: the host's two copies (1080p and the 720p phone copy) are both
+ * answered with the fixture, and the logged URLs tell them apart: phones (the
+ * 375 px Chrome phone and the WebKit iPhone) get `mp4Small`, the desktop
+ * `mp4`. Captions come from our own origin (`/captions/…vtt`), answered with
+ * e2e/fixtures/player-test.vtt (two cues: 0–12 s and 12–23.5 s).
+ *
  * Full screen: headless Chrome may or may not enter it, so the test checks
  * the request (on the player itself, never the bare <video>) and, when Chrome
  * did enter it, that Esc leaves full screen without closing the dialog.
@@ -29,6 +35,9 @@ import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/li
 test.skip(!WALKTHROUGH_VIDEO || !WHATS_NEW_VIDEO, "no video is set in src/lib/site.ts");
 
 const FIXTURE = readFileSync(path.resolve("e2e/fixtures/player-test.mp4"));
+
+const CAPTIONS_FIXTURE = readFileSync(path.resolve("e2e/fixtures/player-test.vtt"));
+const FIRST_CUE = "This is the first caption.";
 
 const DROP_FIXTURE = readFileSync(path.resolve("e2e/fixtures/player-drop-test.mp4"));
 /** DROP_FIXTURE's bytes up to here: enough for Chrome to open it and play ~13.5 s (65%, measured). */
@@ -58,6 +67,25 @@ async function serveVideos(page: Page, log: string[], answer: "video" | "refuse"
     });
   });
   return { serve: () => (mode = "video"), refuse: () => (mode = "refuse") };
+}
+
+/** Answer our own captions files with the fixture; record every path asked for. */
+async function serveCaptions(page: Page, log: string[]) {
+  await page.route("**/captions/**", (route) => {
+    log.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 200, headers: { "content-type": "text/vtt; charset=utf-8" }, body: CAPTIONS_FIXTURE });
+  });
+}
+
+/** The file a device should stream: the 720p copy on phones, the 1080p file elsewhere. */
+const copyFor = (video: { mp4: string; mp4Small?: string }, phone: boolean) => (phone && video.mp4Small ? video.mp4Small : video.mp4);
+
+/** The top of the visible controls (the seek row) and the bottom of the caption box, in page px. */
+async function captionPlacement(player: Locator) {
+  const row = (await player.locator("[data-controls-bar] > :first-child").boundingBox())!;
+  const cue = (await player.locator("[data-cue]").boundingBox())!;
+  const frame = (await player.boundingBox())!;
+  return { controlsTop: row.y, cueBottom: cue.y + cue.height, frameBottom: frame.y + frame.height };
 }
 
 /** Record calls to requestFullscreen / webkitEnterFullscreen, with what they were called on. */
@@ -125,7 +153,7 @@ for (const device of [
       const { play, dialog, player } = await openWalkthrough(page, device.touch);
       // Only the walkthrough's file, and our own cover as its poster.
       await expect.poll(() => toHost.length).toBeGreaterThan(0);
-      expect(toHost.every((u) => u.startsWith(WALKTHROUGH_VIDEO!.mp4))).toBe(true);
+      expect(toHost.every((u) => u.startsWith(copyFor(WALKTHROUGH_VIDEO!, device.touch)))).toBe(true);
       expect(new URL((await video(page).getAttribute("poster"))!, page.url()).pathname).toMatch(/^\/_next\/static\/.*walkthrough-cover-1920.*\.webp$/);
       expect(await video(page).getAttribute("controls")).toBeNull();
       // The music credit is in the dialog too.
@@ -291,7 +319,7 @@ for (const device of [
       await whatsNew.click();
       const second = page.getByRole("dialog", { name: "What’s new in InkBoard" });
       await expect(second.getByRole("region", { name: "What’s new in InkBoard video" })).toBeVisible();
-      expect(await video(page).getAttribute("src")).toBe(WHATS_NEW_VIDEO!.mp4);
+      expect(await video(page).getAttribute("src")).toBe(copyFor(WHATS_NEW_VIDEO!, device.touch));
       await expect(second.getByRole("link", { name: "CC BY 4.0" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(second).toHaveCount(0);
@@ -316,7 +344,8 @@ for (const device of [
       await player.getByRole("button", { name: "Try again" }).click();
       await expect(player.getByRole("alert")).toHaveCount(0);
       await expect(player).toHaveAttribute("data-state", "playing");
-      expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+      // The same file as before (chosen once, when the player opened).
+      expect(await video(page).getAttribute("src")).toBe(copyFor(WALKTHROUGH_VIDEO!, device.touch));
       await expect.poll(() => at(page)).toBeGreaterThan(1);
     });
 
@@ -338,7 +367,7 @@ for (const device of [
       expect(await at(page)).toBeLessThan(lost + 6); // resumed there, not from the start
       await expect(player.getByRole("alert")).toHaveCount(0);
       // The same element, its source intact.
-      expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+      expect(await video(page).getAttribute("src")).toBe(copyFor(WALKTHROUGH_VIDEO!, device.touch));
     });
 
     test("a connection that stays down: one retry only, then the error; Try again resumes near the same place", async ({ page }) => {
@@ -360,6 +389,107 @@ for (const device of [
       await expect(player).toHaveAttribute("data-state", "playing", { timeout: 15_000 });
       await expect.poll(() => at(page)).toBeGreaterThan(lost - 1);
       expect(await at(page)).toBeLessThan(lost + 6);
+    });
+
+    test("the copy for this screen: the phone streams the 720p file, the desktop the 1080p one, for both videos", async ({ page }) => {
+      const toHost: string[] = [];
+      await serveVideos(page, toHost);
+      await page.goto("/about");
+      for (const v of [
+        { video: WALKTHROUGH_VIDEO!, play: "Play the walkthrough", title: "InkBoard walkthrough" },
+        { video: WHATS_NEW_VIDEO!, play: "Play what’s new", title: "What’s new in InkBoard" },
+      ]) {
+        const before = toHost.length;
+        await page.getByRole("main").getByRole("button", { name: v.play }).click();
+        const dialog = page.getByRole("dialog", { name: v.title });
+        await expect(dialog.locator("[data-media-player]")).toHaveAttribute("data-state", "playing");
+        const wanted = copyFor(v.video, device.touch);
+        const other = wanted === v.video.mp4 ? v.video.mp4Small! : v.video.mp4;
+        expect(await video(page).getAttribute("src")).toBe(wanted);
+        const asked = toHost.slice(before);
+        expect(asked.length).toBeGreaterThan(0);
+        expect(asked.every((u) => u === wanted)).toBe(true);
+        expect(toHost).not.toContain(other);
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+      }
+    });
+
+    test("captions: off at first and nothing fetched; CC and C turn them on and off; above the controls while they show, lower when they hide", async ({ page }) => {
+      test.setTimeout(180_000);
+      const vtt: string[] = [];
+      await serveVideos(page, []);
+      await serveCaptions(page, vtt);
+      await page.goto("/about");
+      await page.waitForLoadState("networkidle");
+      expect(vtt).toEqual([]);
+
+      const { player } = await openWalkthrough(page, device.touch);
+      // Taps on the phone: a mouse click would leave the pointer resting on the bar, which keeps the controls up.
+      const press = (control: Locator) => (device.touch ? control.tap() : control.click());
+      const cc = player.getByRole("button", { name: "Captions" });
+      await expect(cc).toHaveAttribute("aria-pressed", "false");
+      // Layout size (the dialog may still be zooming in).
+      expect(await cc.evaluate((el: HTMLElement) => [el.offsetWidth, el.offsetHeight])).toEqual([44, 44]);
+      await expect(player).toHaveAttribute("data-state", "playing");
+      // Paused through the element (the controls' own timing is tested above): paused, they stay up.
+      await video(page).evaluate((v: HTMLVideoElement) => v.pause());
+      await expect(player).toHaveAttribute("data-state", "paused");
+      await seekTo(page, 2);
+      await expect(player.locator("[data-captions]")).toHaveCount(0);
+      // Off: the .vtt isn't fetched, even with the player open.
+      await page.waitForTimeout(1000);
+      expect(vtt).toEqual([]);
+
+      // On: the cue's text, from our own file, fetched now (once).
+      await press(cc);
+      await expect(cc).toHaveAttribute("aria-pressed", "true");
+      const cue = player.locator("[data-cue]");
+      await expect(cue).toHaveText(FIRST_CUE);
+      expect(vtt).toEqual(["/captions/inkboard-walkthrough.en.vtt"]);
+      await expect(player.locator("[data-captions]")).toHaveAttribute("lang", "en");
+      // Readable: a dark backing, at least 15 px.
+      const style = await cue.evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, size: parseFloat(getComputedStyle(el).fontSize) }));
+      expect(style.bg).toMatch(/rgba\(0, 0, 0, 0\.8\)|oklab\(0 0 0 \/ 0\.8\)/);
+      expect(style.size).toBeGreaterThanOrEqual(15);
+
+      // Paused, the controls show: the cue sits above them.
+      await expect(player).toHaveAttribute("data-controls", "shown");
+      await expect.poll(async () => { const p = await captionPlacement(player); return p.cueBottom <= p.controlsTop; }).toBe(true);
+
+      // C turns them off and on again (focus on the main button; the key is the player's there).
+      await player.locator("[data-primary]").focus();
+      await page.keyboard.press("c");
+      await expect(cc).toHaveAttribute("aria-pressed", "false");
+      await expect(player.locator("[data-captions]")).toHaveCount(0);
+      await page.keyboard.press("C");
+      await expect(cc).toHaveAttribute("aria-pressed", "true");
+      await expect(cue).toHaveText(FIRST_CUE);
+      expect(vtt).toHaveLength(1); // not fetched again
+
+      // Playing, the controls hide: the cue drops back down, still above the frame's edge.
+      await expect(player).toHaveAttribute("data-state", "paused");
+      const shownAt = await captionPlacement(player);
+      // Let go of keyboard focus (it keeps the controls up), then play.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      const box = (await player.boundingBox())!;
+      if (!device.touch) await page.mouse.move(box.x + box.width / 2, box.y + 20);
+      await video(page).evaluate((v: HTMLVideoElement) => v.play());
+      await expect(player).toHaveAttribute("data-state", "playing");
+      await expect(player).toHaveAttribute("data-controls", "hidden", { timeout: 10_000 });
+      await expect(cue).toHaveText(FIRST_CUE);
+      await expect.poll(async () => (await captionPlacement(player)).cueBottom).toBeGreaterThan(shownAt.cueBottom + 20);
+      const hidden = await captionPlacement(player);
+      expect(hidden.cueBottom).toBeLessThan(hidden.frameBottom);
+      expect(hidden.frameBottom - hidden.cueBottom).toBeLessThan(24);
+
+      // The controls come back: so does the lift.
+      await showControls(page, player, device.touch);
+      await expect.poll(async () => { const p = await captionPlacement(player); return p.cueBottom <= p.controlsTop; }).toBe(true);
+
+      // The next cue replaces it (its two lines kept on a wide player, joined to wrap on a phone).
+      await seekTo(page, 13);
+      await expect(cue).toHaveText(device.touch ? "And this is the second one, over two lines." : "And this is the second one,\nover two lines.");
     });
   });
 }
@@ -386,10 +516,39 @@ test.describe("@webkit", () => {
     await video(page).evaluate((v) => ((window as unknown as { first: Element }).first = v));
     await expect.poll(() => at(page), { timeout: 20_000 }).toBeGreaterThan(4);
     expect(await video(page).evaluate((v) => v === (window as unknown as { first: Element }).first)).toBe(true);
-    expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+    // A phone: the 720p copy.
+    expect(await video(page).getAttribute("src")).toBe(copyFor(WALKTHROUGH_VIDEO!, true));
     await expect(player.locator("[data-time]")).toContainText(/^0:0[4-9]/);
     await expect(page.getByText(/couldn.t load this page/)).toHaveCount(0);
     expect(crashes).toEqual([]);
+  });
+
+  test("captions: nothing fetched while off; CC shows the cue, C hides it", async ({ page }) => {
+    const vtt: string[] = [];
+    await serveVideos(page, []);
+    await serveCaptions(page, vtt);
+    await page.goto("/about");
+    const { player } = await openWalkthrough(page, true);
+    await expect(player).toHaveAttribute("data-state", "playing");
+    await showControls(page, player, true);
+    await player.getByRole("button", { name: "Pause" }).tap();
+    await expect(player).toHaveAttribute("data-state", "paused");
+    await seekTo(page, 2);
+    await page.waitForTimeout(1000);
+    expect(vtt).toEqual([]);
+    const cc = player.getByRole("button", { name: "Captions" });
+    await cc.tap();
+    await expect(cc).toHaveAttribute("aria-pressed", "true");
+    await expect(player.locator("[data-cue]")).toHaveText(FIRST_CUE);
+    expect(vtt).toEqual(["/captions/inkboard-walkthrough.en.vtt"]);
+    await expect.poll(async () => { const p = await captionPlacement(player); return p.cueBottom <= p.controlsTop; }).toBe(true);
+    // Our own drawing only: the track is hidden, so the engine draws nothing of its own on top.
+    expect(await media(page, (v) => v.textTracks[0]?.mode)).toBe("hidden");
+    await player.locator("[data-primary]").focus();
+    await page.keyboard.press("c");
+    await expect(cc).toHaveAttribute("aria-pressed", "false");
+    await expect(player.locator("[data-captions]")).toHaveCount(0);
+    expect(await media(page, (v) => v.textTracks[0]?.mode)).toBe("disabled");
   });
 
   test("Try again recovers after the host failed", async ({ page }) => {

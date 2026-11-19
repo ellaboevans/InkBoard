@@ -968,10 +968,12 @@ test("the novels page (ongoing serials): empty, and with an ongoing, a private a
   }
 });
 
-test("the video player: open in its dialog, paused with its controls and the speed menu, phone and desktop", async ({ page }) => {
+test("the video player: open in its dialog, paused with its controls, captions on and the speed menu, phone and desktop", async ({ page }) => {
   // The host answered with the tiny fixture video (e2e/media-player.spec.ts), never really reached.
   const fixture = readFileSync(path.resolve("e2e/fixtures/player-test.mp4"));
   await page.route(`${VIDEO_HOST_ORIGIN}/**`, (route) => route.fulfill({ status: 200, headers: { "content-type": "video/mp4" }, body: fixture }));
+  const captions = readFileSync(path.resolve("e2e/fixtures/player-test.vtt"));
+  await page.route("**/captions/**", (route) => route.fulfill({ status: 200, headers: { "content-type": "text/vtt" }, body: captions }));
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/about");
@@ -982,6 +984,10 @@ test("the video player: open in its dialog, paused with its controls and the spe
     await player.locator("[data-primary]").click(); // pause (it started on open)
     await expect(player).toHaveAttribute("data-state", "paused");
     await scan(page, `video player: open, paused, ${width}px`);
+    // Captions on (Phase 31), with the controls showing: the cue above them, the CC button pressed.
+    await player.getByRole("button", { name: "Captions" }).click();
+    await expect(player.locator("[data-cue]")).toHaveText("This is the first caption.");
+    await scan(page, `video player: captions on, ${width}px`);
     await player.getByRole("button", { name: /^Playback speed/ }).click();
     await expect(page.getByRole("menu")).toBeVisible();
     await scan(page, `video player: speed menu, ${width}px`);

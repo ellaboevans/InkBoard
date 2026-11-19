@@ -12,7 +12,9 @@
  * `media-src` allows that origin (VIDEO_HOST_ORIGIN) and nothing else (no frames, no
  * scripts: our own player's <video> streams it, Phase 30). It has to be site-wide, not
  * just /about: a soft navigation to /about keeps the CSP of the page the
- * reader first loaded.
+ * reader first loaded. The videos' captions (Phase 31) are ours, under
+ * /captions/: a <track> is fetched under media-src, which 'self' allows, so
+ * they need nothing here (and no CORS).
  */
 
 export function buildCsp({ dev, videoOrigin }: { dev: boolean; videoOrigin: string | null }): string {

@@ -1,7 +1,8 @@
 /*
  * The rules of InkBoard's media player (src/components/media-player/), pure
  * so they can be tested without a browser: time labels, skips, volume steps,
- * the keyboard map and which source a browser plays.
+ * the keyboard map, which source a browser plays (Phase 31: the lighter copy
+ * for phones) and how captions are shown.
  */
 
 /** How far back or forward the skip buttons and J/L/←/→ move. */
@@ -63,6 +64,7 @@ export type PlayerAction =
   | "volume-down"
   | "mute"
   | "fullscreen"
+  | "captions"
   | "start"
   | "end";
 
@@ -107,6 +109,9 @@ export function playerKeyAction(
     case "f":
     case "F":
       return "fullscreen";
+    case "c":
+    case "C":
+      return "captions";
     case "Home":
       return "start";
     case "End":
@@ -116,9 +121,100 @@ export function playerKeyAction(
   }
 }
 
-/** The one URL the player loads: HLS where the browser plays it natively (Safari, iOS, Android), else the MP4. */
-export function pickSource(sources: { hls?: string; mp4: string }, canPlayHls: boolean): string {
-  return sources.hls && canPlayHls ? sources.hls : sources.mp4;
+/** A video's files: the 1080p MP4, optionally a lighter (720p) MP4 for phones and HLS. */
+export type PlayerSources = { hls?: string; mp4: string; mp4Small?: string };
+
+/** A width and height in CSS pixels (`screen.width`/`height`, `innerWidth`/`innerHeight`). */
+export type CssSize = { width: number; height: number };
+
+/**
+ * Screens whose short side is below this many CSS pixels get the small copy: phones (320–480 in portrait,
+ * the largest about 440–480) and folded foldables; small tablets start around 600 (iPad mini 744).
+ */
+export const SMALL_SCREEN_MAX_CSS_PX = 600;
+
+const shortSide = (size: CssSize | undefined) =>
+  size && Number.isFinite(size.width) && Number.isFinite(size.height) && size.width > 0 && size.height > 0
+    ? Math.min(size.width, size.height)
+    : 0;
+
+/**
+ * Whether this is a phone-sized screen, in CSS pixels. The short side, so rotating changes nothing. The screen
+ * bounds the largest the video can ever be shown (full screen), so a small window on a big monitor still counts
+ * as big; the viewport stands in where `screen` is missing or reports nonsense. The larger of the two decides,
+ * so anyone who could see the difference gets the 1080p file. CSS pixels, not device pixels: they follow the
+ * screen's physical size, and on a phone-sized screen 720p and 1080p look the same at arm's length, while a
+ * 3× phone counted in device pixels (1179 across) would always look like it needed 1080p.
+ */
+export function isSmallScreen({ screen, viewport }: { screen?: CssSize; viewport?: CssSize }): boolean {
+  const side = Math.max(shortSide(screen), shortSide(viewport));
+  return side > 0 && side < SMALL_SCREEN_MAX_CSS_PX;
+}
+
+/** What the browser tells us when the player opens. */
+export type PlaybackEnvironment = {
+  canPlayHls: boolean;
+  screen?: CssSize;
+  viewport?: CssSize;
+  /** `navigator.connection.saveData` (the browser's or system's data saver). */
+  saveData?: boolean;
+};
+
+/**
+ * The one URL the player loads, chosen once when it opens (never switched during playback or on rotation; Try
+ * again and the automatic retry reload the same file): HLS where it's set and the browser plays it natively;
+ * else the small copy, when there is one, on a phone-sized screen or with the data saver on; else the 1080p MP4.
+ */
+export function pickSource(sources: PlayerSources, env: PlaybackEnvironment): string {
+  if (sources.hls && env.canPlayHls) return sources.hls;
+  if (sources.mp4Small && (env.saveData === true || isSmallScreen(env))) return sources.mp4Small;
+  return sources.mp4;
+}
+
+/*
+ * Captions (Phase 31). The player draws the active cue itself (the track's
+ * mode "hidden", read on `cuechange`), so it can sit above the control bar
+ * while the controls show and drop back when they hide, with our own size and
+ * backing; the browser's own rendering can't be moved like that (`::cue` has
+ * no position, and a cue's `line` is reflowed differently by every engine).
+ * Where our overlay can't be seen, the system's own player draws them
+ * (iPhone's full screen, picture-in-picture): the track is "showing" there.
+ */
+
+/** The text track's mode for whether captions are on and whether the system's player is what's on screen. */
+export function captionMode(on: boolean, systemPlayer: boolean): TextTrackMode {
+  if (!on) return "disabled";
+  return systemPlayer ? "showing" : "hidden";
+}
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", nbsp: "\u00a0", lrm: "\u200e", rlm: "\u200f" };
+
+/** A cue's text as plain text: WebVTT's tags (<i>, <b>, <v Name>, timestamps) dropped, its entities decoded, its line breaks kept. */
+export function cueText(raw: string): string {
+  return raw
+    .replace(/<[^>]*>/g, "")
+    .replace(/&(amp|lt|gt|nbsp|lrm|rlm);/g, (_, name: string) => ENTITIES[name])
+    .trim();
+}
+
+/** The lines to draw: the cue's own line breaks on a wide player; one line to wrap evenly on a narrow one. */
+export function captionText(text: string, compact: boolean): string {
+  return compact ? text.replace(/\s*\n\s*/g, " ") : text;
+}
+
+/** The captions' font size in CSS px for a player this wide: 15 on phones, growing with the frame, at most 36. */
+export function captionFontSize(playerWidth: number): number {
+  const w = Number.isFinite(playerWidth) && playerWidth > 0 ? playerWidth : 0;
+  return Math.min(36, Math.max(15, Math.round(w * 0.024)));
+}
+
+/** The gap in CSS px between the captions and the top of the controls, or the frame's bottom when they hide. */
+export const CAPTION_GAP = 8;
+export const CAPTION_BOTTOM = 12;
+
+/** How far above the player's bottom edge the captions sit: above the controls while they show. */
+export function captionLift(controlsShown: boolean, controlsHeight: number): number {
+  return controlsShown && controlsHeight > 0 ? Math.ceil(controlsHeight) + CAPTION_GAP : CAPTION_BOTTOM;
 }
 
 /*

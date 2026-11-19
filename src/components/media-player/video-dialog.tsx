@@ -3,7 +3,7 @@
 import { XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { MediaPlayer, type MediaPlayerHandle, type MediaSources } from "./media-player";
+import { MediaPlayer, type MediaCaptions, type MediaPlayerHandle, type MediaSources } from "./media-player";
 
 /*
  * A video in a modal (docs/PLAN.md, Phase 30): the shadcn Dialog with
@@ -32,6 +32,7 @@ export default function VideoDialog({
   title,
   label,
   sources,
+  captions,
   poster,
   credit,
   returnFocus,
@@ -44,6 +45,8 @@ export default function VideoDialog({
   /** The player's accessible name. */
   label: string;
   sources: MediaSources;
+  /** Captions for the player's CC button (Phase 31); none, no button. */
+  captions?: MediaCaptions;
   poster?: string;
   /** Shown under the player, as the dialog's description (the music credit). */
   credit?: React.ReactNode;
@@ -93,7 +96,7 @@ export default function VideoDialog({
             <span className="sr-only">Close</span>
           </DialogClose>
         </div>
-        <MediaPlayer ref={player} sources={sources} poster={poster} label={label} autoPlay={autoPlay} />
+        <MediaPlayer ref={player} sources={sources} captions={captions} poster={poster} label={label} autoPlay={autoPlay} />
         {credit ? (
           <DialogDescription className="px-4 py-2.5 text-xs text-muted-foreground">{credit}</DialogDescription>
         ) : (

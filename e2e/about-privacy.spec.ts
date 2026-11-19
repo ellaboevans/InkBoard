@@ -79,7 +79,7 @@ test("About: what InkBoard is, the videos (nothing from the video host before pl
     const player = page.locator("[data-media-player] video");
     expect(new URL((await player.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(new RegExp(`^/_next/static/.*${v.cover}-1920.*\\.webp$`));
     await expect.poll(() => toHost.length).toBeGreaterThan(before);
-    const sources = [v.video.hls, v.video.mp4].filter((u): u is string => !!u).map((u) => u.split("?")[0]);
+    const sources = [v.video.hls, v.video.mp4, v.video.mp4Small].filter((u): u is string => !!u).map((u) => u.split("?")[0]);
     expect(toHost.slice(before).every((u) => sources.some((src) => u.startsWith(src)))).toBe(true);
     release();
     // Refused here, so the player says it couldn't load, with a way to try again.

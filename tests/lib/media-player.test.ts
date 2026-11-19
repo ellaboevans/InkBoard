@@ -1,8 +1,18 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AUTO_RETRY_LIMIT,
   AUTO_RETRY_RESET_SECONDS,
+  CAPTION_BOTTOM,
+  CAPTION_GAP,
+  captionFontSize,
+  captionLift,
+  captionMode,
+  captionText,
+  cueText,
   formatTime,
+  isSmallScreen,
   MEDIA_ERR_NETWORK,
   pickSource,
   PLAYBACK_RATES,
@@ -14,12 +24,14 @@ import {
   shouldAutoRetry,
   SKIP_SECONDS,
   skipTo,
+  SMALL_SCREEN_MAX_CSS_PX,
   stepVolume,
   VOLUME_STEP,
   volumeLabel,
 } from "@/lib/media-player";
+import { WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "@/lib/site";
 
-/* The media player's rules (src/lib/media-player.ts; docs/PLAN.md Phase 30). */
+/* The media player's rules (src/lib/media-player.ts; docs/PLAN.md Phases 30 and 31). */
 
 describe("time labels", () => {
   it("formats minutes and seconds, and hours from an hour", () => {
@@ -100,6 +112,7 @@ describe("the keyboard map", () => {
     expect(["ArrowUp", "ArrowDown"].map(map)).toEqual(["volume-up", "volume-down"]);
     expect(["m", "M", "f", "F"].map(map)).toEqual(["mute", "mute", "fullscreen", "fullscreen"]);
     expect(["Home", "End"].map(map)).toEqual(["start", "end"]);
+    expect(["c", "C"].map(map)).toEqual(["captions", "captions"]);
     expect(["Escape", "Tab", "Enter", "x", "1"].map(map)).toEqual([null, null, null, null, null]);
   });
 
@@ -117,6 +130,8 @@ describe("the keyboard map", () => {
     expect(playerKeyAction("Enter", "button")).toBeNull();
     expect(playerKeyAction("ArrowRight", "button")).toBe("forward");
     expect(playerKeyAction("k", "button")).toBe("toggle");
+    expect(playerKeyAction("c", "button")).toBe("captions");
+    expect(playerKeyAction("c", "slider")).toBe("captions");
   });
 
   it("leaves an open menu every key, and the browser's own combinations alone", () => {
@@ -124,15 +139,181 @@ describe("the keyboard map", () => {
     expect(playerKeyAction("f", "other", { ctrl: true })).toBeNull();
     expect(playerKeyAction("l", "other", { meta: true })).toBeNull();
     expect(playerKeyAction("ArrowLeft", "other", { alt: true })).toBeNull();
+    expect(playerKeyAction("c", "other", { meta: true })).toBeNull(); // ⌘C copies
+    expect(playerKeyAction("c", "menu")).toBeNull();
   });
 });
 
-describe("the source", () => {
-  it("plays HLS only where the browser can, else the MP4", () => {
-    const both = { hls: "https://h/x.m3u8", mp4: "https://h/x.mp4" };
-    expect(pickSource(both, true)).toBe(both.hls);
-    expect(pickSource(both, false)).toBe(both.mp4);
-    expect(pickSource({ mp4: both.mp4 }, true)).toBe(both.mp4);
+describe("the source (Phase 31: a lighter copy for phones)", () => {
+  const all = { hls: "https://h/x.m3u8", mp4: "https://h/x-1080p.mp4", mp4Small: "https://h/x-720p.mp4" };
+  const desktop = { screen: { width: 1440, height: 900 }, viewport: { width: 1280, height: 800 } };
+  const phone = { screen: { width: 393, height: 852 }, viewport: { width: 393, height: 659 } };
+
+  it("plays HLS first, wherever the browser can, even on a phone or with the data saver", () => {
+    expect(pickSource(all, { canPlayHls: true, ...desktop })).toBe(all.hls);
+    expect(pickSource(all, { canPlayHls: true, ...phone, saveData: true })).toBe(all.hls);
+    expect(pickSource({ ...all, hls: undefined }, { canPlayHls: true, ...phone })).toBe(all.mp4Small);
+  });
+
+  it("gives phone-sized screens the small copy, in portrait and landscape, and bigger screens the 1080p file", () => {
+    expect(pickSource(all, { canPlayHls: false, ...phone })).toBe(all.mp4Small);
+    expect(pickSource(all, { canPlayHls: false, screen: { width: 852, height: 393 }, viewport: { width: 852, height: 361 } })).toBe(all.mp4Small);
+    expect(pickSource(all, { canPlayHls: false, screen: { width: 320, height: 568 }, viewport: { width: 320, height: 454 } })).toBe(all.mp4Small);
+    expect(pickSource(all, { canPlayHls: false, ...desktop })).toBe(all.mp4);
+    // A tablet (iPad mini) and a 1280×800 laptop.
+    expect(pickSource(all, { canPlayHls: false, screen: { width: 744, height: 1133 }, viewport: { width: 744, height: 1062 } })).toBe(all.mp4);
+    expect(pickSource(all, { canPlayHls: false, screen: { width: 1280, height: 800 }, viewport: { width: 1280, height: 720 } })).toBe(all.mp4);
+  });
+
+  it("decides by the screen, not the window: a small window on a big monitor still gets 1080p", () => {
+    expect(isSmallScreen({ screen: { width: 2560, height: 1440 }, viewport: { width: 400, height: 500 } })).toBe(false);
+    // No usable screen size: the viewport decides.
+    expect(isSmallScreen({ screen: { width: 0, height: 0 }, viewport: { width: 375, height: 667 } })).toBe(true);
+    expect(isSmallScreen({ viewport: { width: 1280, height: 800 } })).toBe(false);
+    // Nothing known: not small (the file everyone got before).
+    expect(isSmallScreen({})).toBe(false);
+    expect(isSmallScreen({ screen: { width: NaN, height: 800 } })).toBe(false);
+    expect(isSmallScreen({ screen: { width: SMALL_SCREEN_MAX_CSS_PX - 1, height: 1000 } })).toBe(true);
+    expect(isSmallScreen({ screen: { width: SMALL_SCREEN_MAX_CSS_PX, height: 1000 } })).toBe(false);
+  });
+
+  it("gives the small copy to any screen when the data saver is on", () => {
+    expect(pickSource(all, { canPlayHls: false, ...desktop, saveData: true })).toBe(all.mp4Small);
+    expect(pickSource(all, { canPlayHls: false, ...desktop, saveData: false })).toBe(all.mp4);
+  });
+
+  it("works as before without a small copy", () => {
+    const mp4Only = { mp4: all.mp4 };
+    expect(pickSource(mp4Only, { canPlayHls: false, ...phone })).toBe(all.mp4);
+    expect(pickSource(mp4Only, { canPlayHls: false, ...phone, saveData: true })).toBe(all.mp4);
+    expect(pickSource(mp4Only, { canPlayHls: true })).toBe(all.mp4);
+    expect(pickSource({ hls: all.hls, mp4: all.mp4 }, { canPlayHls: false, ...desktop })).toBe(all.mp4);
+  });
+
+  it("is set for both About videos, on the same host as their 1080p files", () => {
+    for (const video of [WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO]) {
+      if (!video) continue;
+      expect(video.mp4Small).toMatch(/-720p\.mp4$/);
+      expect(new URL(video.mp4Small!).origin).toBe(new URL(video.mp4).origin);
+      expect(video.mp4Small).not.toBe(video.mp4);
+    }
+  });
+});
+
+describe("captions (Phase 31)", () => {
+  it("are drawn by us while CC is on, by the system's player where that's on screen, and not loaded while off", () => {
+    expect(captionMode(false, false)).toBe("disabled");
+    expect(captionMode(false, true)).toBe("disabled");
+    expect(captionMode(true, false)).toBe("hidden");
+    expect(captionMode(true, true)).toBe("showing");
+  });
+
+  it("show a cue's text as plain text, keeping its line breaks", () => {
+    expect(cueText("Drag to wander. Hold ⌘ or\nCtrl and scroll to zoom.")).toBe("Drag to wander. Hold ⌘ or\nCtrl and scroll to zoom.");
+    expect(cueText("<v Narrator><i>Ŋdi</i>, good morning</v>")).toBe("Ŋdi, good morning");
+    expect(cueText("Fish &amp; chips &lt;3")).toBe("Fish & chips <3");
+    expect(cueText("  \n ")).toBe("");
+  });
+
+  it("keep the cue's own lines on a wide player and wrap evenly on a narrow one", () => {
+    expect(captionText("one\ntwo", false)).toBe("one\ntwo");
+    expect(captionText("one \n two", true)).toBe("one two");
+  });
+
+  it("are readable on a phone and grow with the frame", () => {
+    expect(captionFontSize(351)).toBe(15);
+    expect(captionFontSize(0)).toBe(15);
+    expect(captionFontSize(NaN)).toBe(15);
+    expect(captionFontSize(1088)).toBe(26);
+    expect(captionFontSize(3840)).toBe(36);
+  });
+
+  it("sit above the controls while they show, and drop back when they hide", () => {
+    expect(captionLift(true, 76.4)).toBe(77 + CAPTION_GAP);
+    expect(captionLift(false, 76.4)).toBe(CAPTION_BOTTOM);
+    expect(captionLift(true, 0)).toBe(CAPTION_BOTTOM);
+  });
+});
+
+/*
+ * The committed captions (public/captions/), checked with WebVTT's own rules
+ * for what we use: the header, cue blocks separated by blank lines, an
+ * optional id, a timing line, text with no "-->" and no raw "<" or "&".
+ */
+type Cue = { id: string | null; start: number; end: number; text: string };
+
+function seconds(stamp: string): number {
+  const m = /^(?:(\d{2,}):)?([0-5]\d):([0-5]\d)\.(\d{3})$/.exec(stamp);
+  if (!m) throw new Error(`bad timestamp ${stamp}`);
+  return Number(m[1] ?? 0) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number(m[4]) / 1000;
+}
+
+function parseVtt(file: string): Cue[] {
+  expect(file.charCodeAt(0)).not.toBe(0xfeff);
+  expect(file).not.toContain("\r");
+  const [header, ...blocks] = file.replace(/\n$/, "").split(/\n{2,}/);
+  expect(header).toBe("WEBVTT");
+  expect(file.endsWith("\n")).toBe(true);
+  return blocks
+    .filter((b) => b.trim() !== "")
+    .map((block) => {
+      const lines = block.split("\n");
+      const timingAt = lines[0].includes("-->") ? 0 : 1;
+      const timing = /^(\S+) --> (\S+)$/.exec(lines[timingAt]);
+      if (!timing) throw new Error(`no timing line in ${JSON.stringify(block)}`);
+      const text = lines.slice(timingAt + 1);
+      expect(text.length, block).toBeGreaterThan(0);
+      for (const line of text) {
+        expect(line, block).not.toContain("-->");
+        expect(line.trim(), block).not.toBe("");
+        expect(line, block).not.toMatch(/[<&]/);
+      }
+      if (timingAt === 1) expect(lines[0]).not.toContain("-->");
+      return { id: timingAt ? lines[0] : null, start: seconds(timing[1]), end: seconds(timing[2]), text: text.join("\n") };
+    });
+}
+
+describe("the committed captions", () => {
+  const files = [
+    { video: WALKTHROUGH_VIDEO, file: "inkboard-walkthrough.en.vtt", cues: 77, length: 6 * 60 + 1 },
+    { video: WHATS_NEW_VIDEO, file: "whats-new-walkthrough.en.vtt", cues: 65, length: 2 * 60 + 53 },
+  ];
+
+  for (const { video, file, cues: count, length } of files) {
+    describe(file, () => {
+      const cues = parseVtt(readFileSync(path.resolve("public/captions", file), "utf8"));
+
+      it("parses as WebVTT, every cue in order, the last one ending before the video does", () => {
+        expect(cues).toHaveLength(count);
+        let previousStart = -1;
+        let previousEnd = 0;
+        for (const cue of cues) {
+          expect(cue.end, cue.text).toBeGreaterThan(cue.start);
+          expect(cue.start, cue.text).toBeGreaterThan(previousStart);
+          expect(cue.start, cue.text).toBeGreaterThanOrEqual(previousEnd);
+          previousStart = cue.start;
+          previousEnd = cue.end;
+        }
+        expect(cues.at(-1)!.end).toBeLessThan(length);
+        expect(cues.map((c) => c.id)).toEqual(cues.map((_, i) => String(i + 1)));
+      });
+
+      it("writes InkBoard and the Ghanaian letters as they are written, not as the voice said them", () => {
+        const text = cues.map((c) => c.text).join("\n");
+        expect(text).toContain("InkBoard");
+        expect(text).not.toMatch(/Ink Board|Inkboard\b/);
+        expect(text.normalize("NFC")).toBe(text);
+      });
+
+      it("is the video's captions file in its settings, on our own origin", () => {
+        expect(video?.captions).toEqual({ src: `/captions/${file}`, lang: "en", label: "English" });
+      });
+    });
+  }
+
+  it("spells the walkthrough's Ewe words properly", () => {
+    const text = readFileSync(path.resolve("public/captions/inkboard-walkthrough.en.vtt"), "utf8");
+    for (const word of ["Agbɔ", "Ŋdi", "ɛ, ɔ, ɖ and ŋ"]) expect(text).toContain(word);
   });
 });
 

@@ -2,6 +2,7 @@
 
 import { cn } from "cn";
 import {
+  CaptionsIcon,
   LoaderCircleIcon,
   MaximizeIcon,
   MinimizeIcon,
@@ -14,7 +15,7 @@ import {
   Volume2Icon,
   VolumeXIcon,
 } from "lucide-react";
-import { useCallback, useImperativeHandle, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import {
   DropdownMenu,
@@ -27,7 +28,12 @@ import {
 import { Slider } from "@/components/ui/slider";
 import {
   AUTO_RETRY_DELAY_MS,
+  captionFontSize,
+  captionLift,
+  captionMode,
+  captionText,
   CONTROLS_HIDE_MS,
+  cueText,
   formatTime,
   pickSource,
   PLAYBACK_RATES,
@@ -41,7 +47,9 @@ import {
   skipTo,
   stepVolume,
   volumeLabel,
+  type PlaybackEnvironment,
   type PlayerAction,
+  type PlayerSources,
 } from "@/lib/media-player";
 
 /*
@@ -50,7 +58,18 @@ import {
  * 10 s, a seek bar with the time, mute and volume, playback speed,
  * picture-in-picture where the browser has it, full screen), keyboard
  * shortcuts while it has focus, and loading, ended and error states. No
- * quality choice: the source is one file (or the browser's own HLS).
+ * quality choice: the source is one file (or the browser's own HLS), chosen
+ * once when it opens: a lighter copy on phones (Phase 31, `pickSource`).
+ *
+ * Captions (Phase 31): a CC button (and C), off by default, never
+ * remembered. The player draws the active cue itself (the track's mode
+ * "hidden", read on `cuechange`) so it can sit above the control bar while
+ * the controls show and drop back when they hide, at a size that follows the
+ * frame, on a dark backing; the browser's own rendering can't be moved like
+ * that. Where our overlay isn't what's on screen (iPhone's own full screen,
+ * picture-in-picture) the track is "showing", so the system draws them. The
+ * .vtt is ours (same origin: no CORS, `media-src 'self'`) and is fetched only
+ * once captions are first turned on (a disabled track loads nothing).
  *
  * Performance: the player never re-renders on `timeupdate`. Each piece of the
  * media element's state is read with useSyncExternalStore from the element's
@@ -64,7 +83,10 @@ import {
  * from the video host before that.
  */
 
-export type MediaSources = { hls?: string; mp4: string };
+export type MediaSources = PlayerSources;
+
+/** A captions file on our own origin (WebVTT). */
+export type MediaCaptions = { src: string; lang: string; label: string };
 
 export type MediaPlayerHandle = {
   /** Stop playback (closing a dialog). */
@@ -109,6 +131,9 @@ const media = {
   },
   setRate(v: HTMLVideoElement, rate: number) {
     v.playbackRate = rate;
+  },
+  setTrackMode(t: TextTrack, mode: TextTrackMode) {
+    if (t.mode !== mode) t.mode = mode;
   },
   /**
    * Load the source again from scratch: setting `src` (even to the same URL) restarts the load, and restores an
@@ -194,6 +219,18 @@ function canSetVolume(): boolean {
 function canPlayHls(): boolean {
   if (typeof document === "undefined") return false;
   return document.createElement("video").canPlayType("application/vnd.apple.mpegurl") !== "";
+}
+
+/** What `pickSource` needs to know, read once when the player opens. */
+function playbackEnvironment(): PlaybackEnvironment {
+  if (typeof window === "undefined") return { canPlayHls: false };
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  return {
+    canPlayHls: canPlayHls(),
+    screen: { width: window.screen?.width ?? 0, height: window.screen?.height ?? 0 },
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    saveData: connection?.saveData === true,
+  };
 }
 
 const STATE_EVENTS = "loadstart loadedmetadata loadeddata canplay canplaythrough waiting playing play pause ended seeking seeked stalled emptied error";
@@ -332,13 +369,103 @@ function SpeedMenu({
   );
 }
 
+/** The active cues' text per track, taken when the track or the video says it may have changed (never a live read). */
+const cueSnapshots = new WeakMap<TextTrack, string>();
+
+function activeCueText(track: TextTrack): string {
+  const cues = track.activeCues;
+  if (!cues) return "";
+  const lines: string[] = [];
+  for (let i = 0; i < cues.length; i++) {
+    const text = cueText((cues[i] as VTTCue).text ?? "");
+    if (text) lines.push(text);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * The active cue, drawn by us. Re-renders only when its text changes: `cuechange`, the track's `load` and the
+ * video's time events re-read the cues, and the snapshot is a string, so an unchanged cue is no render.
+ */
+function Captions({
+  trackEl,
+  video,
+  lang,
+  compact,
+  width,
+  lift,
+  safeArea,
+}: {
+  trackEl: HTMLTrackElement;
+  video: HTMLVideoElement;
+  lang: string;
+  compact: boolean;
+  width: number;
+  /** CSS px above the frame's bottom edge. */
+  lift: number;
+  /** Add the bottom safe area (full screen with the controls hidden: the bar isn't there to add it). */
+  safeArea: boolean;
+}) {
+  const track = trackEl.track;
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const update = () => {
+        cueSnapshots.set(track, activeCueText(track));
+        onChange();
+      };
+      // Mounting is turning them on: forget a cue left from the last time.
+      cueSnapshots.set(track, activeCueText(track));
+      track.addEventListener("cuechange", update);
+      trackEl.addEventListener("load", update);
+      for (const e of ["timeupdate", "seeked"]) video.addEventListener(e, update);
+      return () => {
+        track.removeEventListener("cuechange", update);
+        trackEl.removeEventListener("load", update);
+        for (const e of ["timeupdate", "seeked"]) video.removeEventListener(e, update);
+      };
+    },
+    [track, trackEl, video],
+  );
+  const text = useSyncExternalStore(
+    subscribe,
+    () => {
+      if (!cueSnapshots.has(track)) cueSnapshots.set(track, activeCueText(track));
+      return cueSnapshots.get(track)!;
+    },
+    () => "",
+  );
+  if (!text) return null;
+  return (
+    // Visual only: screen reader users hear the same words in the narration, and a live region would talk over it.
+    <div
+      aria-hidden
+      data-captions=""
+      lang={lang}
+      className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-[4%] motion-safe:transition-transform motion-safe:duration-200"
+      style={{
+        fontSize: captionFontSize(width),
+        transform: safeArea ? `translateY(calc(-${lift}px - env(safe-area-inset-bottom, 0px)))` : `translateY(-${lift}px)`,
+      }}
+    >
+      <p className="max-w-full text-center leading-[1.4] font-medium text-balance whitespace-pre-line">
+        <span data-cue="" className="rounded-[0.2em] bg-black/80 px-[0.45em] py-[0.12em] text-white box-decoration-clone">
+          {captionText(text, compact)}
+        </span>
+      </p>
+    </div>
+  );
+}
+
 /** Below this width the player puts back, play and forward in the middle (phones), not in the bar. */
 const COMPACT_WIDTH = 480;
 /** Below this width there's no room for the volume slider: mute stays, and ↑/↓ still change the volume. */
 const NARROW_WIDTH = 420;
+/** Below this width (the smallest phones) the bar has no room for picture-in-picture next to captions. */
+const TINY_WIDTH = 340;
 
 export function MediaPlayer({
   sources,
+  captions,
   poster,
   label,
   autoPlay = false,
@@ -346,6 +473,8 @@ export function MediaPlayer({
   className,
 }: {
   sources: MediaSources;
+  /** Captions for the CC button; without them there's no button. */
+  captions?: MediaCaptions;
   /** Our own image (e.g. from /_next/static), shown until the first frame. */
   poster?: string;
   /** The player's accessible name, e.g. "InkBoard walkthrough video". */
@@ -355,7 +484,8 @@ export function MediaPlayer({
   ref?: React.Ref<MediaPlayerHandle>;
   className?: string;
 }) {
-  const [src] = useState(() => pickSource(sources, canPlayHls()));
+  // Chosen once, here: never switched during playback or on rotation, and Try again reloads this same file.
+  const [src] = useState(() => pickSource(sources, playbackEnvironment()));
   const [volumeSettable] = useState(canSetVolume);
   const [video, setVideo] = useState<WebkitVideo | null>(null);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -370,6 +500,10 @@ export function MediaPlayer({
   const [hoverHeld, setHoverHeld] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [captionsOn, setCaptionsOn] = useState(false);
+  const [trackEl, setTrackEl] = useState<HTMLTrackElement | null>(null);
+  /** From the bar's bottom to the top of its visible controls (the seek row), in CSS px. */
+  const [controlsHeight, setControlsHeight] = useState(0);
   const hideTimer = useRef<number | undefined>(undefined);
   const autoStarted = useRef(false);
   // Recovery bookkeeping, never state: the last position the reader reached (before any error), whether they
@@ -410,15 +544,18 @@ export function MediaPlayer({
     },
     [video],
   );
-  const fullscreen = useSyncExternalStore(
+  // "element": our player in full screen, with our controls; "native": the video in the system's (iPhone).
+  const fullscreenKind = useSyncExternalStore(
     fullscreenSubscribe,
     () => {
       const d = document as WebkitDocument;
       const el = d.fullscreenElement ?? d.webkitFullscreenElement ?? null;
-      return (root !== null && el === root) || video?.webkitDisplayingFullscreen === true;
+      if (root !== null && el === root) return "element";
+      return video?.webkitDisplayingFullscreen === true ? "native" : "none";
     },
-    () => false,
+    () => "none",
   );
+  const fullscreen = fullscreenKind !== "none";
   const pip = useMedia(
     video,
     "pip",
@@ -426,6 +563,29 @@ export function MediaPlayer({
     (v) => document.pictureInPictureElement === v || v.webkitPresentationMode === "picture-in-picture",
     false,
   );
+  /** The system's player is what's on screen (iPhone full screen, picture-in-picture): it draws the captions there. */
+  const systemPlayer = fullscreenKind === "native" || pip;
+
+  // The track's mode follows the CC button; browsers that turn captions on by themselves (Safari, from the system's
+  // caption setting) are put back, except inside the system's full screen, where its own menu is the reader's.
+  useEffect(() => {
+    const track = trackEl?.track;
+    if (!track || !video) return;
+    const want = captionMode(captionsOn, systemPlayer);
+    media.setTrackMode(track, want);
+    const tracks = video.textTracks;
+    const onChange = () => {
+      if (!video.webkitDisplayingFullscreen) media.setTrackMode(track, want);
+    };
+    // Leaving the system's full screen: keep what the reader chose in its menu.
+    const onEndNative = () => setCaptionsOn(track.mode === "showing");
+    tracks.addEventListener("change", onChange);
+    video.addEventListener("webkitendfullscreen", onEndNative);
+    return () => {
+      tracks.removeEventListener("change", onChange);
+      video.removeEventListener("webkitendfullscreen", onEndNative);
+    };
+  }, [trackEl, video, captionsOn, systemPlayer]);
 
   const wake = useCallback(() => {
     setAwake(true);
@@ -439,6 +599,9 @@ export function MediaPlayer({
   const shown = awake || held;
   const compact = width < COMPACT_WIDTH;
   const narrow = width < NARROW_WIDTH;
+  const tiny = width < TINY_WIDTH;
+  /** Our own captions are on screen (not the system player's). */
+  const captionsShown = captions !== undefined && captionsOn && !systemPlayer && !error;
   const state = error ? "error" : ended ? "ended" : busy ? "loading" : paused ? "paused" : "playing";
 
   const play = useCallback(() => {
@@ -457,7 +620,7 @@ export function MediaPlayer({
     wake();
   };
 
-  /** Try again: a fresh source (re-picked), back where the reader was, playing from this tap. */
+  /** Try again: the same file afresh, back where the reader was, playing from this tap. */
   const retry = () => {
     window.clearTimeout(retryTimer.current);
     autoRetries.current = 0;
@@ -468,7 +631,16 @@ export function MediaPlayer({
     wantsPlay.current = true;
     const at = resumePosition(lastTime.current);
     resuming.current = at > 0;
-    media.reload(video, pickSource(sources, canPlayHls()), at, true);
+    media.reload(video, src, at, true);
+  };
+
+  const toggleCaptions = () => {
+    const next = !captionsOn;
+    // At once, from the press: the first time, this is what fetches the .vtt.
+    const track = trackEl?.track;
+    if (track) media.setTrackMode(track, captionMode(next, systemPlayer));
+    setCaptionsOn(next);
+    wake();
   };
 
   const onMediaError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -487,7 +659,7 @@ export function MediaPlayer({
         setRetrying(false);
         if (closed.current) return;
         resuming.current = at > 0;
-        media.reload(v, pickSource(sources, canPlayHls()), at, wantsPlay.current);
+        media.reload(v, src, at, wantsPlay.current);
       }, AUTO_RETRY_DELAY_MS);
       return;
     }
@@ -528,7 +700,12 @@ export function MediaPlayer({
         })
         .catch(() => {});
     } else if (kind === "webkit") (root as WebkitElement).webkitRequestFullscreen!();
-    else video?.webkitEnterFullscreen?.();
+    else {
+      // The system's player shows a track only while it's "showing": set it before going there.
+      const track = trackEl?.track;
+      if (track && captionsOn) media.setTrackMode(track, captionMode(true, true));
+      video?.webkitEnterFullscreen?.();
+    }
   };
 
   const canPip =
@@ -562,6 +739,9 @@ export function MediaPlayer({
         return;
       case "fullscreen":
         if (canFullscreen) toggleFullscreen();
+        return;
+      case "captions":
+        if (captions) toggleCaptions();
         return;
       case "start":
         media.seek(video, 0);
@@ -642,6 +822,15 @@ export function MediaPlayer({
     },
     [autoPlay],
   );
+  const barRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const row = el.firstElementChild as HTMLElement | null;
+      setControlsHeight(el.offsetHeight - (row?.offsetTop ?? 0));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const rootRef = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
     setRoot(el);
@@ -664,7 +853,11 @@ export function MediaPlayer({
     <button
       ref={primary}
       type="button"
-      className={cn(controlButton, big && "size-16 bg-black/45 backdrop-blur-sm [&_svg]:size-8")}
+      className={cn(
+        controlButton,
+        big && "bg-black/45 backdrop-blur-sm",
+        big && (captionsShown ? "size-13 [&_svg]:size-6" : "size-16 [&_svg]:size-8"),
+      )}
       aria-label={primaryLabel}
       data-primary=""
       onClick={toggle}
@@ -679,7 +872,7 @@ export function MediaPlayer({
   const skipButton = (back: boolean, big: boolean) => (
     <button
       type="button"
-      className={cn(controlButton, big && "size-12 bg-black/35 backdrop-blur-sm")}
+      className={cn(controlButton, big && "bg-black/35 backdrop-blur-sm", big && !captionsShown && "size-12")}
       aria-label={back ? `Back ${SKIP_SECONDS} seconds` : `Forward ${SKIP_SECONDS} seconds`}
       onClick={() => skip(back ? -SKIP_SECONDS : SKIP_SECONDS)}
     >
@@ -719,7 +912,9 @@ export function MediaPlayer({
         aria-hidden
         onError={onMediaError}
         className="absolute inset-0 size-full bg-black object-contain"
-      />
+      >
+        {captions && <track ref={setTrackEl} kind="captions" src={captions.src} srcLang={captions.lang} label={captions.label} />}
+      </video>
 
       {/* The surface: a click plays or pauses (mouse); a tap shows or hides the controls (touch); a double click is full screen. */}
       <div
@@ -738,12 +933,27 @@ export function MediaPlayer({
         }}
       />
 
+      {/* Captions: under the middle's buttons and the bar, above the controls while they show. */}
+      {captionsShown && trackEl && video && (
+        <Captions
+          trackEl={trackEl}
+          video={video}
+          lang={captions.lang}
+          compact={compact}
+          width={width}
+          lift={captionLift(shown, controlsHeight)}
+          safeArea={fullscreen && !shown}
+        />
+      )}
+
       {/* The middle: loading, the error, or (phones) back · play · forward; wide players show a big play sign when paused. */}
       {/* On phones the middle stops above the bar, so its buttons and the bar never overlap in a short frame. */}
       <div
         className={cn(
-          "pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center",
+          "pointer-events-none absolute inset-x-0 top-0 flex justify-center",
           compact && !error ? "bottom-[4.25rem]" : "bottom-0",
+          // Phones with captions on: the buttons go to the top, so the cue between them and the bar can be read.
+          compact && captionsShown && !error ? "items-start pt-2" : "items-center",
         )}
       >
         {error ? (
@@ -785,6 +995,7 @@ export function MediaPlayer({
 
       {/* The bar: seek, then the buttons. Safe areas apply in full screen (notches, home indicator). */}
       <div
+        ref={barRef}
         data-controls-bar=""
         className={cn(
           // The gradient itself takes no pointer events (only its rows do), so it never covers the middle's buttons.
@@ -815,8 +1026,23 @@ export function MediaPlayer({
           <VolumeControls video={video} slider={volumeSettable && !narrow} />
           <TimeLabel video={video} />
           <span className="flex-1" />
+          {captions && (
+            <button
+              type="button"
+              className={cn(
+                controlButton,
+                "relative after:absolute after:bottom-2 after:h-0.5 after:w-5 after:rounded-full after:bg-white after:opacity-0 aria-pressed:after:opacity-100",
+              )}
+              aria-label="Captions"
+              aria-pressed={captionsOn}
+              data-captions-toggle=""
+              onClick={toggleCaptions}
+            >
+              <CaptionsIcon aria-hidden />
+            </button>
+          )}
           <SpeedMenu video={video} container={fullscreen ? root : null} onOpenChange={setMenuOpen} />
-          {canPip && (
+          {canPip && !(tiny && captions) && (
             <button
               type="button"
               className={controlButton}

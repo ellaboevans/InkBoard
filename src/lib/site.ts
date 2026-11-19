@@ -21,15 +21,32 @@ export const VIDEO_HOST_ORIGIN = "https://pub-9d452c824f9f47fab650797037d4e05f.r
 /** The video host's name, as the Privacy page and the video captions show it. */
 export const VIDEO_HOST_NAME = "Cloudflare R2";
 
-/** A video's encodings on VIDEO_HOST_ORIGIN. */
+/** A captions file for a video, served from our own origin (public/captions/), never from the video host. */
+export type CaptionTrack = {
+  /** A path on our origin, e.g. "/captions/x.en.vtt": `media-src 'self'` allows it, and no CORS is needed. */
+  src: string;
+  /** The captions' language (BCP 47). */
+  lang: string;
+  /** Their name in the system player's menu (iPhone full screen). */
+  label: string;
+};
+
+/** A video on VIDEO_HOST_ORIGIN: its encodings, and its captions. */
 export type WalkthroughSource = {
   /**
    * Adaptive HLS (240p–1080p), played natively by Safari, iOS and Android.
-   * Optional: without it every browser plays the MP4.
+   * Optional: without it every browser plays an MP4.
    */
   hls?: string;
-  /** A 720p MP4 for browsers without HLS (desktop Chrome, Firefox), and for everyone when there's no HLS. */
+  /** The 1080p MP4, for every browser without HLS (and for everyone when there's no HLS). */
   mp4: string;
+  /**
+   * A 720p copy (about 40% of the size), for phone-sized screens and the data saver (Phase 31,
+   * `pickSource` in src/lib/media-player.ts). Optional: without it everyone gets `mp4`.
+   */
+  mp4Small?: string;
+  /** Captions (WebVTT, ours). Optional: without them the player shows no CC button. */
+  captions?: CaptionTrack;
 };
 
 /**
@@ -43,10 +60,13 @@ export type WalkthroughSource = {
  * no HLS. The file starts with its index (faststart), so it plays while it
  * downloads, and R2 answers range requests for seeking. To replace a video,
  * upload it under a new name and change the path here (browsers may cache the
- * old file under the old name).
+ * old file under the old name). Phones get the 720p copy (Phase 31); the
+ * captions are ours, in public/captions/.
  */
 export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
   mp4: `${VIDEO_HOST_ORIGIN}/about/inkboard-walkthrough-final.mp4`,
+  mp4Small: `${VIDEO_HOST_ORIGIN}/about/inkboard-walkthrough-720p.mp4`,
+  captions: { src: "/captions/inkboard-walkthrough.en.vtt", lang: "en", label: "English" },
 };
 
 /**
@@ -56,6 +76,8 @@ export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
  */
 export const WHATS_NEW_VIDEO: WalkthroughSource | null = {
   mp4: `${VIDEO_HOST_ORIGIN}/about/whats-new-walkthrough.mp4`,
+  mp4Small: `${VIDEO_HOST_ORIGIN}/about/whats-new-walkthrough-720p.mp4`,
+  captions: { src: "/captions/whats-new-walkthrough.en.vtt", lang: "en", label: "English" },
 };
 
 /** Whether the About page streams any video from VIDEO_HOST_ORIGIN (the CSP and the Privacy page follow it). */

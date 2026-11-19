@@ -187,6 +187,7 @@ function VideoCard({ video, copy }: { video: WalkthroughSource; copy: VideoCopy 
             title={copy.title}
             label={copy.player}
             sources={video}
+            captions={video.captions}
             poster={copy.cover.large.src}
             credit={<MusicCredit />}
             returnFocus={button}

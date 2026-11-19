@@ -1,9 +1,16 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WalkthroughPlayer, WalkthroughVideo } from "@/components/about/walkthrough-video";
+import { WalkthroughPlayer, WalkthroughVideo, WHATS_NEW_COPY, WhatsNewVideo } from "@/components/about/walkthrough-video";
 import { buildCsp } from "@/lib/csp";
-import { VIDEO_HOST_ORIGIN, WALKTHROUGH_MUSIC_CREDIT, WALKTHROUGH_VIDEO, type WalkthroughSource } from "@/lib/site";
+import {
+  HOSTED_VIDEO,
+  VIDEO_HOST_ORIGIN,
+  WALKTHROUGH_MUSIC_CREDIT,
+  WALKTHROUGH_VIDEO,
+  WHATS_NEW_VIDEO,
+  type WalkthroughSource,
+} from "@/lib/site";
 
 /*
  * The About page's walkthrough video (docs/PLAN.md, Phase 19) in both states:
@@ -24,12 +31,27 @@ describe("the walkthrough setting", () => {
   it("is null, or HLS and MP4 sources on the video host over https", () => {
     if (WALKTHROUGH_VIDEO === null) return;
     expect(VIDEO_HOST_ORIGIN).toBe("https://ik.imagekit.io");
-    const hls = new URL(WALKTHROUGH_VIDEO.hls);
+    expect(WALKTHROUGH_VIDEO.hls).toBeDefined();
+    const hls = new URL(WALKTHROUGH_VIDEO.hls!);
     const mp4 = new URL(WALKTHROUGH_VIDEO.mp4);
     expect(hls.origin).toBe(VIDEO_HOST_ORIGIN);
     expect(mp4.origin).toBe(VIDEO_HOST_ORIGIN);
     expect(hls.pathname).toMatch(/\/ik-master\.m3u8$/);
     expect(mp4.pathname).toMatch(/\.mp4$/);
+  });
+});
+
+describe("the what's-new setting", () => {
+  it("is null, or an MP4 (and optionally HLS) on the video host over https", () => {
+    if (WHATS_NEW_VIDEO === null) return;
+    const mp4 = new URL(WHATS_NEW_VIDEO.mp4);
+    expect(mp4.origin).toBe(VIDEO_HOST_ORIGIN);
+    expect(mp4.pathname).toMatch(/\.mp4$/);
+    if (WHATS_NEW_VIDEO.hls) expect(new URL(WHATS_NEW_VIDEO.hls).origin).toBe(VIDEO_HOST_ORIGIN);
+  });
+
+  it("makes the CSP and the Privacy page allow the host whenever either video is set", () => {
+    expect(HOSTED_VIDEO).toBe(WALKTHROUGH_VIDEO !== null || WHATS_NEW_VIDEO !== null);
   });
 });
 
@@ -59,7 +81,7 @@ describe("with a video", () => {
     expect(out).toMatch(/<button[^>]*type="button"/);
     expect(out).toContain("Play the walkthrough");
     expect(out).not.toMatch(/<video|<source|<iframe/);
-    expect(out).not.toContain(VIDEO.hls.replaceAll("&", "&amp;"));
+    expect(out).not.toContain(VIDEO.hls!.replaceAll("&", "&amp;"));
     expect(out).not.toContain(`${VIDEO_HOST_ORIGIN}/`);
   });
 
@@ -92,5 +114,36 @@ describe("with a video", () => {
       expect(without.filter((d) => !withVideo.includes(d))).toEqual([]);
       expect(withVideo.join("; ")).not.toContain("frame-src");
     }
+  });
+});
+
+describe("what's new, the second video", () => {
+  const MP4_ONLY: WalkthroughSource = { mp4: `${VIDEO_HOST_ORIGIN}/acct/new-720p.mp4` };
+  const whatsNew = (video: WalkthroughSource | null) => renderToStaticMarkup(createElement(WhatsNewVideo, { video }));
+
+  it("renders nothing while it isn't set", () => {
+    expect(whatsNew(null)).toBe("");
+  });
+
+  it("is its own play button, with no <video> and no request to the host before it's pressed", () => {
+    const out = whatsNew(MP4_ONLY);
+    expect(out).toContain('data-whats-new="ready"');
+    expect(out).not.toContain("data-walkthrough");
+    expect(out).toContain("Play what’s new");
+    expect(out).not.toMatch(/<video|<source|<iframe/);
+    expect(out).not.toContain(`${VIDEO_HOST_ORIGIN}/`);
+    expect(out).toContain(`“${WALKTHROUGH_MUSIC_CREDIT.title}” by`);
+  });
+
+  it("plays its MP4 alone when there's no HLS, under its own name", () => {
+    const out = renderToStaticMarkup(
+      createElement(WalkthroughPlayer, {
+        video: MP4_ONLY,
+        copy: WHATS_NEW_COPY,
+      }),
+    );
+    expect(out).toContain('aria-label="What’s new in InkBoard video"');
+    const sources = [...out.matchAll(/<source src="([^"]+)" type="([^"]+)"/g)].map((m) => [m[1], m[2]]);
+    expect(sources).toEqual([[MP4_ONLY.mp4, "video/mp4"]]);
   });
 });

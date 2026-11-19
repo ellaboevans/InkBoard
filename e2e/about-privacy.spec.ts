@@ -64,6 +64,26 @@ test("About: what InkBoard is, the walkthrough (nothing from ImageKit before pla
   await expect(video).toHaveAttribute("data-walkthrough", "error");
   await expect(video.getByRole("button", { name: "Play the walkthrough" })).toBeVisible();
 
+  // "What's new" (WHATS_NEW_VIDEO), below it: its own cover and play button, the same rule (nothing before play).
+  const whatsNew = main.locator("[data-whats-new]");
+  await expect(whatsNew).toHaveAttribute("data-whats-new", "ready");
+  const playNew = whatsNew.getByRole("button", { name: "Play what’s new" });
+  await expect(playNew).toBeVisible();
+  const newCover = playNew.locator("img");
+  await expect.poll(() => newCover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  expect(await newCover.evaluate((img: HTMLImageElement) => new URL(img.currentSrc).pathname)).toMatch(/^\/_next\/static\/.*whats-new-cover-\d+.*\.webp$/);
+  await expect(whatsNew.locator("video")).toHaveCount(0);
+  const before = toHost.length;
+  await playNew.click();
+  const newPlayer = main.locator('video[aria-label="What’s new in InkBoard video"]');
+  await expect(newPlayer).toBeVisible();
+  await expect(newPlayer).toBeFocused();
+  expect(new URL((await newPlayer.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(/^\/_next\/static\/.*whats-new-cover-1920.*\.webp$/);
+  await expect.poll(() => toHost.length).toBeGreaterThan(before);
+  expect(toHost.slice(before).every((u) => u.startsWith("https://ik.imagekit.io/kkldhhslb/whats-new-walkthrough-720p.mp4"))).toBe(true);
+  await expect(whatsNew).toHaveAttribute("data-whats-new", "error");
+  await expect(whatsNew.getByRole("button", { name: "Play what’s new" })).toBeVisible();
+
   // The invitation, and the privacy page.
   await expect(main.getByRole("link", { name: "Read the board" })).toHaveAttribute("href", "/");
   await expect(main.getByRole("link", { name: "Start writing" })).toHaveAttribute("href", "/sign-in");

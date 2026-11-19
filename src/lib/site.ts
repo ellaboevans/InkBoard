@@ -19,11 +19,14 @@ export const PRIVACY_CONTACT_EMAIL = "ellaboevans@gmail.com";
 /** Where the walkthrough video is hosted (ImageKit). The CSP's `media-src` allows this origin only. */
 export const VIDEO_HOST_ORIGIN = "https://ik.imagekit.io";
 
-/** The walkthrough's two encodings, both on VIDEO_HOST_ORIGIN. */
+/** A video's encodings, both on VIDEO_HOST_ORIGIN. */
 export type WalkthroughSource = {
-  /** Adaptive HLS (240p–1080p), played natively by Safari, iOS and Android. */
-  hls: string;
-  /** A 720p MP4 for browsers without HLS (desktop Chrome, Firefox). */
+  /**
+   * Adaptive HLS (240p–1080p), played natively by Safari, iOS and Android.
+   * Optional: without it every browser plays the MP4.
+   */
+  hls?: string;
+  /** A 720p MP4 for browsers without HLS (desktop Chrome, Firefox), and for everyone when there's no HLS. */
   mp4: string;
 };
 
@@ -39,6 +42,22 @@ export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
   hls: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4/ik-master.m3u8?updatedAt=1794859127104&tr=sr-240_360_480_720_1080`,
   mp4: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4?updatedAt=1794859127104&tr=w-1280`,
 };
+
+/**
+ * The second video on the About page, "What's new in InkBoard" (2:53, made in
+ * reels-studio), shown below the walkthrough, or null to show nothing. The
+ * same rules as WALKTHROUGH_VIDEO: no <video> and no request to ImageKit
+ * until the reader presses play. For now a 720p MP4 we encode ourselves,
+ * delivered as uploaded (no ImageKit transformation: the account's video
+ * transformation quota was used up when it was added); add `hls` like the
+ * walkthrough's once ImageKit can make it.
+ */
+export const WHATS_NEW_VIDEO: WalkthroughSource | null = {
+  mp4: `${VIDEO_HOST_ORIGIN}/kkldhhslb/whats-new-walkthrough-720p.mp4`,
+};
+
+/** Whether the About page streams any video from VIDEO_HOST_ORIGIN (the CSP and the Privacy page follow it). */
+export const HOSTED_VIDEO = WALKTHROUGH_VIDEO !== null || WHATS_NEW_VIDEO !== null;
 
 /** The walkthrough's music, whose licence (CC BY 4.0) requires this credit wherever the video is shown. */
 export const WALKTHROUGH_MUSIC_CREDIT = {

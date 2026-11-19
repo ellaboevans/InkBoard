@@ -4,16 +4,16 @@ import { HTML_LIMITED_BOT_UA_RE } from "next/dist/shared/lib/router/utils/html-b
 import { htmlLimitedBots } from "./src/lib/html-limited-bots";
 import { buildCsp } from "./src/lib/csp";
 import { PHOTO_MAX_BYTES } from "./src/lib/photo-limits";
-import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO } from "./src/lib/site";
+import { HOSTED_VIDEO, VIDEO_HOST_ORIGIN } from "./src/lib/site";
 
 const isDev = process.env.NODE_ENV === "development";
 
 /**
  * Content Security Policy without nonces (see src/lib/csp.ts): our own origin
- * only, plus media from ImageKit while the About page has a walkthrough video
- * (WALKTHROUGH_VIDEO).
+ * only, plus media from ImageKit while the About page has a video
+ * (WALKTHROUGH_VIDEO or WHATS_NEW_VIDEO: HOSTED_VIDEO).
  */
-const csp = buildCsp({ dev: isDev, videoOrigin: WALKTHROUGH_VIDEO ? VIDEO_HOST_ORIGIN : null });
+const csp = buildCsp({ dev: isDev, videoOrigin: HOSTED_VIDEO ? VIDEO_HOST_ORIGIN : null });
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },

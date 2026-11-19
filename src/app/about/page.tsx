@@ -1,13 +1,13 @@
 import { ArrowLeftIcon, FeatherIcon, PenLineIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { WalkthroughVideo } from "@/components/about/walkthrough-video";
+import { WalkthroughVideo, WhatsNewVideo } from "@/components/about/walkthrough-video";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO } from "@/lib/site";
+import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "@/lib/site";
 
 /*
  * What InkBoard is, in one link the owner can send anyone (docs/PLAN.md,
@@ -83,6 +83,7 @@ export default function AboutPage() {
         </div>
 
         <WalkthroughVideo video={WALKTHROUGH_VIDEO} />
+        <WhatsNewVideo video={WHATS_NEW_VIDEO} />
 
         <Section id="why" heading="What it’s for">
           <Points

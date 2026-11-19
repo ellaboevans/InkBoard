@@ -7,7 +7,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { PRIVACY_FACTS as F, PRIVACY_UPDATED } from "@/lib/privacy-facts";
-import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO } from "@/lib/site";
+import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, HOSTED_VIDEO, SITE_NAME, SITE_OPERATOR } from "@/lib/site";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19), written from the code: the
@@ -398,17 +398,17 @@ export default function PrivacyPage() {
               Microsoft, depending on your browser) delivers notifications if you turn them on. It issues the delivery
               address and passes on each notification, which is encrypted so it can’t read it.
             </li>
-            {WALKTHROUGH_VIDEO && (
+            {HOSTED_VIDEO && (
               <li>
-                <strong className="font-medium">ImageKit</strong> hosts the walkthrough video on the About page and
-                streams it from ik.imagekit.io once you press play; nothing is loaded from ImageKit before that. Like
+                <strong className="font-medium">ImageKit</strong> hosts the videos on the About page and streams one
+                from ik.imagekit.io once you press its play button; nothing is loaded from ImageKit before that. Like
                 any website, it then receives your IP address, your browser and the video’s address.
               </li>
             )}
           </ul>
           <p>
             Our fonts, images and scripts are served from {SITE_NAME} itself; no other service receives anything from your
-            visit{WALKTHROUGH_VIDEO ? ", unless you play the walkthrough video" : ""}.
+            visit{HOSTED_VIDEO ? ", unless you play a video on the About page" : ""}.
           </p>
         </Section>
 

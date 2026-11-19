@@ -16,28 +16,26 @@ import {
  * The About page's walkthrough video (docs/PLAN.md, Phase 19) in both states:
  * no video (cover + "Video coming soon", no media origin allowed), and a video
  * set (a play button and no <video> until it's pressed, so nothing from
- * ImageKit before that; then the browser's own player, HLS then MP4, from the
+ * the video host before that; then the browser's own player, HLS (if any) then MP4, from the
  * one origin the CSP then allows in media-src).
  */
 const VIDEO: WalkthroughSource = {
   hls: `${VIDEO_HOST_ORIGIN}/acct/walk.mp4/ik-master.m3u8?tr=sr-240_360_480_720_1080`,
   mp4: `${VIDEO_HOST_ORIGIN}/acct/walk.mp4?tr=w-1280`,
 };
-const IMAGEKIT = /imagekit/i;
+const HOST = new RegExp(new URL(VIDEO_HOST_ORIGIN).host.replaceAll(".", "\\."), "i");
 const html = (video: WalkthroughSource | null) => renderToStaticMarkup(createElement(WalkthroughVideo, { video }));
 const directives = (csp: string) => csp.split("; ");
 
 describe("the walkthrough setting", () => {
-  it("is null, or HLS and MP4 sources on the video host over https", () => {
+  it("is null, or an MP4 (and optionally HLS) on the video host over https", () => {
+    expect(new URL(VIDEO_HOST_ORIGIN).protocol).toBe("https:");
+    expect(new URL(VIDEO_HOST_ORIGIN).origin).toBe(VIDEO_HOST_ORIGIN);
     if (WALKTHROUGH_VIDEO === null) return;
-    expect(VIDEO_HOST_ORIGIN).toBe("https://ik.imagekit.io");
-    expect(WALKTHROUGH_VIDEO.hls).toBeDefined();
-    const hls = new URL(WALKTHROUGH_VIDEO.hls!);
     const mp4 = new URL(WALKTHROUGH_VIDEO.mp4);
-    expect(hls.origin).toBe(VIDEO_HOST_ORIGIN);
     expect(mp4.origin).toBe(VIDEO_HOST_ORIGIN);
-    expect(hls.pathname).toMatch(/\/ik-master\.m3u8$/);
     expect(mp4.pathname).toMatch(/\.mp4$/);
+    if (WALKTHROUGH_VIDEO.hls) expect(new URL(WALKTHROUGH_VIDEO.hls).origin).toBe(VIDEO_HOST_ORIGIN);
   });
 });
 
@@ -61,14 +59,14 @@ describe("no video yet", () => {
     expect(out).toContain("Video coming soon");
     expect(out).toContain('alt="How InkBoard works');
     expect(out).not.toMatch(/<video|<iframe|<button/);
-    expect(out).not.toMatch(IMAGEKIT);
+    expect(out).not.toMatch(HOST);
   });
 
   it("allows no media or frame origins in the CSP", () => {
     for (const dev of [false, true]) {
       const csp = buildCsp({ dev, videoOrigin: null });
       expect(csp).not.toMatch(/media-src|frame-src/);
-      expect(csp).not.toMatch(IMAGEKIT);
+      expect(csp).not.toMatch(HOST);
       expect(csp).toContain("default-src 'self'");
       expect(csp).toContain("frame-ancestors 'none'");
     }
@@ -110,7 +108,7 @@ describe("with a video", () => {
     for (const dev of [false, true]) {
       const without = directives(buildCsp({ dev, videoOrigin: null }));
       const withVideo = directives(buildCsp({ dev, videoOrigin: VIDEO_HOST_ORIGIN }));
-      expect(withVideo.filter((d) => !without.includes(d))).toEqual(["media-src 'self' https://ik.imagekit.io"]);
+      expect(withVideo.filter((d) => !without.includes(d))).toEqual([`media-src 'self' ${VIDEO_HOST_ORIGIN}`]);
       expect(without.filter((d) => !withVideo.includes(d))).toEqual([]);
       expect(withVideo.join("; ")).not.toContain("frame-src");
     }

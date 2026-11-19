@@ -134,7 +134,7 @@ test("Privacy: who runs it, how to reach them, and the facts with an Updated dat
   // Services, the video host only while a video is set, and no YouTube.
   for (const service of ["Vercel", "Neon", "Resend"]) await expect(main.getByText(service, { exact: true }).first()).toBeVisible();
   if (HOSTED_VIDEO) await expect(main).toContainText("nothing is loaded from it before that");
-  else await expect(main).not.toContainText("ImageKit");
+  else await expect(main).not.toContainText("hosts the videos on the About page");
   await expect(main).not.toContainText("YouTube");
 });
 

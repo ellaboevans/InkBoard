@@ -17,12 +17,12 @@ import whatsNew960 from "@/assets/about/whats-new-cover-960.webp";
  *
  * - No video: our own cover image with "Video coming soon".
  * - A video: the same cover as a play button. There is no <video> element
- *   until the reader presses it, so nothing is fetched from ImageKit before
+ *   until the reader presses it, so nothing is fetched from the video host before
  *   that. The press mounts the browser's own player (flushSync) and calls
  *   play() in the same click handler, so it starts with sound everywhere
- *   (ImageKit's iframe player autoplays muted, and loads video.js from two
- *   CDNs). HLS first (adaptive, native on Safari, iOS and Android), then a
- *   720p MP4 for the rest.
+ *   (an iframe player, like ImageKit's that we used before R2, autoplays
+ *   muted and loads scripts from other origins). HLS first when the source
+ *   has it (adaptive, native on Safari, iOS and Android), then the MP4.
  *
  * The cover is a static import, so it's served from /_next/static/, which the
  * offline worker keeps with a saved copy of the page. Offline, the video

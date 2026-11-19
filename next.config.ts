@@ -10,7 +10,7 @@ const isDev = process.env.NODE_ENV === "development";
 
 /**
  * Content Security Policy without nonces (see src/lib/csp.ts): our own origin
- * only, plus media from ImageKit while the About page has a video
+ * only, plus media from the video host while the About page has a video
  * (WALKTHROUGH_VIDEO or WHATS_NEW_VIDEO: HOSTED_VIDEO).
  */
 const csp = buildCsp({ dev: isDev, videoOrigin: HOSTED_VIDEO ? VIDEO_HOST_ORIGIN : null });

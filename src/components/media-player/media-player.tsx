@@ -26,13 +26,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Slider } from "@/components/ui/slider";
 import {
+  AUTO_RETRY_DELAY_MS,
   CONTROLS_HIDE_MS,
   formatTime,
   pickSource,
   PLAYBACK_RATES,
   playerKeyAction,
   rateLabel,
+  resumePosition,
+  retriesAfterProgress,
   seekLabel,
+  shouldAutoRetry,
   SKIP_SECONDS,
   skipTo,
   stepVolume,
@@ -106,13 +110,45 @@ const media = {
   setRate(v: HTMLVideoElement, rate: number) {
     v.playbackRate = rate;
   },
+  /**
+   * Load the source again from scratch: setting `src` (even to the same URL) restarts the load, and restores an
+   * element whose source was dropped; `load()` alone would not. Back to `at` once the length is known, then play
+   * if the reader was watching (from a tap, that's their gesture, so iOS allows sound).
+   */
+  reload(v: HTMLVideoElement, url: string, at: number, resume: boolean) {
+    v.src = url;
+    if (at > 0) v.addEventListener("loadedmetadata", () => (v.currentTime = at), { once: true });
+    if (resume) v.play().catch(() => {});
+  },
 };
 
 const NOOP = () => () => {};
 
-/** A value read from the media element, re-read on the given events only. */
+/*
+ * Snapshots of the media element's state, one per element and value name,
+ * taken when one of the value's events fires (and once on first read).
+ *
+ * Never hand useSyncExternalStore a live read: React calls getSnapshot more
+ * than once per render and requires the same answer each time until the
+ * store says it changed. WebKit's `currentTime` advances between two reads
+ * in the same task (Chrome's doesn't), so a live read made every playing
+ * render look torn: React re-rendered until it threw "Maximum update depth
+ * exceeded" (#185), which took the About page down on every iPhone and in
+ * desktop Safari a moment into playback (Phase 30 fix-up).
+ */
+const snapshots = new WeakMap<HTMLMediaElement, Map<string, unknown>>();
+
+function snapshotOf<T>(video: WebkitVideo, name: string, read: (v: WebkitVideo) => T): T {
+  let values = snapshots.get(video);
+  if (!values) snapshots.set(video, (values = new Map()));
+  if (!values.has(name)) values.set(name, read(video));
+  return values.get(name) as T;
+}
+
+/** A value read from the media element, re-read (and cached under `name`) on the given events only. */
 function useMedia<T extends string | number | boolean>(
   video: HTMLVideoElement | null,
+  name: string,
   events: string,
   read: (v: WebkitVideo) => T,
   fallback: T,
@@ -121,16 +157,24 @@ function useMedia<T extends string | number | boolean>(
     (onChange: () => void) => {
       if (!video) return () => {};
       const names = events.split(" ");
-      for (const e of names) video.addEventListener(e, onChange);
+      const handler = () => {
+        let values = snapshots.get(video);
+        if (!values) snapshots.set(video, (values = new Map()));
+        values.set(name, read(video as WebkitVideo));
+        onChange();
+      };
+      for (const e of names) video.addEventListener(e, handler);
       return () => {
-        for (const e of names) video.removeEventListener(e, onChange);
+        for (const e of names) video.removeEventListener(e, handler);
       };
     },
-    [video, events],
+    // `read` is a fresh closure every render but always reads the same property for a given `name`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [video, name, events],
   );
   return useSyncExternalStore(
     video ? subscribe : NOOP,
-    () => (video ? read(video) : fallback),
+    () => (video ? snapshotOf(video as WebkitVideo, name, read) : fallback),
     () => fallback,
   );
 }
@@ -152,7 +196,7 @@ function canPlayHls(): boolean {
   return document.createElement("video").canPlayType("application/vnd.apple.mpegurl") !== "";
 }
 
-const STATE_EVENTS = "loadstart loadedmetadata loadeddata canplay canplaythrough waiting playing play pause ended seeking seeked stalled emptied";
+const STATE_EVENTS = "loadstart loadedmetadata loadeddata canplay canplaythrough waiting playing play pause ended seeking seeked stalled emptied error";
 
 const controlButton =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-full text-white outline-none hover:bg-white/15 focus-visible:ring-3 focus-visible:ring-white/70 disabled:opacity-40 [&_svg]:size-5";
@@ -171,8 +215,8 @@ function SkipIcon({ back }: { back: boolean }) {
 
 /** The position slider: re-renders on `timeupdate`, alone. */
 function SeekBar({ video, onDragChange }: { video: HTMLVideoElement | null; onDragChange: (dragging: boolean) => void }) {
-  const current = useMedia(video, "timeupdate seeking seeked loadedmetadata durationchange emptied", (v) => v.currentTime, 0);
-  const duration = useMedia(video, "loadedmetadata durationchange emptied", (v) => (Number.isFinite(v.duration) ? v.duration : 0), 0);
+  const current = useMedia(video, "currentTime", "timeupdate seeking seeked loadedmetadata durationchange emptied", (v) => v.currentTime, 0);
+  const duration = useMedia(video, "duration", "loadedmetadata durationchange emptied", (v) => (Number.isFinite(v.duration) ? v.duration : 0), 0);
   const [drag, setDrag] = useState<number | null>(null);
   const value = drag ?? current;
   return (
@@ -203,8 +247,8 @@ function SeekBar({ video, onDragChange }: { video: HTMLVideoElement | null; onDr
 
 /** "1:23 / 6:01": re-renders on `timeupdate`, alone. */
 function TimeLabel({ video }: { video: HTMLVideoElement | null }) {
-  const current = useMedia(video, "timeupdate seeking seeked loadedmetadata durationchange emptied", (v) => v.currentTime, 0);
-  const duration = useMedia(video, "loadedmetadata durationchange emptied", (v) => (Number.isFinite(v.duration) ? v.duration : 0), 0);
+  const current = useMedia(video, "currentTime", "timeupdate seeking seeked loadedmetadata durationchange emptied", (v) => v.currentTime, 0);
+  const duration = useMedia(video, "duration", "loadedmetadata durationchange emptied", (v) => (Number.isFinite(v.duration) ? v.duration : 0), 0);
   return (
     <span data-time className="px-1 text-xs whitespace-nowrap tabular-nums sm:text-sm">
       {formatTime(current, duration)} <span className="text-white/70">/ {formatTime(duration)}</span>
@@ -213,8 +257,8 @@ function TimeLabel({ video }: { video: HTMLVideoElement | null }) {
 }
 
 function VolumeControls({ video, slider }: { video: HTMLVideoElement | null; slider: boolean }) {
-  const muted = useMedia(video, "volumechange", (v) => v.muted, false);
-  const volume = useMedia(video, "volumechange", (v) => v.volume, 1);
+  const muted = useMedia(video, "muted", "volumechange", (v) => v.muted, false);
+  const volume = useMedia(video, "volume", "volumechange", (v) => v.volume, 1);
   const Icon = muted || volume === 0 ? VolumeXIcon : volume < 0.5 ? Volume1Icon : Volume2Icon;
   return (
     <div className="flex items-center">
@@ -260,7 +304,7 @@ function SpeedMenu({
   container: HTMLElement | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const rate = useMedia(video, "ratechange", (v) => v.playbackRate, 1);
+  const rate = useMedia(video, "rate", "ratechange", (v) => v.playbackRate, 1);
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger
@@ -317,6 +361,10 @@ export function MediaPlayer({
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(COMPACT_WIDTH);
   const [error, setError] = useState(false);
+  /** The last MediaError code, kept after recovering: `data-media-error`, for the browser's dev tools only. */
+  const [errorCode, setErrorCode] = useState<number | null>(null);
+  /** Waiting to retry by itself after a network error: the spinner, not the error. */
+  const [retrying, setRetrying] = useState(false);
   const [awake, setAwake] = useState(true);
   const [focusHeld, setFocusHeld] = useState(false);
   const [hoverHeld, setHoverHeld] = useState(false);
@@ -324,14 +372,26 @@ export function MediaPlayer({
   const [dragging, setDragging] = useState(false);
   const hideTimer = useRef<number | undefined>(undefined);
   const autoStarted = useRef(false);
+  // Recovery bookkeeping, never state: the last position the reader reached (before any error), whether they
+  // meant it to play, the automatic retries in this error episode, where the last one resumed, and whether the
+  // player has left the page (then nothing is retried).
+  const lastTime = useRef(0);
+  const wantsPlay = useRef(autoPlay);
+  const autoRetries = useRef(0);
+  const retryAt = useRef<number | null>(null);
+  const retryTimer = useRef<number | undefined>(undefined);
+  const closed = useRef(false);
+  /** A reload is on its way back to the saved position: its timeupdates at 0 aren't the reader's. */
+  const resuming = useRef(false);
   const primary = useRef<HTMLButtonElement>(null);
 
-  const paused = useMedia(video, STATE_EVENTS, (v) => v.paused, true);
-  const ended = useMedia(video, STATE_EVENTS, (v) => v.ended, false);
+  const paused = useMedia(video, "paused", STATE_EVENTS, (v) => v.paused, true);
+  const ended = useMedia(video, "ended", STATE_EVENTS, (v) => v.ended, false);
   // Buffering while it should be playing; before any metadata while paused. iOS loads no data until play, so a
   // paused video with metadata isn't "loading".
   const loading = useMedia(
     video,
+    "loading",
     STATE_EVENTS,
     (v) => !v.error && (v.paused ? v.readyState < HTMLMediaElement.HAVE_METADATA : v.readyState < HTMLMediaElement.HAVE_FUTURE_DATA),
     true,
@@ -361,6 +421,7 @@ export function MediaPlayer({
   );
   const pip = useMedia(
     video,
+    "pip",
     "enterpictureinpicture leavepictureinpicture webkitpresentationmodechanged",
     (v) => document.pictureInPictureElement === v || v.webkitPresentationMode === "picture-in-picture",
     false,
@@ -373,13 +434,15 @@ export function MediaPlayer({
   }, []);
 
   const playing = !paused && !ended;
+  const busy = loading || retrying;
   const held = !playing || error || focusHeld || hoverHeld || menuOpen || dragging;
   const shown = awake || held;
   const compact = width < COMPACT_WIDTH;
   const narrow = width < NARROW_WIDTH;
-  const state = error ? "error" : ended ? "ended" : loading ? "loading" : paused ? "paused" : "playing";
+  const state = error ? "error" : ended ? "ended" : busy ? "loading" : paused ? "paused" : "playing";
 
   const play = useCallback(() => {
+    wantsPlay.current = true;
     // A refusal (autoplay rules) leaves the player paused and ready; nothing else to do.
     video?.play().catch(() => {});
   }, [video]);
@@ -387,8 +450,48 @@ export function MediaPlayer({
   const toggle = () => {
     if (!video) return;
     if (video.paused || video.ended) play();
-    else video.pause();
+    else {
+      wantsPlay.current = false;
+      video.pause();
+    }
     wake();
+  };
+
+  /** Try again: a fresh source (re-picked), back where the reader was, playing from this tap. */
+  const retry = () => {
+    window.clearTimeout(retryTimer.current);
+    autoRetries.current = 0;
+    retryAt.current = null;
+    setError(false);
+    setRetrying(false);
+    if (!video) return;
+    wantsPlay.current = true;
+    const at = resumePosition(lastTime.current);
+    resuming.current = at > 0;
+    media.reload(video, pickSource(sources, canPlayHls()), at, true);
+  };
+
+  const onMediaError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (closed.current) return;
+    const code = v.error?.code ?? 0;
+    setErrorCode(code);
+    if (shouldAutoRetry({ code, autoRetries: autoRetries.current, closed: closed.current })) {
+      // Once, after a moment, from the same position; a second failure shows the error.
+      autoRetries.current += 1;
+      const at = resumePosition(lastTime.current);
+      retryAt.current = at;
+      setRetrying(true);
+      window.clearTimeout(retryTimer.current);
+      retryTimer.current = window.setTimeout(() => {
+        setRetrying(false);
+        if (closed.current) return;
+        resuming.current = at > 0;
+        media.reload(v, pickSource(sources, canPlayHls()), at, wantsPlay.current);
+      }, AUTO_RETRY_DELAY_MS);
+      return;
+    }
+    setError(true);
   };
   const skip = (delta: number) => {
     if (video) media.seek(video, skipTo(video.currentTime, delta, video.duration));
@@ -485,7 +588,18 @@ export function MediaPlayer({
     run(action);
   };
 
-  useImperativeHandle(ref, () => ({ pause: () => video?.pause(), focusPrimary: () => primary.current?.focus() }), [video]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      pause: () => {
+        wantsPlay.current = false;
+        window.clearTimeout(retryTimer.current);
+        video?.pause();
+      },
+      focusPrimary: () => primary.current?.focus(),
+    }),
+    [video],
+  );
 
   const videoRef = useCallback(
     (el: HTMLVideoElement | null) => {
@@ -497,12 +611,29 @@ export function MediaPlayer({
         autoStarted.current = true;
         el.play().catch(() => {});
       }
+      // The position to come back to after an error: only real progress, never the 0 an emptied element reports.
+      const onTime = (e: Event) => {
+        if (e.type === "seeked") resuming.current = false;
+        if (resuming.current || el.error || el.readyState === 0) return;
+        lastTime.current = el.currentTime;
+        autoRetries.current = retriesAfterProgress(autoRetries.current, retryAt.current, el.currentTime);
+        if (autoRetries.current === 0) retryAt.current = null;
+      };
+      el.addEventListener("timeupdate", onTime);
+      el.addEventListener("seeked", onTime);
+      const onEnded = () => (wantsPlay.current = false);
+      el.addEventListener("ended", onEnded);
       return () => {
+        el.removeEventListener("timeupdate", onTime);
+        el.removeEventListener("seeked", onTime);
+        el.removeEventListener("ended", onEnded);
         // Closing frees the video: stop it and drop its source, so the download ends too. Only once it has really
         // left the page: React's StrictMode (development) detaches and re-attaches refs on the same, still-mounted
         // element, and a dropped src would never come back.
         queueMicrotask(() => {
           if (el.isConnected) return;
+          closed.current = true;
+          window.clearTimeout(retryTimer.current);
           el.pause();
           el.removeAttribute("src");
           el.load();
@@ -538,7 +669,7 @@ export function MediaPlayer({
       data-primary=""
       onClick={toggle}
     >
-      {big && loading ? (
+      {big && busy ? (
         <LoaderCircleIcon aria-hidden data-loading="" className="motion-safe:animate-spin" />
       ) : (
         <PrimaryIcon aria-hidden className={cn(!ended && "fill-current")} />
@@ -564,6 +695,7 @@ export function MediaPlayer({
       tabIndex={-1}
       data-media-player=""
       data-state={state}
+      data-media-error={errorCode ?? undefined}
       data-controls={shown ? "shown" : "hidden"}
       data-fullscreen={fullscreen ? "true" : undefined}
       onKeyDown={onKeyDown}
@@ -585,7 +717,7 @@ export function MediaPlayer({
         playsInline
         preload="auto"
         aria-hidden
-        onError={() => setError(true)}
+        onError={onMediaError}
         className="absolute inset-0 size-full bg-black object-contain"
       />
 
@@ -622,12 +754,7 @@ export function MediaPlayer({
             <button
               type="button"
               className="min-h-11 rounded-full bg-white px-5 text-sm font-medium text-black outline-none focus-visible:ring-3 focus-visible:ring-white/70"
-              onClick={() => {
-                setError(false);
-                if (!video) return;
-                video.load();
-                play();
-              }}
+              onClick={retry}
             >
               Try again
             </button>
@@ -645,7 +772,7 @@ export function MediaPlayer({
             {primaryButton(true)}
             {skipButton(false, true)}
           </div>
-        ) : loading ? (
+        ) : busy ? (
           <LoaderCircleIcon aria-hidden data-loading="" className="size-10 motion-safe:animate-spin" />
         ) : (
           !playing && (

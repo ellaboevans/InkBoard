@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 import webpush from "web-push";
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
@@ -31,10 +31,23 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   use: {
     baseURL: `http://localhost:${PORT}`,
-    // Uses the locally installed Chrome; run `pnpm exec playwright install chromium` instead if absent.
-    channel: process.env.PW_CHANNEL ?? "chrome",
     trace: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "chrome",
+      // Uses the locally installed Chrome; run `pnpm exec playwright install chromium` instead if absent.
+      use: { channel: process.env.PW_CHANNEL ?? "chrome" },
+    },
+    {
+      // iPhone Safari's engine, for the media player only (Phase 30 fix-up: the phones' failure was WebKit's).
+      // `pnpm exec playwright install webkit` once. Tests opt in with @webkit in their title.
+      name: "webkit-iphone",
+      testMatch: /media-player\.spec\.ts/,
+      grep: /@webkit/,
+      use: { ...devices["iPhone 15"], browserName: "webkit" },
+    },
+  ],
   webServer: {
     command: `pnpm next dev --port ${PORT}`,
     // Readiness probe must not touch the DB: Playwright starts the server

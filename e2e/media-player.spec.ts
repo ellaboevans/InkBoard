@@ -9,6 +9,18 @@ import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/li
  * answered with a 24-second silent fixture (e2e/fixtures/player-test.mp4,
  * ~5 KB, every frame a keyframe), with range requests like R2's.
  *
+ * Recovery (Phase 30 fix-up): the stub can also cut the connection part way
+ * through (`cut`: every range is served only up to CUT_AT and anything
+ * beyond it is refused), which is how a dropped connection looks to the
+ * player: Chrome gives up after its own ~30 retries (about 30 s) with
+ * MEDIA_ERR_NETWORK (2) at ~13.5 s of media, and the player retries once by
+ * itself. That needs e2e/fixtures/player-drop-test.mp4 (24 s, 52 KB): with
+ * the 5 KB fixture Chrome reads past any cut while opening the file, which
+ * fails with code 4 instead. WebKit never
+ * raises an error for that (it stalls and resumes), so its project
+ * (`webkit-iphone`, tests tagged @webkit) runs the crash regression and Try
+ * again only.
+ *
  * Full screen: headless Chrome may or may not enter it, so the test checks
  * the request (on the player itself, never the bare <video>) and, when Chrome
  * did enter it, that Esc leaves full screen without closing the dialog.
@@ -18,24 +30,34 @@ test.skip(!WALKTHROUGH_VIDEO || !WHATS_NEW_VIDEO, "no video is set in src/lib/si
 
 const FIXTURE = readFileSync(path.resolve("e2e/fixtures/player-test.mp4"));
 
-/** Answer the video host with the fixture (206 for ranges); record every URL asked for. */
-async function serveVideos(page: Page, log: string[], answer: "video" | "refuse" = "video") {
+const DROP_FIXTURE = readFileSync(path.resolve("e2e/fixtures/player-drop-test.mp4"));
+/** DROP_FIXTURE's bytes up to here: enough for Chrome to open it and play ~13.5 s (65%, measured). */
+const CUT_AT = 34_157;
+
+/**
+ * Answer the video host with the fixture (206 for ranges); record every URL asked for. `refuse` fails every
+ * request; `cut` serves only the bytes before CUT_AT and fails anything beyond, like a connection lost mid-play.
+ */
+async function serveVideos(page: Page, log: string[], answer: "video" | "refuse" | "cut" = "video") {
   let mode = answer;
+  const file = answer === "cut" ? DROP_FIXTURE : FIXTURE;
   await page.route(`${VIDEO_HOST_ORIGIN}/**`, async (route: Route) => {
     log.push(route.request().url());
-    if (mode === "refuse") return route.abort();
+    if (mode === "refuse") return route.abort("internetdisconnected");
     const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] ?? "");
     const headers = { "content-type": "video/mp4", "accept-ranges": "bytes" };
-    if (!range) return route.fulfill({ status: 200, headers, body: FIXTURE });
-    const start = Number(range[1]);
-    const end = range[2] ? Math.min(Number(range[2]), FIXTURE.length - 1) : FIXTURE.length - 1;
+    if (!range && mode === "video") return route.fulfill({ status: 200, headers, body: file });
+    const start = range ? Number(range[1]) : 0;
+    if (mode === "cut" && start >= CUT_AT) return route.abort("internetdisconnected");
+    const last = mode === "cut" ? CUT_AT - 1 : file.length - 1;
+    const end = range?.[2] ? Math.min(Number(range[2]), last) : last;
     return route.fulfill({
       status: 206,
-      headers: { ...headers, "content-range": `bytes ${start}-${end}/${FIXTURE.length}` },
-      body: FIXTURE.subarray(start, end + 1),
+      headers: { ...headers, "content-range": `bytes ${start}-${end}/${file.length}` },
+      body: file.subarray(start, end + 1),
     });
   });
-  return { serve: () => (mode = "video") };
+  return { serve: () => (mode = "video"), refuse: () => (mode = "refuse") };
 }
 
 /** Record calls to requestFullscreen / webkitEnterFullscreen, with what they were called on. */
@@ -276,18 +298,109 @@ for (const device of [
       await expect(whatsNew).toBeFocused();
     });
 
-    test("a video that can't load says so, and Try again plays it", async ({ page }) => {
+    test("a video that can't load says so (code 4), and Try again plays it, even with its source gone", async ({ page }) => {
       const toHost: string[] = [];
       const host = await serveVideos(page, toHost, "refuse");
       await page.goto("/about");
-      const { player } = await openWalkthrough(page);
+      const { player } = await openWalkthrough(page, device.touch);
       await expect(player.getByRole("alert")).toHaveText(/The video couldn’t load/);
       await expect(player).toHaveAttribute("data-state", "error");
+      // A host refusing from the start: MEDIA_ERR_SRC_NOT_SUPPORTED, never retried by itself.
+      await expect(player).toHaveAttribute("data-media-error", "4");
+      const asked = toHost.length;
+      await page.waitForTimeout(3000);
+      expect(toHost.length).toBe(asked);
+      // Try again sets the source afresh, so it works even when the element has none left.
+      await video(page).evaluate((v: HTMLVideoElement) => v.removeAttribute("src"));
       host.serve();
       await player.getByRole("button", { name: "Try again" }).click();
-      await expect(player).not.toHaveAttribute("data-state", "error");
       await expect(player.getByRole("alert")).toHaveCount(0);
-      await expect.poll(() => media(page, (v) => v.readyState)).toBeGreaterThanOrEqual(1);
+      await expect(player).toHaveAttribute("data-state", "playing");
+      expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+      await expect.poll(() => at(page)).toBeGreaterThan(1);
+    });
+
+    test("a connection lost mid-play comes back by itself: one retry, from the same place", async ({ page }) => {
+      test.setTimeout(180_000);
+      const host = await serveVideos(page, [], "cut");
+      await page.goto("/about");
+      const { player } = await openWalkthrough(page, device.touch);
+      await expect(player).toHaveAttribute("data-state", "playing");
+      // Chrome gives up on the missing bytes: a network error, and the player waits to retry (the spinner, no error).
+      await expect(player).toHaveAttribute("data-media-error", "2", { timeout: 90_000 });
+      const lost = await at(page);
+      expect(lost).toBeGreaterThan(2);
+      await expect(player).toHaveAttribute("data-state", "loading");
+      await expect(player.getByRole("alert")).toHaveCount(0);
+      host.serve(); // back before the retry (AUTO_RETRY_DELAY_MS)
+      await expect(player).toHaveAttribute("data-state", "playing", { timeout: 15_000 });
+      await expect.poll(() => at(page)).toBeGreaterThan(lost);
+      expect(await at(page)).toBeLessThan(lost + 6); // resumed there, not from the start
+      await expect(player.getByRole("alert")).toHaveCount(0);
+      // The same element, its source intact.
+      expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+    });
+
+    test("a connection that stays down: one retry only, then the error; Try again resumes near the same place", async ({ page }) => {
+      test.setTimeout(240_000);
+      const toHost: string[] = [];
+      const host = await serveVideos(page, toHost, "cut");
+      await page.goto("/about");
+      const { player } = await openWalkthrough(page, device.touch);
+      await expect(player).toHaveAttribute("data-media-error", "2", { timeout: 90_000 });
+      const lost = await at(page);
+      // The one automatic retry fails as well: now the error, and no more retries.
+      await expect(player).toHaveAttribute("data-state", "error", { timeout: 90_000 });
+      await expect(player.getByRole("alert")).toHaveText(/The video couldn’t load/);
+      const asked = toHost.length;
+      await page.waitForTimeout(4000);
+      expect(toHost.length).toBe(asked);
+      host.serve();
+      await player.getByRole("button", { name: "Try again" }).click();
+      await expect(player).toHaveAttribute("data-state", "playing", { timeout: 15_000 });
+      await expect.poll(() => at(page)).toBeGreaterThan(lost - 1);
+      expect(await at(page)).toBeLessThan(lost + 6);
     });
   });
 }
+
+/*
+ * WebKit (the `webkit-iphone` project: an iPhone 15 profile) and Chrome. The regression for the phones'
+ * failure: WebKit's currentTime moves between two reads in one task, and a live read in useSyncExternalStore
+ * made React loop until "Maximum update depth exceeded" took the page down a moment into playback, emptying the
+ * <video> as it went. Now it plays on: the same element, its source intact, no error page.
+ */
+test.describe("@webkit", () => {
+  // A phone: the iPhone 15 profile in the webkit-iphone project; the same size, with touch, in Chrome.
+  test.use({ hasTouch: true, viewport: { width: 393, height: 852 } });
+
+  test("plays on without taking the page down, the same video and its source intact", async ({ page }) => {
+    const crashes: string[] = [];
+    page.on("console", (m) => {
+      if (m.type() === "error" && /Maximum update depth|React error #185/.test(m.text())) crashes.push(m.text());
+    });
+    await serveVideos(page, []);
+    await page.goto("/about");
+    const { player } = await openWalkthrough(page, true);
+    await expect(player).toHaveAttribute("data-state", "playing");
+    await video(page).evaluate((v) => ((window as unknown as { first: Element }).first = v));
+    await expect.poll(() => at(page), { timeout: 20_000 }).toBeGreaterThan(4);
+    expect(await video(page).evaluate((v) => v === (window as unknown as { first: Element }).first)).toBe(true);
+    expect(await video(page).getAttribute("src")).toBe(WALKTHROUGH_VIDEO!.mp4);
+    await expect(player.locator("[data-time]")).toContainText(/^0:0[4-9]/);
+    await expect(page.getByText(/couldn.t load this page/)).toHaveCount(0);
+    expect(crashes).toEqual([]);
+  });
+
+  test("Try again recovers after the host failed", async ({ page }) => {
+    const host = await serveVideos(page, [], "refuse");
+    await page.goto("/about");
+    const { player } = await openWalkthrough(page, true);
+    await expect(player).toHaveAttribute("data-state", "error");
+    await expect(player).toHaveAttribute("data-media-error", /\d/);
+    host.serve();
+    await player.getByRole("button", { name: "Try again" }).tap();
+    await expect(player).toHaveAttribute("data-state", "playing");
+    await expect.poll(() => at(page)).toBeGreaterThan(1);
+  });
+});

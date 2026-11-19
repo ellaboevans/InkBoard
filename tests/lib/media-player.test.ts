@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  AUTO_RETRY_LIMIT,
+  AUTO_RETRY_RESET_SECONDS,
   formatTime,
+  MEDIA_ERR_NETWORK,
   pickSource,
   PLAYBACK_RATES,
   playerKeyAction,
   rateLabel,
+  resumePosition,
+  retriesAfterProgress,
   seekLabel,
+  shouldAutoRetry,
   SKIP_SECONDS,
   skipTo,
   stepVolume,
@@ -127,5 +133,39 @@ describe("the source", () => {
     expect(pickSource(both, true)).toBe(both.hls);
     expect(pickSource(both, false)).toBe(both.mp4);
     expect(pickSource({ mp4: both.mp4 }, true)).toBe(both.mp4);
+  });
+});
+
+describe("recovering from errors (Phase 30 fix-up)", () => {
+  it("retries a network error by itself, once per episode", () => {
+    expect(MEDIA_ERR_NETWORK).toBe(2);
+    expect(AUTO_RETRY_LIMIT).toBe(1);
+    expect(shouldAutoRetry({ code: 2, autoRetries: 0, closed: false })).toBe(true);
+    expect(shouldAutoRetry({ code: 2, autoRetries: 1, closed: false })).toBe(false);
+    expect(shouldAutoRetry({ code: 2, autoRetries: 5, closed: false })).toBe(false);
+  });
+
+  it("never retries other errors by itself: aborted, decode, unsupported (a host refusing from the start), unknown", () => {
+    for (const code of [1, 3, 4, 0, null, undefined]) expect(shouldAutoRetry({ code, autoRetries: 0, closed: false }), String(code)).toBe(false);
+  });
+
+  it("never retries once the reader has closed the player", () => {
+    expect(shouldAutoRetry({ code: 2, autoRetries: 0, closed: true })).toBe(false);
+  });
+
+  it("starts a new episode only after real progress past the retry point", () => {
+    expect(retriesAfterProgress(1, 13.5, 13.5)).toBe(1);
+    expect(retriesAfterProgress(1, 13.5, 13.5 + AUTO_RETRY_RESET_SECONDS - 0.1)).toBe(1);
+    expect(retriesAfterProgress(1, 13.5, 13.5 + AUTO_RETRY_RESET_SECONDS)).toBe(0);
+    // No retry pending, or an unknown time: unchanged.
+    expect(retriesAfterProgress(0, null, 100)).toBe(0);
+    expect(retriesAfterProgress(1, 13.5, NaN)).toBe(1);
+    // A seek back before the retry point isn't progress.
+    expect(retriesAfterProgress(1, 13.5, 2)).toBe(1);
+  });
+
+  it("resumes where the reader was, never at a negative or unknown time", () => {
+    expect(resumePosition(83.4)).toBe(83.4);
+    for (const t of [0, -1, NaN, Infinity]) expect(resumePosition(t), String(t)).toBe(0);
   });
 });

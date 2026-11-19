@@ -120,3 +120,37 @@ export function playerKeyAction(
 export function pickSource(sources: { hls?: string; mp4: string }, canPlayHls: boolean): string {
   return sources.hls && canPlayHls ? sources.hls : sources.mp4;
 }
+
+/*
+ * Recovering from errors (Phase 30 fix-up). What the engines raise, measured
+ * against R2 and a local fixture (docs/PLAN.md Phase 30): a host that refuses
+ * from the start is code 4 (MEDIA_ERR_SRC_NOT_SUPPORTED) in Chrome and
+ * WebKit; a connection lost mid-play is code 2 (MEDIA_ERR_NETWORK) in Chrome
+ * once its own retries give up, while WebKit just stalls (the spinner) and
+ * resumes by itself.
+ */
+
+/** MediaError.MEDIA_ERR_NETWORK: the download failed after it had started. */
+export const MEDIA_ERR_NETWORK = 2;
+/** Automatic retries per error episode: one, never a loop. */
+export const AUTO_RETRY_LIMIT = 1;
+/** The automatic retry waits this long first, so a short drop is over by then (the spinner shows meanwhile). */
+export const AUTO_RETRY_DELAY_MS = 2000;
+/** Playback this far past the retry point ends the episode: a later drop gets its own retry. */
+export const AUTO_RETRY_RESET_SECONDS = 10;
+
+/** Whether an error should be retried by itself: a network error, the episode's first, while the player is still open. */
+export function shouldAutoRetry({ code, autoRetries, closed }: { code: number | null | undefined; autoRetries: number; closed: boolean }): boolean {
+  return !closed && code === MEDIA_ERR_NETWORK && autoRetries < AUTO_RETRY_LIMIT;
+}
+
+/** The retry count once playback has reached `now` after a retry at `retryAt` (null: no retry pending). */
+export function retriesAfterProgress(autoRetries: number, retryAt: number | null, now: number): number {
+  if (retryAt === null || !Number.isFinite(now)) return autoRetries;
+  return now - retryAt >= AUTO_RETRY_RESET_SECONDS ? 0 : autoRetries;
+}
+
+/** Where to resume after an error: the last position known before it, never negative or unknown. */
+export function resumePosition(lastKnown: number): number {
+  return Number.isFinite(lastKnown) && lastKnown > 0 ? lastKnown : 0;
+}

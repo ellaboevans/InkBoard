@@ -10,7 +10,7 @@
  * The one third-party origin is the walkthrough video's host
  * (WALKTHROUGH_VIDEO and WHATS_NEW_VIDEO in src/lib/site.ts), and only when one is set: then
  * `media-src` allows that origin (VIDEO_HOST_ORIGIN) and nothing else (no frames, no
- * scripts: the browser's own player streams it). It has to be site-wide, not
+ * scripts: our own player's <video> streams it, Phase 30). It has to be site-wide, not
  * just /about: a soft navigation to /about keeps the CSP of the page the
  * reader first loaded.
  */

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 import { expect, test, type Page } from "@playwright/test";
@@ -16,6 +18,7 @@ import {
   chooseOption,
 } from "./helpers";
 import { fakePush, type FakePush } from "./push-stub";
+import { VIDEO_HOST_ORIGIN } from "../src/lib/site";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -962,6 +965,29 @@ test("the novels page (ongoing serials): empty, and with an ongoing, a private a
     await expect(page.getByRole("link", { name: "The Locked Room (novel, password protected)" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Continue: Chapter 1" })).toBeVisible();
     await scan(page, `novels page: with novels, ${width}px`);
+  }
+});
+
+test("the video player: open in its dialog, paused with its controls and the speed menu, phone and desktop", async ({ page }) => {
+  // The host answered with the tiny fixture video (e2e/media-player.spec.ts), never really reached.
+  const fixture = readFileSync(path.resolve("e2e/fixtures/player-test.mp4"));
+  await page.route(`${VIDEO_HOST_ORIGIN}/**`, (route) => route.fulfill({ status: 200, headers: { "content-type": "video/mp4" }, body: fixture }));
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/about");
+    await page.getByRole("main").getByRole("button", { name: "Play the walkthrough" }).click();
+    const player = page.getByRole("dialog", { name: "InkBoard walkthrough" }).getByRole("region", { name: "InkBoard walkthrough video" });
+    await expect(player).toBeVisible();
+    await expect(player).not.toHaveAttribute("data-state", "loading");
+    await player.locator("[data-primary]").click(); // pause (it started on open)
+    await expect(player).toHaveAttribute("data-state", "paused");
+    await scan(page, `video player: open, paused, ${width}px`);
+    await player.getByRole("button", { name: /^Playback speed/ }).click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await scan(page, `video player: speed menu, ${width}px`);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   }
 });
 

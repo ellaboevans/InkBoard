@@ -1,7 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { WalkthroughPlayer, WalkthroughVideo, WHATS_NEW_COPY, WhatsNewVideo } from "@/components/about/walkthrough-video";
+import { WALKTHROUGH_COPY, WalkthroughVideo, WHATS_NEW_COPY, WhatsNewVideo } from "@/components/about/walkthrough-video";
+import { MediaPlayer } from "@/components/media-player/media-player";
 import { buildCsp } from "@/lib/csp";
 import {
   HOSTED_VIDEO,
@@ -16,8 +17,8 @@ import {
  * The About page's walkthrough video (docs/PLAN.md, Phase 19) in both states:
  * no video (cover + "Video coming soon", no media origin allowed), and a video
  * set (a play button and no <video> until it's pressed, so nothing from
- * the video host before that; then the browser's own player, HLS (if any) then MP4, from the
- * one origin the CSP then allows in media-src).
+ * the video host before that; then InkBoard's own player in a dialog, Phase
+ * 30, from the one origin the CSP then allows in media-src).
  */
 const VIDEO: WalkthroughSource = {
   hls: `${VIDEO_HOST_ORIGIN}/acct/walk.mp4/ik-master.m3u8?tr=sr-240_360_480_720_1080`,
@@ -91,17 +92,29 @@ describe("with a video", () => {
     expect(out).toContain(">CC BY 4.0<");
   });
 
-  it("then plays in the browser's own player: HLS first, then MP4, with controls, inline on phones, and a name", () => {
-    const out = renderToStaticMarkup(createElement(WalkthroughPlayer, { video: VIDEO }));
-    expect(out).toMatch(/^<video [^>]*controls=""/);
-    expect(out).toContain('playsInline=""');
-    expect(out).toContain('aria-label="InkBoard walkthrough video"');
-    const sources = [...out.matchAll(/<source src="([^"]+)" type="([^"]+)"/g)].map((m) => [m[1].replaceAll("&amp;", "&"), m[2]]);
-    expect(sources).toEqual([
-      [VIDEO.hls, "application/vnd.apple.mpegurl"],
-      [VIDEO.mp4, "video/mp4"],
-    ]);
-    expect(out).not.toContain("<iframe");
+  it("opens a dialog: the button says so, and neither the dialog nor its code is in the page's HTML", () => {
+    const out = html(VIDEO);
+    expect(out).toContain('aria-haspopup="dialog"');
+    expect(out).toContain('data-walkthrough="ready"');
+    expect(out).not.toMatch(/role="dialog"|data-media-player/);
+  });
+
+  it("then plays in our own player: no browser controls, inline on phones, our cover as poster, named for its video", () => {
+    const out = renderToStaticMarkup(
+      createElement(MediaPlayer, { sources: VIDEO, poster: "/_next/static/media/walkthrough-cover-1920.webp", label: WALKTHROUGH_COPY.player }),
+    );
+    expect(out).toMatch(/<div[^>]*role="region"[^>]*aria-label="InkBoard walkthrough video"/);
+    const video = out.match(/<video [^>]*>/)![0];
+    expect(video).not.toContain("controls");
+    expect(video).toContain('playsInline=""');
+    expect(video).toContain('poster="/_next/static/media/walkthrough-cover-1920.webp"');
+    // Without native HLS (as on the server), the MP4; one source, no <source> list.
+    expect(video).toContain(`src="${VIDEO.mp4.replaceAll("&", "&amp;")}"`);
+    expect(out).not.toContain("<source");
+    for (const name of ["Play", "Back 10 seconds", "Forward 10 seconds", "Mute", "Seek", "Volume", "Playback speed 1×"]) {
+      expect(out, name).toContain(`aria-label="${name}"`);
+    }
+    expect(out).not.toMatch(/<iframe|<select/);
   });
 
   it("allows exactly the host's origin in media-src, and changes nothing else in the CSP", () => {
@@ -133,15 +146,10 @@ describe("what's new, the second video", () => {
     expect(out).toContain(`“${WALKTHROUGH_MUSIC_CREDIT.title}” by`);
   });
 
-  it("plays its MP4 alone when there's no HLS, under its own name", () => {
-    const out = renderToStaticMarkup(
-      createElement(WalkthroughPlayer, {
-        video: MP4_ONLY,
-        copy: WHATS_NEW_COPY,
-      }),
-    );
+  it("plays its MP4 under its own name", () => {
+    const out = renderToStaticMarkup(createElement(MediaPlayer, { sources: MP4_ONLY, label: WHATS_NEW_COPY.player }));
     expect(out).toContain('aria-label="What’s new in InkBoard video"');
-    const sources = [...out.matchAll(/<source src="([^"]+)" type="([^"]+)"/g)].map((m) => [m[1], m[2]]);
-    expect(sources).toEqual([[MP4_ONLY.mp4, "video/mp4"]]);
+    expect(out).toContain(`src="${MP4_ONLY.mp4}"`);
+    expect(WHATS_NEW_COPY.title).toBe("What’s new in InkBoard");
   });
 });

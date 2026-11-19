@@ -41,10 +41,10 @@ test("About: what InkBoard is, the videos (nothing from the video host before pl
   if (HOSTED_VIDEO) expect(csp).toContain(`media-src 'self' ${VIDEO_HOST_ORIGIN}`);
   else expect(csp).not.toContain("media-src");
 
-  // Each video: our cover as its play button; pressing it mounts the browser's player, which asks the host for that video only.
+  // Each video: our cover as its play button; pressing it opens our player in a dialog, which asks the host for that video only.
   const videos = [
-    { video: WALKTHROUGH_VIDEO, attr: "data-walkthrough", play: "Play the walkthrough", player: "InkBoard walkthrough video", cover: "walkthrough-cover" },
-    { video: WHATS_NEW_VIDEO, attr: "data-whats-new", play: "Play what’s new", player: "What’s new in InkBoard video", cover: "whats-new-cover" },
+    { video: WALKTHROUGH_VIDEO, attr: "data-walkthrough", play: "Play the walkthrough", title: "InkBoard walkthrough", player: "InkBoard walkthrough video", cover: "walkthrough-cover" },
+    { video: WHATS_NEW_VIDEO, attr: "data-whats-new", play: "Play what’s new", title: "What’s new in InkBoard", player: "What’s new in InkBoard video", cover: "whats-new-cover" },
   ] as const;
   for (const v of videos) {
     const figure = main.locator(`[${v.attr}]`);
@@ -71,19 +71,27 @@ test("About: what InkBoard is, the videos (nothing from the video host before pl
     held = new Promise<void>((resolve) => (release = resolve));
     const before = toHost.length;
     await play.click();
-    const player = main.locator(`video[aria-label="${v.player}"]`);
-    await expect(player).toBeVisible();
-    await expect(player).toBeFocused();
-    await expect(figure).toHaveAttribute(v.attr, "playing");
+    // Our own player, in a dialog named for the video (Phase 30; e2e/media-player.spec.ts tests its controls).
+    const dialog = page.getByRole("dialog", { name: v.title });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("region", { name: v.player })).toBeVisible();
+    await expect(figure).toHaveAttribute(v.attr, "open");
+    const player = page.locator("[data-media-player] video");
     expect(new URL((await player.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(new RegExp(`^/_next/static/.*${v.cover}-1920.*\\.webp$`));
     await expect.poll(() => toHost.length).toBeGreaterThan(before);
     const sources = [v.video.hls, v.video.mp4].filter((u): u is string => !!u).map((u) => u.split("?")[0]);
     expect(toHost.slice(before).every((u) => sources.some((src) => u.startsWith(src)))).toBe(true);
     release();
-    // Refused here, so it says it couldn't load, and the play button is back to try again.
-    await expect(figure.getByRole("alert")).toHaveText(/The video couldn’t load/);
-    await expect(figure).toHaveAttribute(v.attr, "error");
-    await expect(figure.getByRole("button", { name: v.play })).toBeVisible();
+    // Refused here, so the player says it couldn't load, with a way to try again.
+    await expect(dialog.getByRole("alert")).toHaveText(/The video couldn’t load/);
+    await expect(dialog.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Kevin MacLeod" })).toBeVisible();
+    // Closing frees the video and gives focus back to the cover's button.
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator("video")).toHaveCount(0);
+    await expect(figure).toHaveAttribute(v.attr, "ready");
+    await expect(play).toBeFocused();
   }
 
   // The invitation, and the privacy page.

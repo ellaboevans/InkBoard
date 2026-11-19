@@ -1,9 +1,12 @@
 "use client";
 
 import { PlayIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { VIDEO_HOST_NAME, WALKTHROUGH_MUSIC_CREDIT as MUSIC, type WalkthroughSource } from "@/lib/site";
+
+const loadVideoDialog = () => import("@/components/media-player/video-dialog");
+const VideoDialog = lazy(loadVideoDialog);
 import type { StaticImageData } from "next/image";
 import cover1920 from "@/assets/about/walkthrough-cover-1920.webp";
 import cover960 from "@/assets/about/walkthrough-cover-960.webp";
@@ -11,27 +14,23 @@ import whatsNew1920 from "@/assets/about/whats-new-cover-1920.webp";
 import whatsNew960 from "@/assets/about/whats-new-cover-960.webp";
 
 /*
- * The About page's walkthrough video (docs/PLAN.md, Phase 19). The source
- * comes from WALKTHROUGH_VIDEO (src/lib/site.ts), passed in as a prop so tests
- * can render both states.
+ * The About page's videos (docs/PLAN.md, Phases 19 and 30). The sources come
+ * from WALKTHROUGH_VIDEO and WHATS_NEW_VIDEO (src/lib/site.ts), passed in as
+ * props so tests can render every state.
  *
- * - No video: our own cover image with "Video coming soon".
- * - A video: the same cover as a play button. There is no <video> element
- *   until the reader presses it, so nothing is fetched from the video host before
- *   that. The press mounts the browser's own player (flushSync) and calls
- *   play() in the same click handler, so it starts with sound everywhere
- *   (an iframe player, like ImageKit's that we used before R2, autoplays
- *   muted and loads scripts from other origins). HLS first when the source
- *   has it (adaptive, native on Safari, iOS and Android), then the MP4.
+ * - No video: our own cover image with "Video coming soon" (the walkthrough),
+ *   or nothing (What's new).
+ * - A video: the same cover as a play button. Pressing it opens VideoDialog,
+ *   InkBoard's own player in a modal, which starts the video (or waits,
+ *   ready, if the browser refuses to start it). There is no <video> element
+ *   until then, so nothing is fetched from the video host before the press,
+ *   and the dialog's code is loaded only then too (React.lazy; fetched from
+ *   our own origin a moment early when the button is hovered, focused or
+ *   touched), so the prerendered page stays light.
  *
  * The cover is a static import, so it's served from /_next/static/, which the
- * offline worker keeps with a saved copy of the page. Offline, the video
- * fails to load and says so.
- *
- * `WhatsNewVideo` is the second video ("What's new in InkBoard",
- * WHATS_NEW_VIDEO) below it: the same card with its own cover, labels and
- * `data-whats-new` state, and nothing at all while it's null. A source without
- * `hls` plays its MP4 everywhere.
+ * offline worker keeps with a saved copy of the page; it is also the player's
+ * poster. Offline, the video fails to load and the player says so.
  */
 
 export const COVER_ALT =
@@ -42,6 +41,8 @@ type VideoCopy = {
   cover: { small: StaticImageData; large: StaticImageData };
   /** The play button's visible text, which names it. */
   play: string;
+  /** The player dialog's visible title. */
+  title: string;
   /** The player's accessible name. */
   player: string;
   /** The figure's state attribute, so each video can be found on its own. */
@@ -50,18 +51,20 @@ type VideoCopy = {
   ready: string;
 };
 
-const WALKTHROUGH_COPY: VideoCopy = {
+export const WALKTHROUGH_COPY: VideoCopy = {
   cover: { small: cover960, large: cover1920 },
   play: "Play the walkthrough",
+  title: "InkBoard walkthrough",
   player: "InkBoard walkthrough video",
   state: "data-walkthrough",
   ready:
-    `Six minutes, with narration. It streams from our video host, ${VIDEO_HOST_NAME}, once you press play; nothing is loaded from it before that.`,
+    `Six minutes, with narration. It plays here, streaming from our video host, ${VIDEO_HOST_NAME}, once you press play; nothing is loaded from it before that.`,
 };
 
 export const WHATS_NEW_COPY: VideoCopy = {
   cover: { small: whatsNew960, large: whatsNew1920 },
   play: "Play what’s new",
+  title: "What’s new in InkBoard",
   player: "What’s new in InkBoard video",
   state: "data-whats-new",
   ready:
@@ -80,36 +83,6 @@ function Cover({ alt, cover = WALKTHROUGH_COPY.cover }: { alt: string; cover?: V
       alt={alt}
       className="size-full object-cover"
     />
-  );
-}
-
-/** The browser's own player, mounted once the reader presses play. */
-export function WalkthroughPlayer({
-  video,
-  videoRef,
-  onError,
-  copy = WALKTHROUGH_COPY,
-}: {
-  video: WalkthroughSource;
-  videoRef?: React.Ref<HTMLVideoElement>;
-  onError?: () => void;
-  copy?: VideoCopy;
-}) {
-  return (
-    <video
-      ref={videoRef}
-      controls
-      playsInline
-      preload="metadata"
-      poster={copy.cover.large.src}
-      aria-label={copy.player}
-      onError={onError}
-      className="size-full bg-black"
-    >
-      {video.hls && <source src={video.hls} type="application/vnd.apple.mpegurl" />}
-      {/* The last source failing means none could play: an error fires here, not on the <video>. */}
-      <source src={video.mp4} type="video/mp4" onError={onError} />
-    </video>
   );
 }
 
@@ -158,59 +131,68 @@ export function WhatsNewVideo({ video }: { video: WalkthroughSource | null }) {
 }
 
 function VideoCard({ video, copy }: { video: WalkthroughSource; copy: VideoCopy }) {
-  const [state, setState] = useState<"ready" | "playing" | "error">("ready");
-  const player = useRef<HTMLVideoElement>(null);
+  // `mounted` stays true after the first press, so reopening needs no new load; the dialog itself
+  // unmounts its <video> whenever it closes.
+  const [mounted, setMounted] = useState(false);
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
   const frame = FRAME;
 
-  const play = () => {
-    // Mount the player now, then start it while this click still counts as the reader's gesture.
-    flushSync(() => setState("playing"));
-    const el = player.current;
-    if (!el) return;
-    // The button that had focus is gone: hand focus to the player's controls.
-    el.focus();
-    // A refusal (rare) leaves the player's own controls to start it.
-    el.play().catch(() => {});
+  const press = () => {
+    // Synchronously, while this press still counts as the reader's gesture, so the player may start with sound.
+    flushSync(() => {
+      setMounted(true);
+      setOpen(true);
+    });
+  };
+  const prefetch = () => {
+    loadVideoDialog().catch(() => {});
   };
 
   return (
-    <figure className="grid gap-2" {...{ [copy.state]: state }}>
+    <figure className="grid gap-2" {...{ [copy.state]: open ? "open" : "ready" }}>
       <div className={frame}>
-        {/* After an error the button is back, so pressing play again is the retry. */}
-        {state !== "playing" ? (
-          <button
-            type="button"
-            onClick={play}
-            className="group absolute inset-0 size-full cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            {/* The button is named by its visible text; the cover is decoration here. */}
-            <Cover alt="" cover={copy.cover} />
-            {/* Bottom right, over the screenshot half of the cover, so it never hides the cover's title. */}
-            <span className="absolute inset-0 flex items-end justify-end p-3 sm:p-4">
-              <span className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-md transition-transform group-hover:scale-105 sm:px-5 sm:py-3 sm:text-base">
-                <PlayIcon className="size-4 fill-current sm:size-5" aria-hidden />
-                {copy.play}
-              </span>
+        <button
+          ref={button}
+          type="button"
+          onClick={press}
+          onPointerEnter={prefetch}
+          onPointerDown={prefetch}
+          onFocus={prefetch}
+          aria-haspopup="dialog"
+          className="group absolute inset-0 size-full cursor-pointer focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          {/* The button is named by its visible text; the cover is decoration here. */}
+          <Cover alt="" cover={copy.cover} />
+          {/* Bottom right, over the screenshot half of the cover, so it never hides the cover's title. */}
+          <span className="absolute inset-0 flex items-end justify-end p-3 sm:p-4">
+            <span className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-md transition-transform group-hover:scale-105 motion-reduce:transition-none sm:px-5 sm:py-3 sm:text-base">
+              <PlayIcon className="size-4 fill-current sm:size-5" aria-hidden />
+              {copy.play}
             </span>
-          </button>
-        ) : (
-          <WalkthroughPlayer video={video} videoRef={player} copy={copy} onError={() => setState("error")} />
-        )}
+          </span>
+        </button>
       </div>
       <figcaption className="grid gap-1 text-sm text-muted-foreground">
-        {state === "error" ? (
-          <p role="alert" className="text-destructive">
-            The video couldn’t load. Check your connection and press play to try again.
-          </p>
-        ) : (
-          <p>
-            {state === "ready" ? copy.ready : `Streaming from our video host, ${VIDEO_HOST_NAME}.`}
-          </p>
-        )}
+        <p>{copy.ready}</p>
         <p>
           <MusicCredit />
         </p>
       </figcaption>
+      {mounted && (
+        <Suspense fallback={null}>
+          <VideoDialog
+            open={open}
+            onOpenChange={setOpen}
+            title={copy.title}
+            label={copy.player}
+            sources={video}
+            poster={copy.cover.large.src}
+            credit={<MusicCredit />}
+            returnFocus={button}
+          />
+        </Suspense>
+      )}
     </figure>
   );
 }

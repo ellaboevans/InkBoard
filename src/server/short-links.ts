@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { chapters, editors, novels, poems, shortLinks } from "@/db/schema";
 import { newShortCode, parseShortCode } from "@/lib/share-image/short-code";
 import { SHARE_VISIT_WINDOW_SECONDS, shareVisitKey } from "@/lib/share-image/visits";
@@ -66,7 +67,7 @@ export async function ensureChapterShortCode(chapterId: string): Promise<string 
       await db.execute(sql`
         INSERT INTO short_links (chapter_id, code)
         SELECT c.id, ${newShortCode()} FROM chapters c JOIN novels n ON n.id = c.novel_id
-        WHERE c.id = ${chapterId} AND c.status = 'published' AND n.visibility = 'public'
+        WHERE c.id = ${chapterId} AND ${chapterReleased("c")} AND n.visibility = 'public'
         ON CONFLICT (chapter_id) DO NOTHING
       `);
     } catch (err) {
@@ -109,7 +110,7 @@ export async function resolveShortCode(raw: string): Promise<ShortLinkTarget | n
     .from(shortLinks)
     .leftJoin(poems, and(eq(poems.id, shortLinks.poemId), eq(poems.status, "published"), eq(poems.visibility, "public")))
     .leftJoin(poemAuthor, and(eq(poemAuthor.id, poems.editorId), isNotNull(poemAuthor.penName)))
-    .leftJoin(chapters, and(eq(chapters.id, shortLinks.chapterId), eq(chapters.status, "published")))
+    .leftJoin(chapters, and(eq(chapters.id, shortLinks.chapterId), chapterReleased()))
     .leftJoin(novels, and(eq(novels.id, chapters.novelId), eq(novels.visibility, "public")))
     .leftJoin(novelAuthor, and(eq(novelAuthor.id, novels.editorId), isNotNull(novelAuthor.penName)))
     .where(eq(shortLinks.code, code))

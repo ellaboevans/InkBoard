@@ -68,6 +68,12 @@ async function Novels({ searchParams }: Pick<PageProps<"/admin/novels">, "search
                       <span className="tabular-nums">
                         {n.publishedCount} of {n.chapterCount} {n.chapterCount === 1 ? "chapter" : "chapters"} published
                       </span>
+                      {n.scheduledCount > 0 && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">{n.scheduledCount} scheduled</span>
+                        </>
+                      )}
                       <span aria-hidden>·</span>
                       <span>Edited {dayFormat.format(n.updatedAt)}</span>
                     </span>

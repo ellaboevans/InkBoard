@@ -20,6 +20,8 @@ import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/l
 import { hashPassword } from "./passwords";
 import { PASSWORD_SETTINGS_CHANGED } from "./poems";
 import { deleteCoverFiles } from "./novel-covers";
+import { chapterReleased, chapterScheduled } from "./chapter-release";
+import { SCHEDULE_INVALID, SCHEDULE_MAX_DAYS, SCHEDULE_MIN_LEAD_MINUTES, SCHEDULE_TOO_LATE, SCHEDULE_TOO_SOON } from "@/lib/chapter-schedule";
 import { compact, endPosition, moveItem, reorderItems, type Direction, type PositionSpec, type Tx } from "./positions";
 import { recordVersion, type RevisionSpec } from "./revisions";
 
@@ -56,7 +58,17 @@ import { recordVersion, type RevisionSpec } from "./revisions";
  *   last published chapter. Hashes never leave this module: reads return
  *   `hasPassword`.
  *
- * No reader queries here: those live in board.ts (published chapters only,
+ * - Scheduled chapters (Phase 28): status 'published' with release_at in the
+ *   future. "Publish" sets release_at = now(); "Schedule" a future time (at
+ *   least SCHEDULE_MIN_LEAD_MINUTES, at most SCHEDULE_MAX_DAYS ahead, by the
+ *   database clock); "Publish now" brings it to now(); "Cancel" (or Unpublish)
+ *   is back to draft. A chapter that has never been out takes its release
+ *   time as published_at, so readers' dates are right from the release minute
+ *   with nothing to run, and the slug is fixed from scheduling (published_at
+ *   is set); cancelling clears it again. Readers see a chapter only once
+ *   chapterReleased() holds (chapter-release.ts).
+ *
+ * No reader queries here: those live in board.ts (released chapters only,
  * numbered over published chapters, chapter text through CASE WHEN).
  */
 
@@ -135,6 +147,10 @@ const chapterSchema = z.object({
     ),
   /** Absent = keep the current status. */
   status: z.enum(["draft", "published"]).optional(),
+  /** Schedule it for this instant (Phase 28; the browser turns the writer's local day and time into it). */
+  releaseAt: z.iso.datetime({ offset: true, error: SCHEDULE_INVALID }).optional(),
+  /** "Publish now" on a scheduled chapter: release it at once. */
+  releaseNow: z.boolean().optional(),
 });
 
 export type NovelInput = z.input<typeof novelSchema>;
@@ -154,6 +170,9 @@ function parseWith<S extends z.ZodType, E extends Record<string, string | undefi
 }
 
 const EMPTY_CHAPTER = "The chapter is empty: write something before publishing it";
+/** notified_at for a chapter whose notification is settled as never to be sent (announceChapter refuses it). */
+export const NEVER_ANNOUNCED = sql`'-infinity'::timestamptz`;
+const ALREADY_LIVE = "This chapter is already published. Unpublish it first to schedule it.";
 const PRIVATE_NEEDS_PASSWORD = "Private novels need a password readers can use";
 const TOO_MANY_CHAPTERS = `A novel can have at most ${CHAPTERS_MAX} chapters`;
 
@@ -255,7 +274,7 @@ const touchNovel = (tx: Tx, novelId: string) =>
 
 /**
  * After unpublishing or deleting a published chapter: if none of the novel's
- * chapters is published any more, readers can't see it, so revoke their
+ * chapters is released any more, readers can't see it, so revoke their
  * unlocks (as unpublishing a poem does). Publishing again asks for the
  * password again. Call under the novel lock.
  */
@@ -263,7 +282,7 @@ async function revokeIfNothingPublished(tx: Tx, novelId: string) {
   await tx.execute(sql`
     UPDATE novels SET password_version = password_version + 1
     WHERE id = ${novelId}
-      AND NOT EXISTS (SELECT 1 FROM chapters WHERE novel_id = ${novelId} AND status = 'published')
+      AND NOT EXISTS (SELECT 1 FROM chapters c WHERE c.novel_id = ${novelId} AND ${chapterReleased("c")})
   `);
 }
 
@@ -291,7 +310,10 @@ export type NovelSummary = {
   visibility: "public" | "private";
   language: PoemLanguage | null;
   chapterCount: number;
+  /** Released chapters: what readers see. */
   publishedCount: number;
+  /** Published with a release time still ahead (Phase 28). */
+  scheduledCount: number;
   updatedAt: Date;
 };
 
@@ -302,11 +324,15 @@ export type EditorChapterSummary = {
   position: number;
   status: "draft" | "published";
   publishedAt: Date | null;
+  /** When it goes (or went) live; null for a draft. */
+  releaseAt: Date | null;
+  /** Published with its release still ahead (by the database clock): readers see nothing of it yet. */
+  scheduled: boolean;
   wordCount: number;
   updatedAt: Date;
 };
 
-export type EditorNovel = Omit<NovelSummary, "chapterCount" | "publishedCount"> & {
+export type EditorNovel = Omit<NovelSummary, "chapterCount" | "publishedCount" | "scheduledCount"> & {
   blurb: string | null;
   /** The uploaded cover's key (public, like the novel's URLs), or null: the drawn cover. */
   coverKey: string | null;
@@ -335,6 +361,8 @@ const chapterSummaryColumns = {
   position: chapters.position,
   status: chapters.status,
   publishedAt: chapters.publishedAt,
+  releaseAt: chapters.releaseAt,
+  scheduled: sql<boolean>`${chapterScheduled()}`,
   wordCount: chapters.wordCount,
   updatedAt: chapters.updatedAt,
 };
@@ -345,7 +373,8 @@ export async function listNovels(editorId: string): Promise<NovelSummary[]> {
     .select({
       ...novelColumns,
       chapterCount: sql<number>`count(${chapters.id})::int`,
-      publishedCount: sql<number>`count(${chapters.id}) FILTER (WHERE ${chapters.status} = 'published')::int`,
+      publishedCount: sql<number>`count(${chapters.id}) FILTER (WHERE ${chapterReleased()})::int`,
+      scheduledCount: sql<number>`count(${chapters.id}) FILTER (WHERE ${chapterScheduled()})::int`,
     })
     .from(novels)
     .leftJoin(chapters, eq(chapters.novelId, novels.id))
@@ -465,6 +494,8 @@ export async function updateNovel(editorId: string, novelId: string, raw: unknow
       } else if (!current.passwordHash) {
         return { ok: false, errors: { password: PRIVATE_NEEDS_PASSWORD } };
       }
+      // The visibility at a chapter's release decides its notification (Phase 28): settle before it changes.
+      if (visibility !== current.visibility) await settleReleasedAnnouncements(tx, novelId);
       const followTitle = data.title !== current.title && !(await everPublished(tx, novelId));
       const [novel] = await tx
         .update(novels)
@@ -510,7 +541,7 @@ export async function deleteNovel(editorId: string, novelId: string): Promise<bo
 export type ChapterResult =
   | {
       ok: true;
-      chapter: { id: string; slug: string; position: number; status: "draft" | "published" };
+      chapter: { id: string; slug: string; position: number; status: "draft" | "published"; releaseAt: Date | null; scheduled: boolean };
       /** This save published the chapter for the first time ever. */
       publishedNow: boolean;
       /**
@@ -527,6 +558,8 @@ const chapterReturn = {
   slug: chapters.slug,
   position: chapters.position,
   status: chapters.status,
+  releaseAt: chapters.releaseAt,
+  scheduled: sql<boolean>`${chapterScheduled()}`,
 };
 
 /**
@@ -546,9 +579,75 @@ async function claimChapterAnnouncement(tx: Tx, chapterId: string): Promise<bool
     FROM novels n JOIN editors e ON e.id = n.editor_id
     WHERE chapters.id = ${chapterId} AND n.id = chapters.novel_id AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
       AND n.visibility = 'public'
-      AND chapters.notified_at IS NULL AND chapters.status = 'published' AND chapters.published_at = now()
+      AND chapters.notified_at IS NULL AND ${chapterReleased()} AND chapters.published_at = now()
   `);
   return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
+}
+
+/**
+ * Before a novel's visibility changes (in updateNovel, under its locks): its
+ * released chapters still waiting for their "new chapter" notification (a
+ * scheduled release the daily step hasn't reached, or a chapter released
+ * while the novel was private) were released under the *old* visibility.
+ * Private then: never announced, even once public. Public then: the novel is
+ * about to go private, so announceChapter would refuse it anyway. Either way
+ * the claim is settled now, so the visibility at release decides, not the
+ * visibility when the step runs (Phase 28). Settled as NEVER_ANNOUNCED, not a
+ * claim time: announceChapter sends only for a real claim.
+ */
+async function settleReleasedAnnouncements(tx: Tx, novelId: string) {
+  await tx.execute(sql`
+    UPDATE chapters c SET notified_at = ${NEVER_ANNOUNCED}
+    WHERE c.novel_id = ${novelId} AND c.notified_at IS NULL AND ${chapterReleased("c")}
+  `);
+}
+
+/**
+ * Why the (locked) chapter can't be scheduled for `iso`, by the database
+ * clock, or null: not while it is live, and only SCHEDULE_MIN_LEAD_MINUTES to
+ * SCHEDULE_MAX_DAYS ahead.
+ */
+async function scheduleProblemAt(tx: Tx, chapterId: string, iso: string): Promise<string | null> {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return SCHEDULE_INVALID;
+  const t = sql`${at.toISOString()}::timestamptz`;
+  const [row] = await tx
+    .select({
+      released: sql<boolean>`${chapterReleased()}`,
+      tooSoon: sql<boolean>`${t} < now() + make_interval(mins => ${SCHEDULE_MIN_LEAD_MINUTES})`,
+      tooLate: sql<boolean>`${t} > now() + make_interval(days => ${SCHEDULE_MAX_DAYS})`,
+    })
+    .from(chapters)
+    .where(eq(chapters.id, chapterId));
+  if (!row) return SCHEDULE_INVALID;
+  if (row.released) return ALREADY_LIVE;
+  if (row.tooSoon) return SCHEDULE_TOO_SOON;
+  if (row.tooLate) return SCHEDULE_TOO_LATE;
+  return null;
+}
+
+/** The columns scheduling sets: published, going out at `iso`. */
+function scheduledFor(iso: string) {
+  const when = sql`${new Date(iso).toISOString()}::timestamptz`;
+  return { status: "published" as const, releaseAt: when, publishedAt: firstRelease(when) };
+}
+
+/** published_at for a chapter going out at `at`: its first release keeps the earlier date. */
+const firstRelease = (at: SQL) =>
+  sql`CASE WHEN ${chapters.publishedAt} IS NULL OR ${chapters.publishedAt} > now() THEN ${at} ELSE ${chapters.publishedAt} END`;
+/** Back to draft: a chapter that was never out forgets its scheduled first release (its slug follows the title again). */
+const unrelease = sql`CASE WHEN ${chapters.publishedAt} > now() THEN NULL ELSE ${chapters.publishedAt} END`;
+
+/**
+ * The columns a status change sets. Draft → published goes live now; back to
+ * draft drops the release (and a never-released chapter's first-release date);
+ * published → published keeps its release (an edit of a scheduled chapter keeps
+ * its schedule) unless `releaseNow` ("Publish now" on a scheduled chapter).
+ */
+function statusChange(from: "draft" | "published", to: "draft" | "published", releaseNow = false) {
+  if (to === "draft") return from === "draft" ? {} : { status: "draft" as const, releaseAt: null, publishedAt: unrelease };
+  if (from === "draft" || releaseNow) return { status: "published" as const, releaseAt: sql`now()`, publishedAt: firstRelease(sql`now()`) };
+  return {};
 }
 
 /** A new chapter at the end of the novel (a draft unless `status: "published"`). */
@@ -574,6 +673,7 @@ export async function createChapter(editorId: string, novelId: string, raw: unkn
           position: endPosition(CHAPTER_POSITIONS, novelId),
           status,
           publishedAt: status === "published" ? sql`now()` : null,
+          releaseAt: status === "published" ? sql`now()` : null,
           wordCount: countWords(data.body),
         })
         .returning(chapterReturn);
@@ -608,25 +708,35 @@ export async function saveChapter(editorId: string, chapterId: string, raw: unkn
           body: chapters.body,
           status: chapters.status,
           publishedAt: chapters.publishedAt,
+          scheduled: sql<boolean>`${chapterScheduled()}`,
+          neverOut: sql<boolean>`${chapters.publishedAt} IS NULL OR ${chapters.publishedAt} > now()`,
           updatedAt: chapters.updatedAt,
         })
         .from(chapters)
         .where(eq(chapters.id, chapterId))
         .for("update");
       if (!current) return { ok: false, notFound: true };
-      const status = data.status ?? current.status;
+      const status = data.releaseAt ? "published" : (data.status ?? current.status);
       if (status === "published" && data.body === "") return { ok: false, errors: { body: EMPTY_CHAPTER } };
+      if (data.releaseAt) {
+        const problem = await scheduleProblemAt(tx, chapterId, data.releaseAt);
+        if (problem) return { ok: false, errors: { releaseAt: problem } };
+      }
 
-      const retitledDraft = !current.publishedAt && data.title !== current.title;
+      // The slug follows the title until the chapter has a (first) release, past or scheduled; a
+      // cancelled schedule of a chapter never out takes its title's slug again.
+      const unscheduled = current.scheduled && current.neverOut && status === "draft";
+      const retitledDraft = (!current.publishedAt && data.title !== current.title) || unscheduled;
       const [chapter] = await tx
         .update(chapters)
         .set({
           title: data.title,
           body: data.body,
-          status,
           wordCount: countWords(data.body),
           ...(retitledDraft && { slug: await uniqueChapterSlug(tx, novelId, data.title, chapterId) }),
-          ...(status === "published" && { publishedAt: sql`COALESCE(${chapters.publishedAt}, now())` }),
+          ...(data.releaseAt
+            ? scheduledFor(data.releaseAt)
+            : statusChange(current.status, status, data.releaseNow === true && current.scheduled)),
         })
         .where(eq(chapters.id, chapterId))
         .returning(chapterReturn);
@@ -641,12 +751,17 @@ export async function saveChapter(editorId: string, chapterId: string, raw: unkn
       await touchNovel(tx, novelId);
       if (current.status === "published" && status === "draft") await revokeIfNothingPublished(tx, novelId);
       const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
-      return { ok: true, chapter, publishedNow: status === "published" && !current.publishedAt, announce };
+      const wentLive = !data.releaseAt && status === "published" && (current.status === "draft" || (data.releaseNow === true && current.scheduled));
+      return { ok: true, chapter, publishedNow: wentLive && current.neverOut, announce };
     }),
   );
 }
 
-/** Change only the status (no version is recorded: the title and text don't change). */
+/**
+ * Change only the status (no version is recorded: the title and text don't
+ * change). Publishing a scheduled chapter is "Publish now"; unpublishing one
+ * cancels its schedule.
+ */
 async function setChapterStatus(editorId: string, chapterId: string, status: "draft" | "published"): Promise<ChapterResult> {
   if (!isId(chapterId)) return { ok: false, notFound: true };
   return getDb().transaction(async (tx): Promise<ChapterResult> => {
@@ -654,7 +769,14 @@ async function setChapterStatus(editorId: string, chapterId: string, status: "dr
     const novelId = await novelOfChapter(tx, editorId, chapterId);
     if (!novelId || !(await lockNovel(tx, editorId, novelId))) return { ok: false, notFound: true };
     const [row] = await tx
-      .select({ body: chapters.body, status: chapters.status, publishedAt: chapters.publishedAt })
+      .select({
+        title: chapters.title,
+        body: chapters.body,
+        status: chapters.status,
+        publishedAt: chapters.publishedAt,
+        scheduled: sql<boolean>`${chapterScheduled()}`,
+        neverOut: sql<boolean>`${chapters.publishedAt} IS NULL OR ${chapters.publishedAt} > now()`,
+      })
       .from(chapters)
       .where(eq(chapters.id, chapterId))
       .for("update");
@@ -662,18 +784,108 @@ async function setChapterStatus(editorId: string, chapterId: string, status: "dr
     if (status === "published" && row.body === "") return { ok: false, errors: { body: EMPTY_CHAPTER } };
     const [chapter] = await tx
       .update(chapters)
-      .set({ status, ...(status === "published" && { publishedAt: sql`COALESCE(${chapters.publishedAt}, now())` }) })
+      .set({
+        status,
+        ...statusChange(row.status, status, row.scheduled),
+        // A cancelled schedule of a chapter never out: its slug follows its title again.
+        ...(status === "draft" && row.scheduled && row.neverOut && { slug: await uniqueChapterSlug(tx, novelId, row.title, chapterId) }),
+      })
       .where(eq(chapters.id, chapterId))
       .returning(chapterReturn);
     await touchNovel(tx, novelId);
     if (row.status === "published" && status === "draft") await revokeIfNothingPublished(tx, novelId);
     const announce = status === "published" && (await claimChapterAnnouncement(tx, chapterId));
-    return { ok: true, chapter, publishedNow: status === "published" && !row.publishedAt, announce };
+    const wentLive = status === "published" && (row.status === "draft" || row.scheduled);
+    return { ok: true, chapter, publishedNow: wentLive && row.neverOut, announce };
   });
 }
 
+/** Publish a draft, or release a scheduled chapter at once ("Publish now"). */
 export const publishChapter = (editorId: string, chapterId: string) => setChapterStatus(editorId, chapterId, "published");
+/** Back to draft: unpublish a live chapter, or cancel a scheduled one. */
 export const unpublishChapter = (editorId: string, chapterId: string) => setChapterStatus(editorId, chapterId, "draft");
+
+export type ScheduleResult =
+  | { ok: true; chapter: { id: string; slug: string; position: number; releaseAt: Date } }
+  | { ok: false; error: string }
+  | { ok: false; notFound: true };
+
+const releaseInput = z.iso.datetime({ offset: true });
+
+/**
+ * Schedule (or reschedule) a draft or scheduled chapter to go live at
+ * `releaseAt` (an ISO instant: the browser turned the writer's local day and
+ * time into it). At least SCHEDULE_MIN_LEAD_MINUTES and at most
+ * SCHEDULE_MAX_DAYS ahead, by the database clock. A chapter already live
+ * can't be scheduled (unpublish it first). Status, release time and a
+ * never-released chapter's first-release date only: no version (the title
+ * and text don't change), no announcement (that comes once it is released:
+ * claimReleasedChapters). Readers see nothing until then.
+ */
+export async function scheduleChapter(editorId: string, chapterId: string, releaseAt: unknown): Promise<ScheduleResult> {
+  if (!isId(chapterId)) return { ok: false, notFound: true };
+  const parsed = releaseInput.safeParse(releaseAt);
+  if (!parsed.success) return { ok: false, error: SCHEDULE_INVALID };
+  return getDb().transaction(async (tx): Promise<ScheduleResult> => {
+    await lockEditor(tx, editorId);
+    const novelId = await novelOfChapter(tx, editorId, chapterId);
+    if (!novelId || !(await lockNovel(tx, editorId, novelId))) return { ok: false, notFound: true };
+    const [row] = await tx.select({ body: chapters.body }).from(chapters).where(eq(chapters.id, chapterId)).for("update");
+    if (!row) return { ok: false, notFound: true };
+    if (row.body === "") return { ok: false, error: EMPTY_CHAPTER };
+    const problem = await scheduleProblemAt(tx, chapterId, parsed.data);
+    if (problem) return { ok: false, error: problem };
+    const [chapter] = await tx
+      .update(chapters)
+      .set(scheduledFor(parsed.data))
+      .where(eq(chapters.id, chapterId))
+      .returning({ id: chapters.id, slug: chapters.slug, position: chapters.position, releaseAt: chapters.releaseAt });
+    await touchNovel(tx, novelId);
+    return { ok: true, chapter: { ...chapter, releaseAt: chapter.releaseAt! } };
+  });
+}
+
+/**
+ * Claim the "new chapter" notification of every released chapter still
+ * waiting for one (scheduled releases: Phase 28), through the same once-only
+ * rule as a publish: public novel, author with a pen name, notified_at still
+ * empty, and this release its first (published_at = release_at). Per editor
+ * in the usual lock order (editor → novels in id order → chapters). Returns
+ * the claimed ids; send each with announceChapter (followers only, the usual
+ * limits). Run by the daily cleanup for everyone, and for one editor after
+ * each of their novel and chapter actions (whichever comes first).
+ */
+export async function claimReleasedChapters(onlyEditorId?: string): Promise<string[]> {
+  if (onlyEditorId !== undefined && !isId(onlyEditorId)) return [];
+  const db = getDb();
+  const due = (await db.execute(sql`
+    SELECT DISTINCT n.editor_id AS "editorId", n.id AS "novelId"
+    FROM chapters c JOIN novels n ON n.id = c.novel_id
+    WHERE c.notified_at IS NULL AND ${chapterReleased("c")} AND c.published_at = c.release_at
+      AND n.visibility = 'public' ${onlyEditorId ? sql`AND n.editor_id = ${onlyEditorId}` : sql``}
+    ORDER BY 1, 2
+  `)) as unknown as { rows: { editorId: string; novelId: string }[] };
+  const byEditor = new Map<string, string[]>();
+  for (const r of due.rows) byEditor.set(r.editorId, [...(byEditor.get(r.editorId) ?? []), r.novelId]);
+  const claimed: string[] = [];
+  for (const [editorId, novelIds] of byEditor) {
+    const ids = await db.transaction(async (tx) => {
+      await lockEditor(tx, editorId);
+      for (const id of novelIds) await lockNovel(tx, editorId, id);
+      const r = (await tx.execute(sql`
+        UPDATE chapters c SET notified_at = now()
+        FROM novels n JOIN editors e ON e.id = n.editor_id
+        WHERE n.id = c.novel_id AND n.editor_id = ${editorId} AND c.novel_id IN (${sql.join(novelIds.map((id) => sql`${id}::uuid`), sql`, `)})
+          AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL AND n.visibility = 'public'
+          AND c.notified_at IS NULL AND ${chapterReleased("c")} AND c.published_at = c.release_at
+        RETURNING c.id
+      `)) as unknown as { rows: { id: string }[] };
+      return r.rows.map((x) => x.id);
+    });
+    claimed.push(...ids);
+  }
+  return claimed;
+}
 
 /** Delete a chapter; the rest close up (positions stay 1..n). */
 export async function deleteChapter(editorId: string, chapterId: string): Promise<boolean> {
@@ -784,6 +996,8 @@ export type NovelForExport = {
     position: number;
     status: "draft" | "published";
     publishedAt: Date | null;
+    /** Phase 28: when it goes live, while that is still ahead (by the database clock); else null. */
+    scheduledFor: Date | null;
     createdAt: Date;
     updatedAt: Date;
     wordCount: number;
@@ -856,7 +1070,9 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
         slug: c.slug,
         position: c.position,
         status: c.status,
-        publishedAt: c.publishedAt,
+        // A scheduled chapter's published_at is its coming first release: not "published" yet.
+        publishedAt: c.scheduled ? null : c.publishedAt,
+        scheduledFor: c.scheduled ? c.releaseAt : null,
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
         wordCount: c.wordCount,

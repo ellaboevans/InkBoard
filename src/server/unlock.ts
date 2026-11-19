@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { chapters, editors, novels, poems } from "@/db/schema";
 import { hmac, safeEqual } from "./crypto";
 import { verifyPassword } from "./passwords";
@@ -138,7 +139,7 @@ async function loadNovelLock(authorSlug: string, novelSlug: string): Promise<Loc
           getDb()
             .select({ one: sql`1` })
             .from(chapters)
-            .where(and(eq(chapters.novelId, novels.id), eq(chapters.status, "published"))),
+            .where(and(eq(chapters.novelId, novels.id), chapterReleased())),
         ),
       ),
     )
@@ -231,7 +232,7 @@ export async function readUnlockedChapterBody(
   const [row] = await getDb()
     .select({ body: chapters.body })
     .from(chapters)
-    .where(and(eq(chapters.novelId, lock.id), eq(chapters.slug, chapterSlug), eq(chapters.status, "published")))
+    .where(and(eq(chapters.novelId, lock.id), eq(chapters.slug, chapterSlug), chapterReleased()))
     .limit(1);
   return row?.body ?? null;
 }

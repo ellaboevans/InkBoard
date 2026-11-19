@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { withRelease } from "../support/chapters";
 import { getDb } from "@/db";
 import { chapters, editors, novels } from "@/db/schema";
 import { coverHex, oklchToHex } from "@/lib/novel-cover";
@@ -33,13 +34,13 @@ async function setup() {
     wordCount: 2,
     publishedAt: status === "published" ? new Date("2026-11-01T10:00:00Z") : null,
   });
-  await db.insert(chapters).values([
+  await db.insert(chapters).values(withRelease([
     ch(ewe.id, "one", 1, "published", "*Nùnyá* came late.\n\n* * *\n\nShe waited.\nAnd waited."),
     ch(ewe.id, "secret-draft", 2, "draft", "DRAFT TEXT"),
     ch(ewe.id, "chapter", 3, "published"),
     ch(plain.id, "only", 1, "published"),
     ch(drafty.id, "hidden", 1, "draft", "HIDDEN TEXT"),
-  ]);
+  ]));
 }
 
 describe("JSON-LD for novels", () => {

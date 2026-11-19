@@ -12,6 +12,7 @@ import {
   type SitemapChapter,
 } from "./board";
 import { BOARD_TAG } from "./cache-tags";
+import { releaseAwareCacheLife } from "./release-cache";
 import { loadAuthorFeed, loadNovelFeed, loadSiteFeed } from "./feeds";
 
 /*
@@ -19,12 +20,16 @@ import { loadAuthorFeed, loadNovelFeed, loadSiteFeed } from "./feeds";
  * every admin mutation calls updateTag(BOARD_TAG), so edits show up on the
  * next request. Data written outside the app (e.g. `pnpm db:seed`) appears
  * when the cache revalidates (hourly), or after restarting the server.
+ *
+ * Anything that can show chapters lives only until the next scheduled release
+ * (releaseAwareCacheLife, Phase 28), so a scheduled chapter appears at its
+ * time with nothing running then. Poem-only data keeps cacheLife("hours").
  */
 
 export async function getBoardSections(): Promise<BoardSection[]> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadBoardSections();
 }
 
@@ -41,7 +46,7 @@ export async function getReaderPoem(
 export async function getAuthorPage(authorSlug: string): Promise<AuthorPage | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadAuthorPage(authorSlug);
 }
 
@@ -49,7 +54,7 @@ export async function getAuthorPage(authorSlug: string): Promise<AuthorPage | nu
 export async function getSiteFeed(): Promise<string> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadSiteFeed();
 }
 
@@ -57,7 +62,7 @@ export async function getSiteFeed(): Promise<string> {
 export async function getAuthorFeed(authorSlug: string): Promise<string | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadAuthorFeed(authorSlug);
 }
 
@@ -73,7 +78,7 @@ export async function getCollectionPage(authorSlug: string, collectionSlug: stri
 export async function getNovelPage(authorSlug: string, novelSlug: string): Promise<NovelPage | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadNovelPage(authorSlug, novelSlug);
 }
 
@@ -81,7 +86,7 @@ export async function getNovelPage(authorSlug: string, novelSlug: string): Promi
 export async function getReaderChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ReaderChapter | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadReaderChapter(authorSlug, novelSlug, chapterSlug);
 }
 
@@ -89,7 +94,7 @@ export async function getReaderChapter(authorSlug: string, novelSlug: string, ch
 export async function getSitemapChapters(): Promise<SitemapChapter[]> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadSitemapChapters();
 }
 
@@ -97,6 +102,6 @@ export async function getSitemapChapters(): Promise<SitemapChapter[]> {
 export async function getNovelFeed(authorSlug: string, novelSlug: string): Promise<string | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadNovelFeed(authorSlug, novelSlug);
 }

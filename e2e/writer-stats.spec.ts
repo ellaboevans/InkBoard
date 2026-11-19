@@ -56,8 +56,8 @@ test("a writer's stats show their links' visits, their novel and followers; anot
 
   // A novel with a published chapter and a draft (written straight to the database: new slugs, nothing cached).
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${editorId}', 'The Ferry ${id}', 'ferry') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT n.id, c.title, c.slug, c.body, c.position, c.status::poem_status, c.published_at, c.words FROM n,
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT n.id, c.title, c.slug, c.body, c.position, c.status::poem_status, c.published_at, c.words, c.published_at FROM n,
       (VALUES ('Thursday', 'thursday', 'The ferry came late. Akua waited at the landing.', 1, 'published', now(), 2300),
               ('Next', 'next', 'Not yet.', 2, 'draft', NULL::timestamptz, 2)) AS c(title, slug, body, position, status, published_at, words)`);
   const { rows: ch } = await sql(

@@ -127,7 +127,8 @@ function Novels({ novels }: { novels: WriterStats["novels"] }) {
       </h2>
       <p className={explain}>
         Words and reading time count published chapters only: the same numbers readers see on the novel&apos;s page.
-        Drafts are chapters waiting to be published. Link visits add up every chapter&apos;s shared link.
+        Scheduled chapters count once their time comes; drafts are chapters waiting to be published. Link visits add up
+        every chapter&apos;s shared link.
       </p>
       {novels.length === 0 ? (
         <p className={`${card} ${explain}`}>
@@ -154,6 +155,7 @@ function Novels({ novels }: { novels: WriterStats["novels"] }) {
               </h3>
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
                 <Stat label="Published chapters" value={n.publishedChapters.toLocaleString("en")} />
+                {n.scheduledChapters > 0 && <Stat label="Scheduled" value={n.scheduledChapters.toLocaleString("en")} />}
                 <Stat label="Drafts" value={n.draftChapters.toLocaleString("en")} />
                 <Stat label="Words" value={n.words.toLocaleString("en")} />
                 <Stat label="Reading time" value={n.readingMinutes ? `about ${pluralCount(n.readingMinutes, "minute")}` : "—"} />

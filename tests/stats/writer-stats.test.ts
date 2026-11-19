@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
+import { withRelease } from "../support/chapters";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -38,7 +39,7 @@ async function novel(editorId: string, title: string, visibility: "public" | "pr
 async function chapter(novelId: string, position: number, title: string, words: number, status: "published" | "draft") {
   const [c] = await db
     .insert(chapters)
-    .values({ novelId, position, title, slug: `c${position}`, body: "Text.", wordCount: words, status, publishedAt: status === "published" ? new Date() : null })
+    .values(withRelease({ novelId, position, title, slug: `c${position}`, body: "Text.", wordCount: words, status, publishedAt: status === "published" ? new Date() : null }))
     .returning();
   return c.id;
 }
@@ -91,9 +92,9 @@ describe("getWriterStats", () => {
 
     const { novels: stats } = await getWriterStats(ama);
     expect(stats).toEqual([
-      { id: ferry, title: "The Ferry", isPrivate: false, publishedChapters: 2, draftChapters: 2, words: 3450, readingMinutes: readingMinutes(3450), visits: 8 },
-      { id: expect.any(String), title: "Just Started", isPrivate: false, publishedChapters: 0, draftChapters: 0, words: 0, readingMinutes: 0, visits: 0 },
-      { id: secret, title: "Locked Room", isPrivate: true, publishedChapters: 1, draftChapters: 0, words: 460, readingMinutes: 2, visits: 0 },
+      { id: ferry, title: "The Ferry", isPrivate: false, publishedChapters: 2, scheduledChapters: 0, draftChapters: 2, words: 3450, readingMinutes: readingMinutes(3450), visits: 8 },
+      { id: expect.any(String), title: "Just Started", isPrivate: false, publishedChapters: 0, scheduledChapters: 0, draftChapters: 0, words: 0, readingMinutes: 0, visits: 0 },
+      { id: secret, title: "Locked Room", isPrivate: true, publishedChapters: 1, scheduledChapters: 0, draftChapters: 0, words: 460, readingMinutes: 2, visits: 0 },
     ]);
   });
 

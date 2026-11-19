@@ -96,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 7, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 8, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -137,7 +137,7 @@ describe("what the export contains", () => {
     await countShareVisit(a.ewe, "198.51.100.2");
     for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(7);
+    expect(data.version).toBe(8);
     expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
       ["Ŋkɔ", 2],
       ["Locked room", 0],
@@ -222,7 +222,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 7,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 8,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });
@@ -365,7 +365,7 @@ describe("novels in the export (Phase 23)", () => {
     await moveChapter(a.ed.id, book.novel.id, two.chapter.id, "first");
 
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(7);
+    expect(data.version).toBe(8);
     expect(data.novels).toHaveLength(1);
     const [n] = data.novels;
     expect(n).toMatchObject({ title: "Ɔdɔ ne Asuo", slug: "odo-ne-asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing", visibility: "public" });

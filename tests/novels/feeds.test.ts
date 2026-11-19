@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { chapters, editors, novels, poems } from "@/db/schema";
@@ -22,13 +23,13 @@ async function setup() {
   });
   const rows = await db
     .insert(chapters)
-    .values([
+    .values(withRelease([
       ch(ferry.id, "thursday", 1, "Thursday", "published", "2026-10-01T10:00:00Z", "^^The ferry came *late*.\n\n* * *\n\nAkua waited."),
       ch(ferry.id, "secret", 2, "SECRET TITLE", "draft", null, "SECRET TEXT"),
       ch(ferry.id, "chapter", 3, "", "published", "2026-10-08T10:00:00Z", "Second published."),
       ch(ferry.id, "radio", 4, "The Radio", "published", "2026-10-15T10:00:00Z", "Third <published>."),
       ch(drafty.id, "hidden", 1, "Hidden", "draft", null, "HIDDEN TEXT"),
-    ])
+    ]))
     .returning({ id: chapters.id, slug: chapters.slug });
   await db.insert(poems).values({ editorId: ama.id, title: "A Poem", slug: "a-poem", body: "a line", status: "published", publishedAt: at("2026-10-10T10:00:00Z") });
   const id = (slug: string) => rows.find((r) => r.slug === slug)!.id;

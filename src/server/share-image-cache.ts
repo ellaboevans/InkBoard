@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { releaseAwareCacheLife } from "./release-cache";
 import type { ShareDesign } from "@/lib/share-image/designs";
 import type { ShareFormat } from "@/lib/share-image/layout";
 import { loadShareChapter, loadSharePoem, type ShareChapter, type SharePoem } from "./board";
@@ -62,6 +63,6 @@ export async function getShareImage(
 export async function getShareChapter(authorSlug: string, novelSlug: string, chapterSlug: string): Promise<ShareChapter | null> {
   "use cache";
   cacheTag(BOARD_TAG);
-  cacheLife("hours");
+  await releaseAwareCacheLife();
   return loadShareChapter(authorSlug, novelSlug, chapterSlug);
 }

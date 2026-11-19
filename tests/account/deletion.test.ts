@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import {
@@ -215,7 +216,7 @@ describe("deleting an account", () => {
     const eve = await populated("eve@example.com", "Eve Other");
     const book = async (editorId: string, slug: string) => {
       const [n] = await db.insert(novels).values({ editorId, title: slug, slug }).returning();
-      const [c] = await db.insert(chapters).values({ novelId: n.id, title: "One", slug: "one", body: "x.", position: 1, status: "published", publishedAt: new Date() }).returning();
+      const [c] = await db.insert(chapters).values(withRelease({ novelId: n.id, title: "One", slug: "one", body: "x.", position: 1, status: "published", publishedAt: new Date() })).returning();
       await db.insert(shortLinks).values({ chapterId: c.id, code: slug === "ada-book" ? "bcdfgh" : "bcdfgj" });
       const keys = [`unlock:n:${n.id}:all`, `unlock:n:${n.id}:ip:198.51.100.7`, `share:visit:${c.id}:198.51.100.7`];
       for (const key of keys) await db.insert(rateLimits).values({ key, windowStart: new Date(), count: 1 });

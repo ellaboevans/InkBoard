@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { env } from "@/env";
 import { cleanupExpiredRows, isAuthorizedCron } from "@/server/maintenance";
+import { announceReleasedChapters } from "@/server/release-announcements";
 
 /** Daily cleanup (vercel.json `crons`). Requires `Authorization: Bearer $CRON_SECRET`. */
 export async function GET(request: Request) {
@@ -14,5 +15,8 @@ export async function GET(request: Request) {
   }
   const deleted = await cleanupExpiredRows();
   console.info("[cron] cleanup", deleted);
-  return Response.json({ ok: true, deleted });
+  // Scheduled chapters released since the last run: their "new chapter" notification (Phase 28).
+  const released = await announceReleasedChapters();
+  console.info("[cron] release announcements", released);
+  return Response.json({ ok: true, deleted, released });
 }

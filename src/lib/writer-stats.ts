@@ -34,9 +34,12 @@ export type NovelStats = {
   id: string;
   title: string;
   isPrivate: boolean;
+  /** Released chapters: what readers see (a scheduled one counts once its time comes). */
   publishedChapters: number;
+  /** Published with a release time still ahead (Phase 28): readers see nothing of them yet. */
+  scheduledChapters: number;
   draftChapters: number;
-  /** Words in published chapters only: what readers see. */
+  /** Words in released chapters only: what readers see. */
   words: number;
   /** readingMinutes(words), the novel page's "about n min". */
   readingMinutes: number;

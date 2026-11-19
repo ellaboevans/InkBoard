@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { chapterDisplayTitle, readingMinutes } from "@/lib/novel-limits";
 import { byVisits, followerCount, type NovelStats, type SharedLink, type WriterStats } from "@/lib/writer-stats";
 
@@ -11,7 +12,9 @@ import { byVisits, followerCount, type NovelStats, type SharedLink, type WriterS
  *
  * Only what InkBoard already keeps: short_links.visits (counted in the proxy,
  * once per network per work per day, link-preview bots excluded), the
- * chapters' word counts and statuses, and push_follows rows. Two queries,
+ * chapters' word counts, statuses and release times, and push_follows rows.
+ * "Published" counts released chapters only (chapterReleased); scheduled
+ * chapters (Phase 28) are counted apart from drafts. Two queries,
  * each on existing indexes (poems_editor_idx, novels_editor_slug_key,
  * chapters_novel_position_key, short_links_{poem,chapter}_key,
  * push_follows_editor_idx).
@@ -31,6 +34,7 @@ type NovelRow = {
   title: string;
   is_private: boolean;
   published: number;
+  scheduled: number;
   drafts: number;
   words: number;
   visits: number;
@@ -46,15 +50,15 @@ export async function getWriterStats(editorId: string): Promise<WriterStats> {
       WHERE p.editor_id = ${editorId}
       UNION ALL
       SELECT 'chapter', n.title, c.title, pc.number,
-        (c.status = 'published' AND n.visibility = 'public'), sl.visits
+        (${chapterReleased("c")} AND n.visibility = 'public'), sl.visits
       FROM short_links sl
       JOIN chapters c ON c.id = sl.chapter_id
       JOIN novels n ON n.id = c.novel_id
-      -- Numbered among published chapters, like readers see them.
+      -- Numbered among released chapters, like readers see them.
       LEFT JOIN (
         SELECT pc.id, row_number() OVER (PARTITION BY pc.novel_id ORDER BY pc.position)::int AS number
         FROM chapters pc JOIN novels pn ON pn.id = pc.novel_id
-        WHERE pn.editor_id = ${editorId} AND pc.status = 'published'
+        WHERE pn.editor_id = ${editorId} AND ${chapterReleased("pc")}
       ) pc ON pc.id = c.id
       WHERE n.editor_id = ${editorId}
     `) as unknown as Promise<{ rows: LinkRow[] }>,
@@ -64,9 +68,10 @@ export async function getWriterStats(editorId: string): Promise<WriterStats> {
         COALESCE((
           SELECT json_agg(x) FROM (
             SELECT n.id, n.title, n.visibility = 'private' AS is_private,
-              count(c.id) FILTER (WHERE c.status = 'published')::int AS published,
+              count(c.id) FILTER (WHERE ${chapterReleased("c")})::int AS published,
+              count(c.id) FILTER (WHERE c.status = 'published' AND c.release_at > now())::int AS scheduled,
               count(c.id) FILTER (WHERE c.status = 'draft')::int AS drafts,
-              COALESCE(sum(c.word_count) FILTER (WHERE c.status = 'published'), 0)::int AS words,
+              COALESCE(sum(c.word_count) FILTER (WHERE ${chapterReleased("c")}), 0)::int AS words,
               COALESCE(sum(sl.visits), 0)::int AS visits
             FROM novels n
             LEFT JOIN chapters c ON c.novel_id = n.id
@@ -99,6 +104,7 @@ export async function getWriterStats(editorId: string): Promise<WriterStats> {
     title: n.title,
     isPrivate: n.is_private,
     publishedChapters: n.published,
+    scheduledChapters: n.scheduled,
     draftChapters: n.drafts,
     words: n.words,
     readingMinutes: readingMinutes(n.words),

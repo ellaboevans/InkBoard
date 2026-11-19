@@ -3,6 +3,7 @@ import { EXCERPT_CHARS, EXCERPT_LINES } from "@/lib/poem-text";
 import { authorPicture, type AuthorPicture } from "@/lib/author-picture";
 import { and, asc, desc, eq, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { chapters, collections, editors, novels, poems, shortLinks } from "@/db/schema";
 import type {
   AuthorCollection,
@@ -92,7 +93,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
         or(
           sql`EXISTS (SELECT 1 FROM ${poems} WHERE ${poems.editorId} = ${editors.id} AND ${poems.status} = 'published')`,
           sql`EXISTS (SELECT 1 FROM ${novels} JOIN ${chapters} ON ${chapters.novelId} = ${novels.id}
-            WHERE ${novels.editorId} = ${editors.id} AND ${chapters.status} = 'published')`,
+            WHERE ${novels.editorId} = ${editors.id} AND ${chapterReleased()})`,
         ),
       ),
     )
@@ -145,11 +146,12 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
 
 // ---- novels (Phase 23b) ---------------------------------------------------------------
 //
-// Readers see a novel only once it has a published chapter, and only its
-// published chapters: every query below joins chapters with
-// status = 'published', and counts, numbers and reading times are computed
-// over those rows alone, so a draft never shows, not even as a gap in the
-// numbering or a word in the total.
+// Readers see a novel only once it has a released chapter, and only its
+// released chapters: every query below joins chapters on chapterReleased()
+// (published, and its release time has come: Phase 28), and counts, numbers
+// and reading times are computed over those rows alone, so a draft or a
+// scheduled chapter never shows, not even as a gap in the numbering or a word
+// in the total.
 //
 // Private novels (Phase 25, N1): readers see a private novel's title, cover,
 // blurb and chapter list (numbers, titles, reading times), never its chapter
@@ -179,7 +181,7 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
     })
     .from(novels)
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .innerJoin(chapters, and(eq(chapters.novelId, novels.id), eq(chapters.status, "published")))
+    .innerJoin(chapters, and(eq(chapters.novelId, novels.id), chapterReleased()))
     .where(where)
     .groupBy(novels.id)
     .orderBy(desc(sql`max(${chapters.publishedAt})`), asc(novels.title), asc(novels.id));
@@ -223,7 +225,7 @@ async function loadNovelWithChapters(authorSlug: string, novelSlug: string) {
       publishedAt: chapters.publishedAt,
     })
     .from(chapters)
-    .where(and(eq(chapters.novelId, n.id), eq(chapters.status, "published")))
+    .where(and(eq(chapters.novelId, n.id), chapterReleased()))
     .orderBy(asc(chapters.position));
   if (rows.length === 0) return null;
   const list = rows.map((c, i): ReaderChapterSummary & { id: string } => ({
@@ -301,7 +303,7 @@ export async function loadReaderChapter(
     .select({ body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END` })
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
-    .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), eq(chapters.status, "published")))
+    .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), chapterReleased()))
     .limit(1);
   // Unpublished between the two queries: not found, like any draft.
   if (!row) return null;
@@ -355,7 +357,7 @@ export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .where(and(eq(chapters.status, "published"), isNotNull(editors.penName), isNotNull(editors.slug)))
+    .where(and(chapterReleased(), isNotNull(editors.penName), isNotNull(editors.slug)))
     .orderBy(asc(editors.slug), asc(novels.slug), asc(chapters.position));
   return rows.map((r) => ({
     authorSlug: r.authorSlug!,
@@ -400,7 +402,7 @@ export async function readerPathExists(path: ReaderPath): Promise<boolean> {
         chapters,
         and(
           eq(chapters.novelId, novels.id),
-          eq(chapters.status, "published"),
+          chapterReleased(),
           path.kind === "chapter" ? eq(chapters.slug, path.chapter) : undefined,
         ),
       )
@@ -562,7 +564,7 @@ export async function loadShareChapter(authorSlug: string, novelSlug: string, ch
       body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END`,
       // Raw names: inside a subquery drizzle would render bare column names.
       number: sql<number>`(SELECT count(*)::int FROM chapters o
-        WHERE o.novel_id = "chapters"."novel_id" AND o.status = 'published' AND o.position <= "chapters"."position")`,
+        WHERE o.novel_id = "chapters"."novel_id" AND ${chapterReleased("o")} AND o.position <= "chapters"."position")`,
       novelId: novels.id,
       novelTitle: novels.title,
       novelSlug: novels.slug,
@@ -583,7 +585,7 @@ export async function loadShareChapter(authorSlug: string, novelSlug: string, ch
         eq(editors.slug, authorSlug),
         eq(novels.slug, novelSlug),
         eq(chapters.slug, chapterSlug),
-        eq(chapters.status, "published"),
+        chapterReleased(),
         eq(novels.visibility, "public"),
         isNotNull(editors.penName),
       ),

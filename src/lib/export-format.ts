@@ -21,8 +21,9 @@ import { parseProse } from "./prose";
  * 5: novels carry `visibility` (Phase 25; never a password hash or version).
  * 6: novels carry `cover`, the uploaded cover itself (Phase 25), or null.
  * 7: chapters carry `shareVisits` (Phase 25, "Share a passage").
+ * 8: chapters carry `scheduledFor`, and a scheduled chapter's `status` is "scheduled" (Phase 28).
  */
-export const EXPORT_FORMAT_VERSION = 7;
+export const EXPORT_FORMAT_VERSION = 8;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -57,8 +58,12 @@ export type ExportedChapter = {
   slug: string;
   /** 1..n over all the novel's chapters, drafts included. */
   position: number;
-  status: "draft" | "published";
+  /** "scheduled": published with its release still ahead (Phase 28); readers see nothing of it yet. */
+  status: "draft" | "published" | "scheduled";
+  /** First release; null for a draft and for a chapter that hasn't been out yet. */
   publishedAt: string | null;
+  /** When a scheduled chapter goes live (UTC), else null. */
+  scheduledFor: string | null;
   createdAt: string;
   updatedAt: string;
   wordCount: number;
@@ -240,6 +245,8 @@ export function proseToMarkdown(text: string): string {
 }
 
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
+/** "2026-11-21 18:00" from an ISO instant (UTC). */
+const minuteUtc = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
 const count = (n: number, one: string, other = `${one}s`) => `${n} ${n === 1 ? one : other}`;
 
 function poemSection(p: ExportedPoem): string {
@@ -257,10 +264,11 @@ function poemSection(p: ExportedPoem): string {
 function novelSection(n: ExportedNovel): string {
   const language = n.language ? `${languageName(n.language) ?? n.language} (${n.language})` : "Not set";
   const published = n.chapters.filter((c) => c.status === "published").length;
+  const scheduled = n.chapters.filter((c) => c.status === "scheduled").length;
   const out = [
     `## ${n.title}`,
     "",
-    `- Novel, ${n.status === "complete" ? "complete" : "ongoing"}: ${count(n.chapters.length, "chapter")} (${published} published)`,
+    `- Novel, ${n.status === "complete" ? "complete" : "ongoing"}: ${count(n.chapters.length, "chapter")} (${published} published${scheduled ? `, ${scheduled} scheduled` : ""})`,
     `- Language: ${language}`,
     `- Visibility: ${n.visibility === "public" ? "Public" : "Private (readers need a password; the password isn't in this file)"}`,
     ...(n.cover ? [`- Cover: an uploaded picture, in the JSON download (novels[].cover)`] : []),
@@ -270,7 +278,12 @@ function novelSection(n: ExportedNovel): string {
   if (n.blurb) out.push(plainTextToMarkdown(n.blurb), "");
   if (n.chapters.length === 0) out.push("*No chapters yet.*", "");
   for (const c of n.chapters) {
-    const status = c.status === "published" ? `Published ${day(c.publishedAt) ?? ""}`.trim() : "Draft";
+    const status =
+      c.status === "scheduled" && c.scheduledFor
+        ? `Scheduled for ${minuteUtc(c.scheduledFor)} UTC`
+        : c.status === "published"
+          ? `Published ${day(c.publishedAt) ?? ""}`.trim()
+          : "Draft";
     out.push(
       `### Chapter ${c.position}${c.title ? ` · ${c.title}` : ""}`,
       "",

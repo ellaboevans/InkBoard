@@ -73,6 +73,29 @@ describe("novel actions refresh what readers see (BOARD_TAG)", () => {
     expect(await tagged(() => actions.saveChapterAction(one, {}, form({ title: "One", body: "Edited." })))).toBe(true);
   });
 
+  it("scheduling, rescheduling, Publish now and cancelling (Phase 28): a schedule shows readers nothing, but drops caches made before it", async () => {
+    const { two } = await writer();
+    const at = new Date(Date.now() + 2 * 86_400_000).toISOString();
+    const scheduled = await actions.saveChapterAction(two, {}, form({ title: "Two", body: "Text two.", status: "schedule", releaseAt: at }));
+    expect(scheduled).toMatchObject({ status: "published", scheduledAt: at, scheduleChange: "scheduled" });
+    expect(cache.updateTag.mock.calls.map((c) => c[0])).toContain(BOARD_TAG);
+    const later = new Date(Date.now() + 3 * 86_400_000).toISOString();
+    expect(await tagged(() => actions.saveChapterAction(two, scheduled, form({ title: "Two", body: "Text two.", status: "schedule", releaseAt: later })))).toBe(true);
+    const cancelled = await actions.saveChapterAction(two, { scheduledAt: later }, form({ title: "Two", body: "Text two.", status: "draft" }));
+    expect(cancelled).toMatchObject({ status: "draft", scheduledAt: null, scheduleChange: "cancelled" });
+    await actions.saveChapterAction(two, {}, form({ title: "Two", body: "Text two.", status: "schedule", releaseAt: at }));
+    const now = await actions.saveChapterAction(two, { scheduledAt: at }, form({ title: "Two", body: "Text two.", status: "now" }));
+    expect(now).toMatchObject({ status: "published", scheduledAt: null, publishedNow: true });
+  });
+
+  it("a refused schedule (too soon) changes nothing and says why", async () => {
+    const { two } = await writer();
+    cache.updateTag.mockClear();
+    const res = await actions.saveChapterAction(two, {}, form({ title: "Two", body: "Text two.", status: "schedule", releaseAt: new Date().toISOString() }));
+    expect(res.errors?.releaseAt).toMatch(/at least 5 minutes/);
+    expect(cache.updateTag).not.toHaveBeenCalled();
+  });
+
   it("novel details, moves, reorders and deletes", async () => {
     const { novelId, one, two } = await writer();
     expect(await tagged(() => actions.updateNovelAction(novelId, {}, form({ title: "Book", blurb: "New blurb", status: "complete" })))).toBe(true);

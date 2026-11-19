@@ -490,13 +490,28 @@ export const chapters = pgTable(
     /** 1..n over all the novel's chapters, drafts included, contiguous (src/server/positions.ts). */
     position: integer("position").notNull(),
     status: poemStatus("status").notNull().default("draft"),
-    /** First publish; kept when unpublished, so "ever published" fixes the slugs. */
+    /**
+     * First release; kept when unpublished, so "ever published" fixes the slugs.
+     * For a chapter scheduled before its first release it is the scheduled time
+     * (in the future until then), so readers' dates are right from the release
+     * minute with nothing to run (Phase 28).
+     */
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    /**
+     * When the chapter's current publication goes live (Phase 28): set exactly
+     * while status is 'published' (a check), now() for "Publish", a future time
+     * for a scheduled chapter. Readers see a chapter only once it is released:
+     * src/server/chapter-release.ts, the one place that says so.
+     */
+    releaseAt: timestamp("release_at", { withTimezone: true }),
     wordCount: integer("word_count").notNull().default(0),
     /**
      * Set once, in the transaction of the chapter's first publish, when its
      * "new chapter" notification is claimed (Phase 24); never cleared, so
-     * unpublishing and publishing again never announces it twice.
+     * unpublishing and publishing again never announces it twice. A scheduled
+     * chapter's is claimed after its release (Phase 28: the daily step, or its
+     * writer's next novel action); '-infinity' means settled as never to be sent (it was
+     * released while its novel was private), which announceChapter refuses.
      */
     notifiedAt: timestamp("notified_at", { withTimezone: true }),
     ...timestamps,
@@ -505,6 +520,8 @@ export const chapters = pgTable(
     uniqueIndex("chapters_novel_slug_key").on(t.novelId, t.slug),
     uniqueIndex("chapters_novel_position_key").on(t.novelId, t.position),
     index("chapters_status_published_idx").on(t.status, t.publishedAt),
+    index("chapters_status_release_idx").on(t.status, t.releaseAt),
+    check("chapters_release_when_published", sql`(${t.status} = 'published') = (${t.releaseAt} IS NOT NULL)`),
   ],
 );
 

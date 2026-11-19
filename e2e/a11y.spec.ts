@@ -315,8 +315,8 @@ test("novels for readers: the book card, author page, novel page (start and cont
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
       VALUES ('${rows[0].id}', 'Ɔdɔ ne Ɛkɔm', 'odo', 'A long blurb.
 With a second paragraph.', 'ak') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 40 FROM n,
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 40, CASE WHEN t.status = 'published' THEN now() END FROM n,
       (VALUES ('Thursday', 'thursday', E'^^The ferry came *late*.\n\n* * *\n\n^^“Akua waited.”\nA kept line.', 1, 'published'),
               ('', 'chapter', 'Second chapter text.', 2, 'published'),
               ('Draft', 'draft', 'Draft text.', 3, 'draft')) AS t(title, slug, body, pos, status)`);
@@ -366,8 +366,8 @@ test("private novels: the writer's details form, the novel page and a locked cha
   // Two published chapters, written straight to the database; the details form then makes it private (and refreshes the cache).
   const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
       VALUES ('${rows[0].id}', 'Ɔdɔ a Ɛyɛ Kumaa', 'locked', 'A public blurb.', 'ak') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, t.title, t.slug, t.body, t.pos, 'published'::poem_status, now(), 40 FROM n,
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, t.title, t.slug, t.body, t.pos, 'published'::poem_status, now(), 40, now() FROM n,
       (VALUES ('Thursday', 'thursday', E'The ferry came *late*.', 1), ('', 'chapter', 'Second chapter text.', 2)) AS t(title, slug, body, pos)
     RETURNING novel_id`);
   const adminUrl = `/admin/novels/${made[0].novel_id}`;
@@ -414,8 +414,8 @@ test("novel covers: the details' cover panel, the 2:3 crop step and a saved cove
   const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
   const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb)
       VALUES ('${rows[0].id}', 'Ɔdɔ ne Nsuo', 'covered', 'A blurb.') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published'::poem_status, now(), 4 FROM n RETURNING novel_id`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published'::poem_status, now(), 4, now() FROM n RETURNING novel_id`);
   const adminUrl = `/admin/novels/${made[0].novel_id}`;
   const picture = await sharp({ create: { width: 900, height: 1200, channels: 3, background: { r: 30, g: 90, b: 160 } } }).jpeg().toBuffer();
   for (const width of [375, 1280]) {
@@ -441,14 +441,48 @@ test("novel covers: the details' cover panel, the 2:3 crop step and a saved cove
   await scan(page, "novel page: an uploaded cover");
 });
 
+test("scheduling a chapter: the schedule dialog and its calendar, a scheduled chapter's editor and the chapter list, phone and desktop", async ({ page }) => {
+  const id = unique();
+  const email = `a11y-schedule-${id}@example.com`;
+  await signUpAs(page, email, `Schedule Novelist ${id}`);
+  const { rows } = await sql(`SELECT id FROM editors WHERE email = '${email}'`);
+  const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${rows[0].id}', 'Ɔdɔ ne Nsuo', 'scheduled') RETURNING id)
+    INSERT INTO chapters (novel_id, title, slug, body, position) SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1 FROM n
+    RETURNING id, novel_id`);
+  const editorUrl = `/admin/novels/${made[0].novel_id}/chapters/${made[0].id}`;
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.goto(editorUrl);
+    await page.getByRole("button", { name: "Schedule…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Schedule this chapter" });
+    await expect(dialog).toContainText("Goes live");
+    await scan(page, `schedule dialog, ${width}px`);
+    await dialog.getByRole("button", { name: "Day" }).click();
+    await expect(page.locator("[data-day]").first()).toBeVisible();
+    await scan(page, `schedule dialog: the calendar, ${width}px`);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+  }
+  await sql(`UPDATE chapters SET status = 'published', release_at = now() + interval '2 days', published_at = now() + interval '2 days' WHERE id = '${made[0].id}'`);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.goto(editorUrl);
+    await expect(page.locator("[data-schedule-status]")).toContainText("Scheduled for");
+    await scan(page, `a scheduled chapter's editor, ${width}px`);
+    await page.goto(`/admin/novels/${made[0].novel_id}`);
+    await expect(page.locator("[data-scheduled-time]")).toContainText("for ");
+    await scan(page, `the chapter list with a scheduled chapter, ${width}px`);
+  }
+});
+
 test("share a passage: the sheet with its passage picker (empty, picked and trimmed, over the cap), phone and desktop", async ({ browser }) => {
   const id = unique();
   const { rows } = await sql(`INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-passage-${id}@example.com', 'Selorm Agbɔ ${id}', 'a11y-passage-${id}') RETURNING id`);
   const long = "Ŋkekea ɖe ɖeka la, èyi ƒuta kple eƒe nɔvi. ".repeat(18).trim();
   const body = ["Nùnyá, àdìdòé. Àsí mètúnɛ́ ò.", "The ferry came late. Akua waited.", long].join("\\n\\n");
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, language) VALUES ('${rows[0].id}', 'Ʋu la', 'vu', 'ee') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'Ŋkeke', 'nkeke', E'${body}', 1, 'published'::poem_status, now(), 80 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'Ŋkeke', 'nkeke', E'${body}', 1, 'published'::poem_status, now(), 80, now() FROM n`);
   const context = await browser.newContext();
   // No file sharing in headless Chrome: Download image is the sheet's main action.
   await context.addInitScript(() => {
@@ -1199,8 +1233,8 @@ test("chapter text settings: the open control, the default and the largest sans 
     `INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-reading-${id}@example.com', 'Reading A11y ${id}', 'reading-a11y-${id}') RETURNING id, slug`,
   );
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${rows[0].id}', 'Settings', 'settings') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'One', 'one', '^^The ferry came late.' || chr(10) || chr(10) || 'Akua waited.', 1, 'published', now(), 5 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'One', 'one', '^^The ferry came late.' || chr(10) || chr(10) || 'Akua waited.', 1, 'published', now(), 5, now() FROM n`);
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/a/${rows[0].slug}/n/settings/one`);
@@ -1234,7 +1268,7 @@ test("writer's stats: empty and with links, a novel and followers, phone and des
   await sql(`WITH p AS (INSERT INTO poems (editor_id, title, slug, body, status, published_at) VALUES ('${ed}', 'Ŋutifafa', 'nutifafa', 'a line', 'published', now()) RETURNING id)
     INSERT INTO short_links (poem_id, code, visits) SELECT id, 'k${id.slice(-5).replace(/[^2-9b-df-hj-np-tv-xz]/g, "k")}', 12 FROM p`);
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, visibility, password_hash) VALUES ('${ed}', 'Ʋu la', 'vu', 'private', 'scrypt$1$1$1$x$y') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count) SELECT id, 'Ŋkeke', 'nkeke', 'Text.', 1, 'published', now(), 1200 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at) SELECT id, 'Ŋkeke', 'nkeke', 'Text.', 1, 'published', now(), 1200, now() FROM n`);
   for (let i = 0; i < 4; i++) {
     await sql(`WITH s AS (INSERT INTO push_subscriptions (endpoint, p256dh, auth) VALUES ('https://fcm.googleapis.com/fcm/send/a11y-${id}-${i}', 'k', 'a') RETURNING id)
       INSERT INTO push_follows (subscription_id, editor_id) SELECT id, '${ed}' FROM s`);

@@ -51,7 +51,7 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
           {novel.status === "complete" ? "Complete" : "Ongoing"} ·{" "}
           {novel.visibility === "private"
             ? "Password protected: readers see its cover, blurb and chapter list, and need the password to read a chapter."
-            : "Readers see it on the board once a chapter is published."}
+            : "Readers see it on the board once a chapter is published (a scheduled one, from its time)."}
         </p>
       </div>
       <ChapterOrder
@@ -60,6 +60,7 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
           id: c.id,
           title: c.title,
           status: c.status,
+          scheduledAt: c.scheduled && c.releaseAt ? c.releaseAt.toISOString() : null,
           wordCount: c.wordCount,
           updatedLabel: dayFormat.format(c.updatedAt),
         }))}

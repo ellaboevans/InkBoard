@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { chapters, editors, novels, poems } from "@/db/schema";
 import { buildAtomFeed, type FeedEntry } from "@/lib/atom-feed";
 import { authorFeedPath, novelFeedPath, SITE_FEED_PATH } from "@/lib/feed-links";
@@ -101,7 +102,7 @@ async function loadChapterEntries({ scope, firstOnly = false }: { scope?: SQL; f
         language: novels.language,
         penName: editors.penName,
         authorSlug: sql<string>`${editors.slug}`.as("author_slug"),
-        // Reader numbering: published chapters only, in the novel's order.
+        // Reader numbering: released chapters only, in the novel's order.
         number: sql<number>`(row_number() OVER (PARTITION BY ${chapters.novelId} ORDER BY ${chapters.position}))::int`.as("number"),
         novelSince: sql<Date>`min(${chapters.publishedAt}) OVER (PARTITION BY ${chapters.novelId})`.as("novel_since"),
       })
@@ -110,7 +111,7 @@ async function loadChapterEntries({ scope, firstOnly = false }: { scope?: SQL; f
       .innerJoin(editors, eq(editors.id, novels.editorId))
       .where(
         and(
-          eq(chapters.status, "published"),
+          chapterReleased(),
           isNotNull(chapters.publishedAt),
           isNotNull(editors.penName),
           isNotNull(editors.slug),

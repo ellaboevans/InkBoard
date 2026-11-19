@@ -24,8 +24,8 @@ async function novel() {
     `INSERT INTO editors (email, pen_name, slug) VALUES ('reading-${id}@example.com', 'Setting Reader ${id}', 'setting-reader-${id}') RETURNING id, slug`,
   );
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, language) VALUES ('${rows[0].id}', 'The Ferry', 'ferry', 'ak') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT n.id, c.title, c.slug, c.body, c.position, 'published', now(), 20 FROM n,
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT n.id, c.title, c.slug, c.body, c.position, 'published', now(), 20, now() FROM n,
       (VALUES ('Thursday', 'thursday', $$${BODY}$$, 1), ('The Landing', 'the-landing', 'The radio stayed on the table all night.', 2)) AS c(title, slug, body, position)`);
   return `/a/${rows[0].slug}/n/ferry`;
 }

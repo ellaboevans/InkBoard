@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import { describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { chapters, editors, novels, poems } from "@/db/schema";
@@ -54,7 +55,7 @@ async function setup() {
     };
   };
   // Reading order: Thursday, (draft), The Landing, (once published, now a draft), [untitled].
-  await db.insert(chapters).values([
+  await db.insert(chapters).values(withRelease([
     chapter({ novelId: ferry.id, slug: "thursday", title: "Thursday", position: 1, publishedAt: at("2026-10-02") }),
     chapter({
       novelId: ferry.id, slug: "draft-chapter", title: "SECRET DRAFT TITLE", position: 2,
@@ -68,7 +69,7 @@ async function setup() {
     chapter({ novelId: ferry.id, slug: "chapter", title: "", position: 5, body: words(100), publishedAt: at("2026-10-16") }),
     chapter({ novelId: unfinished.id, slug: "draft-only", title: "DRAFT ONLY", position: 1, status: "draft", publishedAt: null }),
     chapter({ novelId: kofis.id, slug: "one", title: "One", position: 1, publishedAt: at("2026-09-01") }),
-  ]);
+  ]));
   await db.insert(poems).values({ editorId: ama.id, title: "A Poem", slug: "a-poem", body: "a line", status: "published", publishedAt: at("2026-08-01") });
   return { ama, kofi, ferry, unfinished, kofis };
 }
@@ -119,9 +120,9 @@ describe("loadNovelPage", () => {
 
   it("disappears once its last published chapter is unpublished, and isn't shown for an author without a pen name", async () => {
     const { kofi, kofis } = await setup();
-    await db.update(chapters).set({ status: "draft" }).where(eq(chapters.novelId, kofis.id));
+    await db.update(chapters).set({ status: "draft", releaseAt: null }).where(eq(chapters.novelId, kofis.id));
     expect(await loadNovelPage("kofi", "kofis-book")).toBeNull();
-    await db.update(chapters).set({ status: "published" }).where(eq(chapters.novelId, kofis.id));
+    await db.update(chapters).set({ status: "published", releaseAt: new Date() }).where(eq(chapters.novelId, kofis.id));
     await db.update(editors).set({ penName: null }).where(eq(editors.id, kofi.id));
     expect(await loadNovelPage("kofi", "kofis-book")).toBeNull();
   });
@@ -193,7 +194,7 @@ describe("novels on the board and the author page", () => {
 
   it("drops an author whose only work is a novel with nothing published", async () => {
     const { kofis } = await setup();
-    await db.update(chapters).set({ status: "draft" }).where(eq(chapters.novelId, kofis.id));
+    await db.update(chapters).set({ status: "draft", releaseAt: null }).where(eq(chapters.novelId, kofis.id));
     const sections = await loadBoardSections();
     expect(sections.map((s) => s.penName)).toEqual(["Ama Serwaa"]);
   });

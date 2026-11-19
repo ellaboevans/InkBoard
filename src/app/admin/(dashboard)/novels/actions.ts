@@ -4,6 +4,7 @@ import { refresh, updateTag } from "next/cache";
 import { after } from "next/server";
 import { BOARD_TAG } from "@/server/cache-tags";
 import { announceChapter } from "@/server/push";
+import { announceReleasedChapters } from "@/server/release-announcements";
 import { redirect, RedirectType } from "next/navigation";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import {
@@ -59,6 +60,7 @@ const novelInput = (formData: FormData) => ({
 
 export async function createNovelAction(_prev: NovelFormState, formData: FormData): Promise<NovelFormState> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const res = await createNovel(editor.id, novelInput(formData));
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: "Couldn't create the novel." } };
   refresh(); // the list
@@ -67,6 +69,7 @@ export async function createNovelAction(_prev: NovelFormState, formData: FormDat
 
 export async function updateNovelAction(novelId: string, _prev: NovelFormState, formData: FormData): Promise<NovelFormState> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const res = await updateNovel(editor.id, novelId, novelInput(formData));
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: GONE } };
   updateTag(BOARD_TAG);
@@ -76,6 +79,7 @@ export async function updateNovelAction(novelId: string, _prev: NovelFormState, 
 
 export async function deleteNovelAction(novelId: string): Promise<void> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const deleted = await deleteNovel(editor.id, novelId);
   if (deleted) updateTag(BOARD_TAG);
   refresh();
@@ -88,10 +92,25 @@ export async function deleteNovelAction(novelId: string): Promise<void> {
 /** "New chapter": an empty draft at the end, opened in the editor (Back returns to the novel). */
 export async function createChapterAction(novelId: string): Promise<{ ok: false; error: string } | void> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const res = await createChapter(editor.id, novelId, { title: "", body: "" });
   if (!res.ok) return { ok: false, error: "errors" in res ? (res.errors.form ?? "Couldn't add a chapter.") : GONE };
   refresh();
   redirect(`/admin/novels/${novelId}/chapters/${res.chapter.id}?created=1`);
+}
+
+/**
+ * Scheduled chapters of this writer's released since (Phase 28): their "new
+ * chapter" notification, after the response. The daily cleanup is the
+ * guarantee; this sends sooner whenever the writer works on their novels,
+ * with no work on any reader page.
+ */
+function announceReleasedLater(editorId: string) {
+  after(() =>
+    announceReleasedChapters(editorId).catch((e: unknown) => {
+      console.error("[push] release announcements failed", e);
+    }),
+  );
 }
 
 /**
@@ -112,27 +131,50 @@ export type ChapterFormState = {
   /** Set on every successful save (resets the form's dirty state and clears the device draft). */
   savedAt?: number;
   status?: "draft" | "published";
+  /** Phase 28: when it goes live (ISO), while that is still ahead; null when not scheduled. */
+  scheduledAt?: string | null;
+  /** What this save did with the schedule, for the toast. */
+  scheduleChange?: "scheduled" | "rescheduled" | "cancelled";
   /** The save published the chapter for the first time ever. */
   publishedNow?: boolean;
 };
 
-export async function saveChapterAction(chapterId: string, _prev: ChapterFormState, formData: FormData): Promise<ChapterFormState> {
+export async function saveChapterAction(chapterId: string, prev: ChapterFormState, formData: FormData): Promise<ChapterFormState> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
+  // Which submit button was pressed: "Save draft", "Publish chapter", "Unpublish", "Publish now"
+  // (status "now"), or the schedule dialog's "Schedule" (status "schedule", with releaseAt).
+  const pressed = str(formData, "status");
   const res = await saveChapter(editor.id, chapterId, {
     title: str(formData, "title") ?? "",
     body: str(formData, "body") ?? "",
-    // Which submit button was pressed: "Save draft", "Publish chapter", "Unpublish"…
-    status: str(formData, "status"),
+    ...(pressed === "schedule"
+      ? { releaseAt: str(formData, "releaseAt") ?? "" }
+      : pressed === "now"
+        ? { status: "published", releaseNow: true }
+        : { status: pressed }),
   });
   if (!res.ok) return { errors: "errors" in res ? res.errors : { form: CHAPTER_GONE } };
-  updateTag(BOARD_TAG); // publish, unpublish, or an edit readers may see
+  // Publish, unpublish, an edit readers may see, or a schedule: readers see nothing of it yet, but
+  // cached reader data made before it lives an hour, too long for a release sooner than that
+  // (src/server/release-cache.ts), so it must be dropped now.
+  updateTag(BOARD_TAG);
   announceLater(chapterId, res.announce);
   refresh(); // the novel page's list, History, the status badge
-  return { savedAt: Date.now(), status: res.chapter.status, publishedNow: res.publishedNow };
+  const scheduledAt = res.chapter.scheduled && res.chapter.releaseAt ? res.chapter.releaseAt.toISOString() : null;
+  const wasScheduled = Boolean(prev.scheduledAt);
+  return {
+    savedAt: Date.now(),
+    status: res.chapter.status,
+    scheduledAt,
+    scheduleChange: pressed === "schedule" ? (wasScheduled ? "rescheduled" : "scheduled") : wasScheduled && res.chapter.status === "draft" ? "cancelled" : undefined,
+    publishedNow: res.publishedNow,
+  };
 }
 
 export async function deleteChapterAction(novelId: string, chapterId: string): Promise<void> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const deleted = await deleteChapter(editor.id, chapterId);
   if (deleted) updateTag(BOARD_TAG);
   refresh();
@@ -148,6 +190,7 @@ export async function moveChapterAction(
   direction: "up" | "down" | "first" | "last",
 ): Promise<MoveChapterActionResult> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const res = await moveChapter(editor.id, novelId, chapterId, direction);
   if (!res.ok) return { ok: false, error: "This chapter or novel no longer exists or isn't yours." };
   updateTag(BOARD_TAG); // readers number published chapters in this order
@@ -160,6 +203,7 @@ export type ReorderActionResult = { ok: true } | { ok: false; error: string };
 /** Save a dragged order. The server checks it's still the same set of chapters. */
 export async function reorderChaptersAction(novelId: string, chapterIds: string[]): Promise<ReorderActionResult> {
   const editor = await requireOnboardedEditor();
+  announceReleasedLater(editor.id);
   const res = await reorderChapters(editor.id, novelId, chapterIds);
   if (res.ok) updateTag(BOARD_TAG);
   refresh(); // on failure, shows the current order

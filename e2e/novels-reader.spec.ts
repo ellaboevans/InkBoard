@@ -249,8 +249,8 @@ test("a phone reads at 19 px with a 1.7 line height, 18 px under 360 px", async 
   const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
   // Written straight to the database: a new slug isn't in any cache yet.
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${rows[0].id}', 'Measure', 'measure') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, '', 'chapter', 'One paragraph of prose to measure.', 1, 'published', now(), 6 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, '', 'chapter', 'One paragraph of prose to measure.', 1, 'published', now(), 6, now() FROM n`);
   await page.goto(`/a/${rows[0].slug}/n/measure/chapter`);
   // No title of its own: the heading is "Chapter 1", in the UI's language.
   const h1 = page.getByRole("main").getByRole("heading", { level: 1, name: "Chapter 1" });
@@ -283,8 +283,8 @@ test("the list view lists novels by language; the pages give search engines and 
   // a draft-only novel, and two poems so the board offers Akan and English…
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb, language)
       VALUES ('${rows[0].id}', 'Ɔdɔ ne Ɛkɔm', 'odo', 'Akua waits at the landing for a brother who never came back.', 'ak') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 9 FROM n,
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, t.title, t.slug, t.body, t.pos, t.status::poem_status, CASE WHEN t.status = 'published' THEN now() END, 9, CASE WHEN t.status = 'published' THEN now() END FROM n,
       (VALUES ('Thursday', 'thursday', E'*Akua* waited at the landing.\n\n* * *\n\nThe ferry came late.', 1, 'published'),
               ('SECRET DRAFT', 'secret', 'SECRET TEXT', 2, 'draft'),
               ('', 'chapter', 'Second chapter.', 3, 'published')) AS t(title, slug, body, pos, status)`);

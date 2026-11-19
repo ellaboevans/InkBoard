@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import webpush from "web-push";
 import { getDb } from "@/db";
+import { chapterReleased } from "./chapter-release";
 import { safeEqual, sha256 } from "@/server/crypto";
 import { env } from "@/env";
 import {
@@ -283,11 +284,11 @@ export async function announceChapter(
   const chapter = (
     (await getDb().execute(sql`
       SELECT c.id, c.slug, n.title AS novel_title, n.slug AS novel_slug, n.editor_id, e.pen_name, e.slug AS author_slug,
-        -- Its number among the novel's published chapters, as readers see it.
+        -- Its number among the novel's released chapters, as readers see it.
         (SELECT count(*)::int FROM chapters o
-          WHERE o.novel_id = c.novel_id AND o.status = 'published' AND o.position <= c.position) AS number
+          WHERE o.novel_id = c.novel_id AND ${chapterReleased("o")} AND o.position <= c.position) AS number
       FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
-      WHERE c.id = ${chapterId} AND c.notified_at IS NOT NULL AND c.status = 'published'
+      WHERE c.id = ${chapterId} AND c.notified_at > '-infinity' AND ${chapterReleased("c")}
         AND n.visibility = 'public' AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
     `)) as unknown as {
       rows: {

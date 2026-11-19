@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { chapters, collections, editors, novels, poems } from "@/db/schema";
@@ -61,17 +62,25 @@ beforeEach(async () => {
     status: published ? ("published" as const) : ("draft" as const),
     publishedAt: everPublished ? new Date() : null,
   });
-  await db.insert(chapters).values([
+  await db.insert(chapters).values(withRelease([
     chapter(book.id, "one", 1, true),
     chapter(book.id, "draft", 2, false),
     chapter(book.id, "pulled", 3, false, true),
     chapter(unready.id, "first", 1, false),
     chapter(kofiBook.id, "k1", 1, true),
-  ]);
+  ]));
   // Not onboarded, with a published chapter: still nothing for readers.
   const [ghost] = await db.select().from(editors).where(eq(editors.slug, "not-onboarded"));
   const [ghostBook] = await db.insert(novels).values({ editorId: ghost.id, title: "G", slug: "ghost-book" }).returning();
-  await db.insert(chapters).values(chapter(ghostBook.id, "g1", 1, true));
+  await db.insert(chapters).values(withRelease(chapter(ghostBook.id, "g1", 1, true)));
+
+  // Scheduled chapters (Phase 28): one beside the book's published chapter, and a novel whose only chapter is scheduled.
+  const [soon] = await db.insert(novels).values({ editorId: ama.id, title: "Soon", slug: "soon" }).returning();
+  const later = new Date(Date.now() + 3 * 86_400_000);
+  await db.insert(chapters).values([
+    { ...chapter(book.id, "next-week", 4, true), publishedAt: later, releaseAt: later },
+    { ...chapter(soon.id, "opening", 1, true), publishedAt: later, releaseAt: later },
+  ]);
 });
 
 const cases: ReaderPath[] = [
@@ -108,6 +117,9 @@ const cases: ReaderPath[] = [
   { kind: "chapter", author: "kofi", novel: "kofi-book", chapter: "k1" },
   { kind: "chapter", author: "kofi", novel: "book", chapter: "one" },
   { kind: "chapter", author: "not-onboarded", novel: "ghost-book", chapter: "g1" },
+  { kind: "chapter", author: "ama", novel: "book", chapter: "next-week" },
+  { kind: "novel", author: "ama", novel: "soon" },
+  { kind: "chapter", author: "ama", novel: "soon", chapter: "opening" },
 ];
 
 async function pageHasContent(p: ReaderPath) {
@@ -122,6 +134,21 @@ describe("readerPathExists", () => {
   it("agrees with the page's own loader in every case", async () => {
     for (const p of cases) {
       expect(await readerPathExists(p), JSON.stringify(p)).toBe(await pageHasContent(p));
+    }
+  });
+
+  it("a scheduled chapter is missing until its time, then found, in step with the loaders (Phase 28)", async () => {
+    const scheduled = cases.slice(-3);
+    for (const p of scheduled) {
+      expect(await readerPathExists(p), JSON.stringify(p)).toBe(false);
+      expect(await pageHasContent(p), JSON.stringify(p)).toBe(false);
+    }
+    // Its time passes (moved into the past in SQL rather than waited for).
+    await db.execute(sql`UPDATE chapters SET release_at = now() - interval '1 minute', published_at = now() - interval '1 minute'
+      WHERE slug IN ('next-week', 'opening')`);
+    for (const p of scheduled) {
+      expect(await readerPathExists(p), JSON.stringify(p)).toBe(true);
+      expect(await pageHasContent(p), JSON.stringify(p)).toBe(true);
     }
   });
 

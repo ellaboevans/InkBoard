@@ -232,7 +232,7 @@ The board's sections are the author's work, so a novel goes in its author's sect
 | **23b: reading** | Book card on the board and author page, list view; novel page; chapter page (full page, measure, type, next/previous); reader 404s; "where you stopped" in `localStorage` with Continue; OG cards and JSON-LD; offline kinds; Privacy page; a11y and phone E2E. **First release to writers and readers.** | **L** (~1.5 weeks) |
 | **24: reach** | Feeds (author and per-novel), "new chapter" notifications to followers, novel titles in search, "Save this novel for offline". | **M** (~1 week) |
 | **25: private novels and covers** | Novel-level password (extended triggers, unlock grants), uploaded covers through the photo pipeline (2:3 crop, R2, removal, export, deletion), share a passage as an image. | **M–L** (~1.5 weeks) |
-| **Later, if asked** | Reader settings (text size, font: done, Phase 26), reading-time stats for writers (done, Phase 27: data already kept only), scheduled chapters, an "ongoing serials" view on the board. | S each |
+| **Later, if asked** | Reader settings (text size, font: done, Phase 26), reading-time stats for writers (done, Phase 27: data already kept only), scheduled chapters (done, Phase 28), an "ongoing serials" view on the board. | S each |
 
 23a and 23b can ship together if the owner prefers one release; they are split so the data and writing side can be reviewed before anything is public.
 

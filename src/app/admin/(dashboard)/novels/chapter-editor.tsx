@@ -3,9 +3,10 @@
 import { ArrowLeftIcon, ArrowRightIcon, BoldIcon, ItalicIcon, Loader2Icon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
-import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useActionState, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ProseText } from "@/components/novel/prose-text";
 import { StatusBadge } from "@/components/poem-badges";
+import { Badge } from "@/components/ui/badge";
 import { SpecialLetters } from "@/components/special-letters";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -28,6 +29,9 @@ import { chapterDraftKey, parseDraft, serializeDraft, shouldOfferDraft, type Cha
 import { CHAPTER_BODY_MAX, CHAPTER_TITLE_MAX, chapterDisplayTitle, readingMinutes } from "@/lib/novel-limits";
 import { notify, withErrorToast } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
+import { scheduleLabel } from "@/lib/chapter-schedule";
+import { ScheduleDialog } from "./schedule-dialog";
+import { ScheduledTime } from "./scheduled-time";
 import { toggleEmphasis, type TextEdit } from "@/lib/poem-markdown";
 import { countWords, DROP_CAP_MARKER, toggleDropCap } from "@/lib/prose";
 import { HistoryPanel, VersionDialog, type HistoryItem, type SelectedVersion } from "../poems/poem-history";
@@ -62,6 +66,8 @@ export type ChapterEditorProps = {
     title: string;
     body: string;
     status: "draft" | "published";
+    /** Phase 28: when it goes live (ISO) while that is still ahead, else null. */
+    scheduledAt: string | null;
     /** 1-based, over all chapters (drafts included). */
     position: number;
     total: number;
@@ -157,6 +163,8 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
   const basePath = `/admin/novels/${novel.id}/chapters/${chapter.id}`;
   const draftKey = chapterDraftKey(chapter.id);
   const formRef = useRef<HTMLFormElement>(null);
+  const formId = `chapter-form-${useId().replace(/:/g, "")}`;
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const keepStatusRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
@@ -177,27 +185,41 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
         lastSaved.set(chapter.id, { title: String(formData.get("title") ?? ""), body: String(formData.get("body") ?? ""), at: res.savedAt });
         writeDraft(draftKey, null);
         const unpublished = prevState.status === "published" && res.status === "draft";
-        notify.success(
-          res.publishedNow ? "Chapter published" : unpublished ? "Chapter unpublished" : res.status === "published" ? "Chapter saved" : "Draft saved",
-          res.status === "published"
-            ? "Readers will see published chapters when novels come to the board."
-            : "Drafts are only visible to you.",
-        );
+        // Labels in the browser's time zone: this runs in the browser.
+        const when = res.scheduledAt ? scheduleLabel(new Date(res.scheduledAt), new Date()) : "";
+        if (res.scheduleChange === "scheduled" || res.scheduleChange === "rescheduled") {
+          notify.success(res.scheduleChange === "scheduled" ? "Chapter scheduled" : "Schedule changed", `It goes live by itself on ${when}. Until then readers see nothing of it.`);
+        } else if (res.scheduleChange === "cancelled") {
+          notify.success("Schedule cancelled", "The chapter is a draft again. Drafts are only visible to you.");
+        } else {
+          notify.success(
+            res.publishedNow ? "Chapter published" : unpublished ? "Chapter unpublished" : res.scheduledAt ? "Chapter saved" : res.status === "published" ? "Chapter saved" : "Draft saved",
+            res.scheduledAt
+              ? `Still scheduled for ${when}.`
+              : res.status === "published"
+                ? "Readers will see published chapters when novels come to the board."
+                : "Drafts are only visible to you.",
+          );
+        }
       } else if (res.errors) {
         notify.error("Couldn't save the chapter", res.errors.form ?? Object.values(res.errors)[0]);
       }
       return res;
     }),
-    { status: chapter.status },
+    { status: chapter.status, scheduledAt: chapter.scheduledAt },
   );
 
   const [seenState, setSeenState] = useState(state);
   if (seenState !== state) {
     setSeenState(state);
-    if (state.savedAt) setSaved({ title, body, updatedAt: state.savedAt });
+    if (state.savedAt) {
+      setSaved({ title, body, updatedAt: state.savedAt });
+      setScheduleOpen(false); // a schedule was saved (a refusal keeps the dialog open)
+    }
   }
 
   const status = state.status ?? chapter.status;
+  const scheduledAt = state.savedAt ? (state.scheduledAt ?? null) : chapter.scheduledAt;
   const dirty = title !== saved.title || body !== saved.body;
   const errors = { ...state.errors, ...(clientError ? { body: clientError } : {}) };
   const words = countWords(body);
@@ -295,7 +317,7 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
 
   function validate(e: React.FormEvent<HTMLFormElement>) {
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    if (submitter?.value === "published" && !body.trim()) {
+    if ((submitter?.value === "published" || submitter?.value === "schedule" || submitter?.value === "now") && !body.trim()) {
       e.preventDefault();
       const message = "The chapter is empty: write something before publishing it";
       setClientError(message);
@@ -339,7 +361,11 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
       </nav>
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <StatusBadge status={status} />
+        {scheduledAt ? (
+          <Badge variant="secondary">Scheduled</Badge>
+        ) : (
+          <StatusBadge status={status} />
+        )}
         <span>
           Chapter {n} of {chapter.total} · readers see {pluralCount(publishedCount, "published chapter")}
         </span>
@@ -370,7 +396,7 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
         </Alert>
       )}
 
-      <form ref={formRef} action={formAction} onSubmit={validate} className="grid gap-4" noValidate>
+      <form id={formId} ref={formRef} action={formAction} onSubmit={validate} className="grid gap-4" noValidate>
         {/* Enter submits with the first submit button: keep the current status. */}
         <button ref={keepStatusRef} type="submit" name="status" value={status} disabled={pending} tabIndex={-1} aria-hidden className="sr-only" />
         <input type="hidden" name="body" value={body} />
@@ -497,7 +523,23 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
               History ({history.length})
             </a>
           </p>
-          {status === "published" ? (
+          {scheduledAt ? (
+            <>
+              <p className="w-full text-sm max-sm:basis-full sm:w-auto" data-schedule-status>
+                <ScheduledTime iso={scheduledAt} prefix="Scheduled for " fallback="Scheduled" />
+              </p>
+              <SubmitButton status="draft" pending={pending} variant="outline">
+                Cancel schedule
+              </SubmitButton>
+              <ScheduleDialog formId={formId} scheduledAt={scheduledAt} pending={pending} open={scheduleOpen} onOpenChange={setScheduleOpen} />
+              <SubmitButton status="published" pending={pending} variant="outline">
+                Save changes
+              </SubmitButton>
+              <SubmitButton status="now" pending={pending}>
+                Publish now
+              </SubmitButton>
+            </>
+          ) : status === "published" ? (
             <>
               <SubmitButton status="draft" pending={pending} variant="outline">
                 Unpublish
@@ -511,6 +553,7 @@ export function ChapterEditor({ novel, chapter, publishedCount, prev, next, just
               <SubmitButton status="draft" pending={pending} variant="outline">
                 Save draft
               </SubmitButton>
+              <ScheduleDialog formId={formId} scheduledAt={null} pending={pending} open={scheduleOpen} onOpenChange={setScheduleOpen} />
               <SubmitButton status="published" pending={pending}>
                 Publish chapter
               </SubmitButton>
@@ -557,7 +600,8 @@ function SubmitButton({
   variant,
   children,
 }: {
-  status: "draft" | "published";
+  /** "now": "Publish now" on a scheduled chapter. */
+  status: "draft" | "published" | "now";
   pending: boolean;
   variant?: "outline";
   children: React.ReactNode;

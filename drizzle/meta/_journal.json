@@ -225,6 +225,13 @@
       "when": 1795006164364,
       "tag": "0031_chapter_short_links",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795078144520,
+      "tag": "0032_chapter_release",
+      "breakpoints": true
     }
   ]
 }

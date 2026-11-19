@@ -52,12 +52,13 @@ async function EditChapter({ params, searchParams }: PageProps<"/admin/novels/[i
         title: chapter.title,
         body: chapter.body,
         status: chapter.status,
+        scheduledAt: chapter.scheduled && chapter.releaseAt ? chapter.releaseAt.toISOString() : null,
         position: index + 1,
         total: novel.chapters.length,
         updatedAt: chapter.updatedAt.getTime(),
         savedLabel: savedLabel(chapter.updatedAt),
       }}
-      publishedCount={novel.chapters.filter((c) => c.status === "published").length}
+      publishedCount={novel.chapters.filter((c) => c.status === "published" && !c.scheduled).length}
       prev={neighbour(index - 1)}
       next={neighbour(index + 1)}
       justCreated={created === "1"}

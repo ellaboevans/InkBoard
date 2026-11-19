@@ -72,6 +72,8 @@ async function chapter(title: string, status: "draft" | "published" = "published
   if (!res.ok) throw new Error(JSON.stringify(res));
   return res;
 }
+const neverAnnounced = async (id: string) =>
+  ((await db.execute(sql`SELECT notified_at = '-infinity' AS never FROM chapters WHERE id = ${id}`)) as unknown as { rows: { never: boolean }[] }).rows[0].never;
 const notifiedAt = async (id: string) => (await db.select({ at: chapters.notifiedAt }).from(chapters).where(eq(chapters.id, id)))[0].at;
 
 describe("a chapter is announced once: on its first publish, claimed in that transaction", () => {
@@ -208,8 +210,9 @@ describe("private novels (Phase 25): a chapter first published while its novel i
     expect(await publishChapter(ama, created.chapter.id)).toMatchObject({ announce: false });
     expect(await saveChapter(ama, draft.chapter.id, { title: "The Landing", body: "x", status: "draft" })).toMatchObject({ announce: false });
     expect(await saveChapter(ama, draft.chapter.id, { title: "The Landing", body: "x", status: "published" })).toMatchObject({ announce: false });
-    expect(await notifiedAt(created.chapter.id)).toBeNull();
-    expect(await notifiedAt(draft.chapter.id)).toBeNull();
+    // Going public settled them (Phase 28): released while private, so never to be sent.
+    expect(await neverAnnounced(created.chapter.id)).toBe(true);
+    expect(await neverAnnounced(draft.chapter.id)).toBe(true);
     expect(await announceChapter(created.chapter.id)).toMatchObject({ skipped: "not-announceable", sent: 0 });
     expect(send).not.toHaveBeenCalled();
 

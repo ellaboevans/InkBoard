@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "@/db";
@@ -33,12 +34,12 @@ beforeEach(async () => {
   ferry = n.id;
   const [draft] = await db
     .insert(chapters)
-    .values({ novelId: ferry, title: "Draft", slug: "draft", body: "DRAFT TEXT.", position: 1, status: "draft" })
+    .values(withRelease({ novelId: ferry, title: "Draft", slug: "draft", body: "DRAFT TEXT.", position: 1, status: "draft" }))
     .returning();
   void draft;
   const [c] = await db
     .insert(chapters)
-    .values({ novelId: ferry, title: "Thursday", slug: "thursday", body: TEXT, position: 2, status: "published", publishedAt: new Date() })
+    .values(withRelease({ novelId: ferry, title: "Thursday", slug: "thursday", body: TEXT, position: 2, status: "published", publishedAt: new Date() }))
     .returning();
   thursday = c.id;
 });
@@ -48,7 +49,7 @@ async function privateNovel() {
   const [n] = await db.insert(novels).values({ editorId: ama, title: "Behind the Door", slug: "door", visibility: "private" }).returning();
   const [c] = await db
     .insert(chapters)
-    .values({ novelId: n.id, title: "One", slug: "one", body: SECRET, position: 1, status: "published", publishedAt: new Date() })
+    .values(withRelease({ novelId: n.id, title: "One", slug: "one", body: SECRET, position: 1, status: "published", publishedAt: new Date() }))
     .returning();
   return { novelId: n.id, chapterId: c.id };
 }
@@ -215,7 +216,7 @@ describe("short links for chapters", () => {
     await db.update(novels).set({ visibility: "private" }).where(eq(novels.id, ferry));
     expect(await resolveShortCode(code)).toBeNull();
     await db.update(novels).set({ visibility: "public" }).where(eq(novels.id, ferry));
-    await db.update(chapters).set({ status: "draft" }).where(eq(chapters.id, thursday));
+    await db.update(chapters).set({ status: "draft", releaseAt: null }).where(eq(chapters.id, thursday));
     expect(await resolveShortCode(code)).toBeNull();
   });
 

@@ -181,8 +181,8 @@ test("browsers and feed readers find the feeds; robots.txt allows them", async (
   await sql(`WITH c AS (INSERT INTO collections (editor_id, title, slug) VALUES ('${ed[0].id}', 'Cycle', 'cycle') RETURNING id)
     UPDATE poems SET collection_id = (SELECT id FROM c), collection_position = 1 WHERE editor_id = '${ed[0].id}'`);
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${ed[0].id}', 'Lake', 'lake') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'One', 'one', 'The ferry came late.', 1, 'published', now(), 4 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'One', 'one', 'The ferry came late.', 1, 'published', now(), 4, now() FROM n`);
   const authorFeeds = [expect.stringMatching(abs(`/a/${slug}/feed.xml`)), expect.stringMatching(abs("/feed.xml"))];
   const novelFeeds = [expect.stringMatching(abs(`/a/${slug}/n/lake/feed.xml`)), ...authorFeeds];
   expect(await rawHeadFeedLinks(request, "/")).toEqual([expect.stringMatching(abs("/feed.xml"))]);

@@ -172,8 +172,8 @@ test("a writer uploads a cover, crops it to 2:3, readers see it on the novel pag
   // A novel with a published chapter, straight to the database; the cover's save refreshes the readers' cache.
   const { rows: made } = await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, blurb)
       VALUES ('${rows[0].id}', 'The Red Ferry', 'red-ferry', 'A ferry.') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published', now(), 4 FROM n RETURNING novel_id`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'Thursday', 'thursday', 'The ferry came late.', 1, 'published', now(), 4, now() FROM n RETURNING novel_id`);
   const adminUrl = `/admin/novels/${made[0].novel_id}`;
 
   // The drawn cover first, in the details.

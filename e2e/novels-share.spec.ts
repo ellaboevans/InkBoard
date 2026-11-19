@@ -46,11 +46,11 @@ async function setUp() {
     LONG,
   ].join("\\n\\n");
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug) VALUES ('${ed}', 'The Ferry at Yeji', 'ferry') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'Thursday', 'thursday', E'${body}', 1, 'published', now(), 60 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'Thursday', 'thursday', E'${body}', 1, 'published', now(), 60, now() FROM n`);
   await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, visibility) VALUES ('${ed}', 'Behind the Door', 'door', 'private') RETURNING id)
-    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count)
-    SELECT id, 'One', 'one', 'SECRET-PRIVATE-CHAPTER. It must never be drawn.', 1, 'published', now(), 6 FROM n`);
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, word_count, release_at)
+    SELECT id, 'One', 'one', 'SECRET-PRIVATE-CHAPTER. It must never be drawn.', 1, 'published', now(), 6, now() FROM n`);
   return { author };
 }
 

@@ -10,6 +10,8 @@ import { unstable_rethrow } from "next/navigation";
 import { useLayoutEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { StatusBadge } from "@/components/poem-badges";
+import { Badge } from "@/components/ui/badge";
+import { ScheduledTime } from "./scheduled-time";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -41,6 +43,8 @@ export type OrderChapter = {
   id: string;
   title: string;
   status: "draft" | "published";
+  /** Phase 28: when it goes live (ISO) while that is still ahead, else null. */
+  scheduledAt: string | null;
   wordCount: number;
   /** Server-formatted. */
   updatedLabel: string;
@@ -60,7 +64,8 @@ export function ChapterOrder({ novelId, chapters }: { novelId: string; chapters:
   const byId = new Map(chapters.map((c) => [c.id, c]));
   const shown = dropped?.every((id) => byId.has(id)) ? dropped.map((id) => byId.get(id)!) : chapters;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const published = chapters.filter((c) => c.status === "published").length;
+  const published = chapters.filter((c) => c.status === "published" && !c.scheduledAt).length;
+  const scheduled = chapters.filter((c) => c.scheduledAt).length;
 
   useLayoutEffect(() => {
     const target = focusNext.current;
@@ -125,11 +130,12 @@ export function ChapterOrder({ novelId, chapters }: { novelId: string; chapters:
           Chapters, in reading order
         </h2>
         <span className="text-sm text-muted-foreground tabular-nums">
-          {pluralCount(chapters.length, "chapter")} · {published} published
+          {pluralCount(chapters.length, "chapter")} · {published} published{scheduled > 0 && ` · ${scheduled} scheduled`}
         </span>
       </div>
       <p id="chapter-order-help" className="text-sm text-muted-foreground">
-        Readers see published chapters in this order, numbered without drafts. Drag a chapter by its handle, or use the
+        Readers see published chapters in this order, numbered without drafts (a scheduled chapter joins at its time). Drag a
+        chapter by its handle, or use the
         arrow buttons to move it.
       </p>
       <p role="status" className="sr-only">
@@ -167,7 +173,14 @@ export function ChapterOrder({ novelId, chapters }: { novelId: string; chapters:
                         {label}
                       </Link>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                        <StatusBadge status={c.status} />
+                        {c.scheduledAt ? (
+                          <>
+                            <Badge variant="secondary">Scheduled</Badge>
+                            <ScheduledTime iso={c.scheduledAt} prefix="for " />
+                          </>
+                        ) : (
+                          <StatusBadge status={c.status} />
+                        )}
                         <span className="tabular-nums">{pluralCount(c.wordCount, "word")}</span>
                         <span className="max-sm:sr-only">· edited {c.updatedLabel}</span>
                       </span>

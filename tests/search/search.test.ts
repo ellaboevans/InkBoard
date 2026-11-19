@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { withRelease } from "../support/chapters";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getDb } from "@/db";
 import { chapters, editors, novels, poems } from "@/db/schema";
@@ -113,10 +114,10 @@ describe("novel titles (Phase 24)", () => {
       .values({ editorId, title, slug: title.toLowerCase().replace(/[^a-z0-9]+/g, "-"), blurb: "a blurb about lighthouses" })
       .returning();
     if (chapterStatus) {
-      await db.insert(chapters).values({
+      await db.insert(chapters).values(withRelease({
         novelId: n.id, title: "Chapter Lighthouse", slug: "c", body, position: 1, status: chapterStatus,
         publishedAt: chapterStatus === "published" ? new Date() : null,
-      });
+      }));
     }
   }
   const novelTitles = async (q: string) => (await searchBoard(q)).novels.map((n) => n.title);

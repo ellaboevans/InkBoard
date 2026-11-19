@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
-import { VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/lib/site";
+import { SITE_OPERATOR, VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/lib/site";
 
 /*
  * InkBoard's own media player on the About page (docs/PLAN.md, Phase 30), on
@@ -158,6 +158,8 @@ for (const device of [
       expect(await video(page).getAttribute("controls")).toBeNull();
       // The music credit is in the dialog too.
       await expect(dialog.getByRole("link", { name: "Kevin MacLeod" })).toBeVisible();
+      // And the site's attribution, at the foot of the dialog.
+      await expect(dialog.getByText(`Designed & Built by ${SITE_OPERATOR}`)).toBeVisible();
       // First focus: the main button.
       const primary = player.locator("[data-primary]");
       await expect(primary).toBeFocused();

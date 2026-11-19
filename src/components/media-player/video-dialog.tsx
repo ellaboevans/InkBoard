@@ -3,6 +3,7 @@
 import { XIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { SITE_OPERATOR } from "@/lib/site";
 import { MediaPlayer, type MediaCaptions, type MediaPlayerHandle, type MediaSources } from "./media-player";
 
 /*
@@ -97,11 +98,15 @@ export default function VideoDialog({
           </DialogClose>
         </div>
         <MediaPlayer ref={player} sources={sources} captions={captions} poster={poster} label={label} autoPlay={autoPlay} />
-        {credit ? (
-          <DialogDescription className="px-4 py-2.5 text-xs text-muted-foreground">{credit}</DialogDescription>
-        ) : (
-          <DialogDescription className="sr-only">{label}</DialogDescription>
-        )}
+        {/* The credit (the dialog's description) and the site's attribution: one row on wide screens, stacked on phones. */}
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-muted-foreground">
+          {credit ? (
+            <DialogDescription className="text-xs">{credit}</DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">{label}</DialogDescription>
+          )}
+          <p data-attribution="">Designed &amp; Built by {SITE_OPERATOR}</p>
+        </div>
       </DialogContent>
     </Dialog>
   );

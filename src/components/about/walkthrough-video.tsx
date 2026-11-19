@@ -3,7 +3,7 @@
 import { PlayIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { WALKTHROUGH_MUSIC_CREDIT as MUSIC, type WalkthroughSource } from "@/lib/site";
+import { VIDEO_HOST_NAME, WALKTHROUGH_MUSIC_CREDIT as MUSIC, type WalkthroughSource } from "@/lib/site";
 import type { StaticImageData } from "next/image";
 import cover1920 from "@/assets/about/walkthrough-cover-1920.webp";
 import cover960 from "@/assets/about/walkthrough-cover-960.webp";
@@ -56,7 +56,7 @@ const WALKTHROUGH_COPY: VideoCopy = {
   player: "InkBoard walkthrough video",
   state: "data-walkthrough",
   ready:
-    "Six minutes, with narration. It streams from our video host, ImageKit, once you press play; nothing is loaded from it before that.",
+    `Six minutes, with narration. It streams from our video host, ${VIDEO_HOST_NAME}, once you press play; nothing is loaded from it before that.`,
 };
 
 export const WHATS_NEW_COPY: VideoCopy = {
@@ -65,7 +65,7 @@ export const WHATS_NEW_COPY: VideoCopy = {
   player: "What’s new in InkBoard video",
   state: "data-whats-new",
   ready:
-    "What’s new since the walkthrough above, in three minutes: pictures of poems and passages, profile photos, following writers, novels and stats. It streams from ImageKit once you press play.",
+    `What’s new since the walkthrough above, in three minutes: pictures of poems and passages, profile photos, following writers, novels and stats. It streams from ${VIDEO_HOST_NAME} once you press play.`,
 };
 
 function Cover({ alt, cover = WALKTHROUGH_COPY.cover }: { alt: string; cover?: VideoCopy["cover"] }) {
@@ -204,7 +204,7 @@ function VideoCard({ video, copy }: { video: WalkthroughSource; copy: VideoCopy 
           </p>
         ) : (
           <p>
-            {state === "ready" ? copy.ready : "Streaming from our video host, ImageKit."}
+            {state === "ready" ? copy.ready : `Streaming from our video host, ${VIDEO_HOST_NAME}.`}
           </p>
         )}
         <p>

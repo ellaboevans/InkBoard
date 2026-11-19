@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { HOSTED_VIDEO, VIDEO_HOST_ORIGIN, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "../src/lib/site";
 import { expectBackOnList, signUpAs, sql } from "./helpers";
 
 /*
@@ -11,13 +12,13 @@ test.beforeEach(() => sql("DELETE FROM rate_limits"));
 
 const meta = (page: Page, name: string) => page.locator(`meta[name="${name}"]`).first().getAttribute("content");
 
-test("About: what InkBoard is, the walkthrough (nothing from ImageKit before play), and the way in", async ({ page }) => {
+test("About: what InkBoard is, the videos (nothing from the video host before play), and the way in", async ({ page }) => {
   // The video host is never really reached from tests: record and refuse every request to it.
   // Held until the player has been checked, then refused, so the page's error state shows.
   const toHost: string[] = [];
   let release = () => {};
-  const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route("https://ik.imagekit.io/**", async (route) => {
+  let held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`${VIDEO_HOST_ORIGIN}/**`, async (route) => {
     toHost.push(route.request().url());
     await held;
     await route.abort();
@@ -31,58 +32,59 @@ test("About: what InkBoard is, the walkthrough (nothing from ImageKit before pla
     await expect(main.getByRole("heading", { level: 2, name: heading })).toBeVisible();
   }
 
-  // The walkthrough (WALKTHROUGH_VIDEO): our cover as a play button, no <video> and no request to ImageKit yet.
-  const video = main.locator("[data-walkthrough]");
-  await expect(video).toHaveAttribute("data-walkthrough", "ready");
-  const play = video.getByRole("button", { name: "Play the walkthrough" });
-  await expect(play).toBeVisible();
-  const cover = play.locator("img");
-  await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-  expect(await cover.evaluate((img: HTMLImageElement) => new URL(img.currentSrc).pathname)).toMatch(/^\/_next\/static\/.*walkthrough-cover-\d+.*\.webp$/);
+  // Before any press: no <video>, no frames, nothing asked of the video host; the CSP allows its origin only while a video is set.
   await expect(main.locator("video, iframe")).toHaveCount(0);
-  await expect(video.getByRole("link", { name: "Kevin MacLeod" })).toHaveAttribute("href", "https://incompetech.com");
-  await expect(video.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
   await page.waitForLoadState("networkidle");
   expect(toHost).toEqual([]);
-  // The CSP allows media from ImageKit's origin, and still no frames.
   const csp = res!.headers()["content-security-policy"];
-  expect(csp).toContain("media-src 'self' https://ik.imagekit.io");
   expect(csp).not.toContain("frame-src");
+  if (HOSTED_VIDEO) expect(csp).toContain(`media-src 'self' ${VIDEO_HOST_ORIGIN}`);
+  else expect(csp).not.toContain("media-src");
 
-  // Pressing play mounts the browser's player (focused, our cover as poster) and asks ImageKit for the video.
-  await play.click();
-  const player = main.locator('video[aria-label="InkBoard walkthrough video"]');
-  await expect(player).toBeVisible();
-  await expect(player).toBeFocused();
-  await expect(video).toHaveAttribute("data-walkthrough", "playing");
-  expect(new URL((await player.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(/^\/_next\/static\/.*walkthrough-cover-1920.*\.webp$/);
-  await expect.poll(() => toHost.length).toBeGreaterThan(0);
-  expect(toHost.every((u) => u.startsWith("https://ik.imagekit.io/kkldhhslb/inkboard-walkthrough-final.mp4"))).toBe(true);
-  release();
-  // Refused here, so it says it couldn't load, and the play button is back to try again.
-  await expect(video.getByRole("alert")).toHaveText(/The video couldn’t load/);
-  await expect(video).toHaveAttribute("data-walkthrough", "error");
-  await expect(video.getByRole("button", { name: "Play the walkthrough" })).toBeVisible();
+  // Each video: our cover as its play button; pressing it mounts the browser's player, which asks the host for that video only.
+  const videos = [
+    { video: WALKTHROUGH_VIDEO, attr: "data-walkthrough", play: "Play the walkthrough", player: "InkBoard walkthrough video", cover: "walkthrough-cover" },
+    { video: WHATS_NEW_VIDEO, attr: "data-whats-new", play: "Play what’s new", player: "What’s new in InkBoard video", cover: "whats-new-cover" },
+  ] as const;
+  for (const v of videos) {
+    const figure = main.locator(`[${v.attr}]`);
+    if (!v.video) {
+      // The walkthrough says it's coming; "What's new" isn't shown at all.
+      if (v.attr === "data-walkthrough") {
+        await expect(figure).toHaveAttribute(v.attr, "coming-soon");
+        await expect(figure).toContainText("Video coming soon");
+        await expect(figure.getByRole("button")).toHaveCount(0);
+      } else {
+        await expect(figure).toHaveCount(0);
+      }
+      continue;
+    }
+    await expect(figure).toHaveAttribute(v.attr, "ready");
+    const play = figure.getByRole("button", { name: v.play });
+    await expect(play).toBeVisible();
+    const cover = play.locator("img");
+    await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    expect(await cover.evaluate((img: HTMLImageElement) => new URL(img.currentSrc).pathname)).toMatch(new RegExp(`^/_next/static/.*${v.cover}-\\d+.*\\.webp$`));
+    await expect(figure.getByRole("link", { name: "Kevin MacLeod" })).toHaveAttribute("href", "https://incompetech.com");
+    await expect(figure.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
 
-  // "What's new" (WHATS_NEW_VIDEO), below it: its own cover and play button, the same rule (nothing before play).
-  const whatsNew = main.locator("[data-whats-new]");
-  await expect(whatsNew).toHaveAttribute("data-whats-new", "ready");
-  const playNew = whatsNew.getByRole("button", { name: "Play what’s new" });
-  await expect(playNew).toBeVisible();
-  const newCover = playNew.locator("img");
-  await expect.poll(() => newCover.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-  expect(await newCover.evaluate((img: HTMLImageElement) => new URL(img.currentSrc).pathname)).toMatch(/^\/_next\/static\/.*whats-new-cover-\d+.*\.webp$/);
-  await expect(whatsNew.locator("video")).toHaveCount(0);
-  const before = toHost.length;
-  await playNew.click();
-  const newPlayer = main.locator('video[aria-label="What’s new in InkBoard video"]');
-  await expect(newPlayer).toBeVisible();
-  await expect(newPlayer).toBeFocused();
-  expect(new URL((await newPlayer.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(/^\/_next\/static\/.*whats-new-cover-1920.*\.webp$/);
-  await expect.poll(() => toHost.length).toBeGreaterThan(before);
-  expect(toHost.slice(before).every((u) => u.startsWith("https://ik.imagekit.io/kkldhhslb/whats-new-walkthrough-720p.mp4"))).toBe(true);
-  await expect(whatsNew).toHaveAttribute("data-whats-new", "error");
-  await expect(whatsNew.getByRole("button", { name: "Play what’s new" })).toBeVisible();
+    held = new Promise<void>((resolve) => (release = resolve));
+    const before = toHost.length;
+    await play.click();
+    const player = main.locator(`video[aria-label="${v.player}"]`);
+    await expect(player).toBeVisible();
+    await expect(player).toBeFocused();
+    await expect(figure).toHaveAttribute(v.attr, "playing");
+    expect(new URL((await player.getAttribute("poster")) ?? "", page.url()).pathname).toMatch(new RegExp(`^/_next/static/.*${v.cover}-1920.*\\.webp$`));
+    await expect.poll(() => toHost.length).toBeGreaterThan(before);
+    const sources = [v.video.hls, v.video.mp4].filter((u): u is string => !!u).map((u) => u.split("?")[0]);
+    expect(toHost.slice(before).every((u) => sources.some((src) => u.startsWith(src)))).toBe(true);
+    release();
+    // Refused here, so it says it couldn't load, and the play button is back to try again.
+    await expect(figure.getByRole("alert")).toHaveText(/The video couldn’t load/);
+    await expect(figure).toHaveAttribute(v.attr, "error");
+    await expect(figure.getByRole("button", { name: v.play })).toBeVisible();
+  }
 
   // The invitation, and the privacy page.
   await expect(main.getByRole("link", { name: "Read the board" })).toHaveAttribute("href", "/");
@@ -129,9 +131,10 @@ test("Privacy: who runs it, how to reach them, and the facts with an Updated dat
   await expect(main).toContainText("A sign-in lasts 30 days");
   await expect(main).toContainText("the sign-in lasts 12 hours");
   await expect(main).toContainText("we haven’t been able to use for 90 days");
-  // Services, including the video host (WALKTHROUGH_VIDEO is set), and no YouTube.
-  for (const service of ["Vercel", "Neon", "Resend", "ImageKit"]) await expect(main.getByText(service, { exact: true }).first()).toBeVisible();
-  await expect(main).toContainText("nothing is loaded from ImageKit before that");
+  // Services, the video host only while a video is set, and no YouTube.
+  for (const service of ["Vercel", "Neon", "Resend"]) await expect(main.getByText(service, { exact: true }).first()).toBeVisible();
+  if (HOSTED_VIDEO) await expect(main).toContainText("nothing is loaded from it before that");
+  else await expect(main).not.toContainText("ImageKit");
   await expect(main).not.toContainText("YouTube");
 });
 

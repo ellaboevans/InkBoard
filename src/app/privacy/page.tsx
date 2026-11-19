@@ -7,7 +7,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { PRIVACY_FACTS as F, PRIVACY_UPDATED } from "@/lib/privacy-facts";
-import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, HOSTED_VIDEO, SITE_NAME, SITE_OPERATOR } from "@/lib/site";
+import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, HOSTED_VIDEO, SITE_NAME, SITE_OPERATOR, VIDEO_HOST_NAME, VIDEO_HOST_ORIGIN } from "@/lib/site";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19), written from the code: the
@@ -400,9 +400,10 @@ export default function PrivacyPage() {
             </li>
             {HOSTED_VIDEO && (
               <li>
-                <strong className="font-medium">ImageKit</strong> hosts the videos on the About page and streams one
-                from ik.imagekit.io once you press its play button; nothing is loaded from ImageKit before that. Like
-                any website, it then receives your IP address, your browser and the video’s address.
+                <strong className="font-medium">{VIDEO_HOST_NAME}</strong> hosts the videos on the About page and
+                streams one from {new URL(VIDEO_HOST_ORIGIN).host} once you press its play button; nothing is loaded
+                from it before that. Like any website, it then receives your IP address, your browser and the video’s
+                address.
               </li>
             )}
           </ul>

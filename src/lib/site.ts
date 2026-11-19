@@ -16,8 +16,10 @@ export const SITE_OPERATOR = "Evans Elabo";
 /** Where privacy questions and requests go; shown only on our own pages, as a mailto link. */
 export const PRIVACY_CONTACT_EMAIL = "ellaboevans@gmail.com";
 
-/** Where the walkthrough video is hosted (ImageKit). The CSP's `media-src` allows this origin only. */
+/** Where the About page's videos are hosted. The CSP's `media-src` allows this origin only. */
 export const VIDEO_HOST_ORIGIN = "https://ik.imagekit.io";
+/** The video host's name, as the Privacy page and the video captions show it. */
+export const VIDEO_HOST_NAME = "ImageKit";
 
 /** A video's encodings, both on VIDEO_HOST_ORIGIN. */
 export type WalkthroughSource = {
@@ -38,10 +40,7 @@ export type WalkthroughSource = {
  * VIDEO_HOST_ORIGIN. `updatedAt` is ImageKit's cache key: bump it with the
  * file's new value after replacing the video in ImageKit.
  */
-export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
-  hls: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4/ik-master.m3u8?updatedAt=1794859127104&tr=sr-240_360_480_720_1080`,
-  mp4: `${VIDEO_HOST_ORIGIN}/kkldhhslb/inkboard-walkthrough-final.mp4?updatedAt=1794859127104&tr=w-1280`,
-};
+export const WALKTHROUGH_VIDEO: WalkthroughSource | null = null;
 
 /**
  * The second video on the About page, "What's new in InkBoard" (2:53, made in
@@ -51,10 +50,11 @@ export const WALKTHROUGH_VIDEO: WalkthroughSource | null = {
  * delivered as uploaded (no ImageKit transformation: the account's video
  * transformation quota was used up when it was added); add `hls` like the
  * walkthrough's once ImageKit can make it.
+ *
+ * Both are null for now (2026-11-19): the files were removed from ImageKit
+ * and are moving to Cloudflare R2, so the page shows "Video coming soon".
  */
-export const WHATS_NEW_VIDEO: WalkthroughSource | null = {
-  mp4: `${VIDEO_HOST_ORIGIN}/kkldhhslb/whats-new-walkthrough-720p.mp4`,
-};
+export const WHATS_NEW_VIDEO: WalkthroughSource | null = null;
 
 /** Whether the About page streams any video from VIDEO_HOST_ORIGIN (the CSP and the Privacy page follow it). */
 export const HOSTED_VIDEO = WALKTHROUGH_VIDEO !== null || WHATS_NEW_VIDEO !== null;

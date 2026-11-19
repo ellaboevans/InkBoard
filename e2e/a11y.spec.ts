@@ -911,8 +911,9 @@ test("About and Privacy pages, phone and desktop; a missing poem in the overlay"
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/about");
-    await expect(page.getByRole("button", { name: "Play the walkthrough" })).toBeVisible();
-    await scan(page, `about (walkthrough ready to play) at ${width}px`);
+    await expect(page.getByRole("heading", { level: 1, name: "About InkBoard" })).toBeVisible();
+    await expect(page.locator("[data-walkthrough]")).toBeVisible();
+    await scan(page, `about (with its videos, or "coming soon") at ${width}px`);
     await page.goto("/privacy");
     await expect(page.getByRole("heading", { level: 1, name: "Privacy" })).toBeVisible();
     await scan(page, `privacy at ${width}px`);

@@ -116,6 +116,19 @@ export default function AboutPage() {
                 text: "Each writer has a section of their own. Drag to move around, pinch or scroll to zoom, or switch to the list view. Search finds writers and poem titles, and you can show only the poems in one language.",
               },
               {
+                lead: "Read novels, chapter by chapter.",
+                text: (
+                  <>
+                    Some writers publish serial novels. The{" "}
+                    <Link href="/novels" className="underline underline-offset-4">
+                      Novels
+                    </Link>{" "}
+                    page lists the ones still being written, most recently updated first, and remembers on this device
+                    where you stopped.
+                  </>
+                ),
+              },
+              {
                 lead: "Some poems are private.",
                 text: "You’ll see their title and author; the writer shares a password with the people they’d like to read them.",
               },

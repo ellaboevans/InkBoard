@@ -72,6 +72,8 @@ async function warmUp() {
     ["/p/warm-up/warm-up/opengraph-image"],
     ["/manifest.webmanifest"],
     ["/offline"],
+    ["/novels"],
+    ["/novels/opengraph-image"],
     ["/about"],
     ["/about/opengraph-image"],
     ["/privacy"],

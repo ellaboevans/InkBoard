@@ -1,6 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
-import type { AuthorPage, BoardSection, CollectionPage, NovelPage, ReaderChapter, ReaderPoem } from "@/lib/board-types";
+import type { AuthorPage, BoardSection, CollectionPage, NovelPage, ReaderChapter, ReaderPoem, SerialsPage } from "@/lib/board-types";
 import {
   loadAuthorPage,
   loadBoardSections,
@@ -8,6 +8,7 @@ import {
   loadNovelPage,
   loadReaderChapter,
   loadReaderPoem,
+  loadSerialsPage,
   loadSitemapChapters,
   type SitemapChapter,
 } from "./board";
@@ -104,4 +105,12 @@ export async function getNovelFeed(authorSlug: string, novelSlug: string): Promi
   cacheTag(BOARD_TAG);
   await releaseAwareCacheLife();
   return loadNovelFeed(authorSlug, novelSlug);
+}
+
+/** The "ongoing serials" page, /novels (Phase 29): released chapters only, so it lives until the next release. */
+export async function getSerialsPage(): Promise<SerialsPage> {
+  "use cache";
+  cacheTag(BOARD_TAG);
+  await releaseAwareCacheLife();
+  return loadSerialsPage();
 }

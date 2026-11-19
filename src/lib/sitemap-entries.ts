@@ -23,6 +23,7 @@ export function sitemapEntries(
 ): MetadataRoute.Sitemap {
   return [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
+    { url: absoluteUrl("/novels"), changeFrequency: "daily", priority: 0.8 },
     { url: absoluteUrl("/about"), changeFrequency: "monthly", priority: 0.5 },
     { url: absoluteUrl("/privacy"), changeFrequency: "yearly", priority: 0.2 },
     ...sections.flatMap((s) => [

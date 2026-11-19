@@ -66,3 +66,6 @@ export const chapterPageAlternates = (c: { authorSlug: string; penName: string; 
   canonical: `/a/${c.authorSlug}/n/${c.novel.slug}/${c.slug}`,
   ...feedAlternates({ slug: c.authorSlug, penName: c.penName }, c.novel),
 });
+
+/** The "ongoing serials" page (Phase 29): the site feed, which announces every new novel. */
+export const serialsPageAlternates = () => ({ canonical: "/novels", ...feedAlternates() });

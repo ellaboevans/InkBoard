@@ -53,12 +53,12 @@ describe("which request gets which strategy", () => {
     expect(R.verdict(200, "text/html; charset=utf-8", page("<h1>Novel not found</h1>"))).toBe("drop");
   });
 
-  it("the About and Privacy pages are reader pages too (kind \"page\"), and nothing under them is", () => {
-    for (const path of ["/about", "/privacy"]) {
+  it("the About, Privacy and Novels pages are reader pages too (kind \"page\"), and nothing under them is", () => {
+    for (const path of ["/about", "/privacy", "/novels"]) {
       expect(req(path), path).toBe("reader-page");
       expect(R.readerKind(path), path).toBe("page");
     }
-    for (const path of ["/about/x", "/privacy/x", "/aboutx", "/about/opengraph-image"]) {
+    for (const path of ["/about/x", "/privacy/x", "/aboutx", "/about/opengraph-image", "/novels/opengraph-image", "/novelsx", "/novels/x"]) {
       expect(R.readerKind(path), path).toBeNull();
     }
   });

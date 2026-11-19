@@ -110,3 +110,25 @@ export function RememberChapter({ novelId, chapterSlug }: { novelId: string; cha
   useEffect(() => rememberChapter(novelId, chapterSlug), [novelId, chapterSlug]);
   return null;
 }
+
+/**
+ * "Continue: Chapter n" on a /novels card (Phase 29), only when this browser
+ * has a place in the novel; nothing on the server or while hydrating. Sits
+ * above the card's stretched link (relative z-20, over the title link's z-10 ::after), so it is its own target.
+ */
+export function SerialContinue({ novelId, base, chapterSlugs }: { novelId: string; base: string; chapterSlugs: string[] }) {
+  const i = continueIndex(
+    useReadingPlace(novelId),
+    chapterSlugs.map((slug) => ({ slug })),
+  );
+  if (i === null) return null;
+  return (
+    <a
+      href={`${base}/${chapterSlugs[i]}`}
+      data-serial-continue
+      className="relative z-20 inline-flex min-h-11 items-center self-start rounded-lg px-1 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+    >
+      Continue: Chapter {i + 1}
+    </a>
+  );
+}

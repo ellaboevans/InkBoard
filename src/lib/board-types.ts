@@ -180,3 +180,22 @@ export type CollectionPage = {
   updatedAt: string;
   poems: (BoardPoem & { part: number; publishedAt: string | null })[];
 };
+
+/**
+ * A novel on the "ongoing serials" page, /novels (docs/PLAN.md, Phase 29): its
+ * book-card facts, its author, and its latest released chapter. Released
+ * chapters only (chapterReleased), never chapter text.
+ */
+export type SerialNovel = BoardNovel & {
+  editorId: string;
+  penName: string;
+  authorSlug: string;
+  picture: AuthorPicture;
+  /** Released chapters' slugs in reading order: this browser's saved place is matched against them ("Continue: Chapter n"). */
+  chapterSlugs: string[];
+  /** The most recently released chapter, numbered among released chapters. */
+  latest: { number: number; title: string; displayTitle: string; slug: string; publishedAt: string | null };
+};
+
+/** /novels: still being written first, then finished; each most recently updated first. */
+export type SerialsPage = { ongoing: SerialNovel[]; complete: SerialNovel[] };

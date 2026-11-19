@@ -7,6 +7,7 @@ import {
   collectionPageAlternates,
   novelPageAlternates,
   poemPageAlternates,
+  serialsPageAlternates,
 } from "@/lib/feed-links";
 import { chapterPath, novelPath } from "@/lib/novel-seo";
 import { absoluteUrl } from "@/lib/site";
@@ -25,6 +26,12 @@ describe("each reader page's feed links", () => {
   it("board: the site feed only", () => {
     const a = boardAlternates();
     expect(a.canonical).toBe("/");
+    expect(feeds(a)).toEqual([site]);
+  });
+
+  it("novels page (Phase 29): the site feed only", () => {
+    const a = serialsPageAlternates();
+    expect(a.canonical).toBe("/novels");
     expect(feeds(a)).toEqual([site]);
   });
 

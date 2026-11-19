@@ -3,6 +3,7 @@
 import { AuthorPicture } from "@/components/author/author-picture";
 import {
   FeatherIcon,
+  BookOpenIcon,
   InfoIcon,
   ListIcon,
   LogInIcon,
@@ -789,8 +790,8 @@ function AuthorsPanel({
 }) {
   return (
     // In the top overlay column; only the button and the list take pointer events.
-    <div className="pointer-events-none w-64 max-w-full self-start">
-      {/* About sits here, not in the toolbar: the toolbar has no room left on
+    <div className="pointer-events-none w-80 max-w-full self-start">
+      {/* Novels (Phase 29) and About sit here, not in the toolbar: the toolbar has no room left on
           phones (two rows at 320px), and this column is in the flow, so it
           can't cover anything (docs/PLAN.md, Phase 19). */}
       <div className="flex flex-wrap gap-2">
@@ -807,6 +808,12 @@ function AuthorsPanel({
           <span className="text-muted-foreground">{sections.length}</span>
         </Button>
         <Button asChild variant="outline" size="sm" className="pointer-events-auto bg-background/85 backdrop-blur">
+          <Link href="/novels">
+            <BookOpenIcon aria-hidden />
+            Novels
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="pointer-events-auto bg-background/85 backdrop-blur">
           <Link href="/about">
             <InfoIcon aria-hidden />
             About
@@ -818,7 +825,7 @@ function AuthorsPanel({
         <nav
           id="authors-list"
           aria-label="Authors"
-          className="pointer-events-auto mt-2 max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
+          className="pointer-events-auto mt-2 w-64 max-w-full max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
         >
           <ul>
             {sections.map((s, i) => (

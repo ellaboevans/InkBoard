@@ -17,6 +17,8 @@ import type {
   ReaderChapterSummary,
   ReaderCollection,
   ReaderPoem,
+  SerialNovel,
+  SerialsPage,
 } from "@/lib/board-types";
 import { chapterDisplayTitle, readingMinutes } from "@/lib/novel-limits";
 import type { ReaderPath } from "@/lib/reader-paths";
@@ -189,6 +191,79 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
     editorId,
     novel: { ...n, readingMinutes: readingMinutes(n.wordCount), updatedAt: updatedAt?.toISOString() ?? null },
   }));
+}
+
+/**
+ * The "ongoing serials" page, /novels (docs/PLAN.md, Phase 29): every novel
+ * readers can see (an onboarded author, at least one released chapter), split
+ * by the writer's own status, each list ordered by its latest released
+ * chapter, newest first. One query: novels × authors × released chapters,
+ * grouped per novel (the chapters_novel_position_key index for the join). Never the
+ * email, never chapter text: only chapter slugs, titles and dates.
+ */
+export async function loadSerialsPage(): Promise<SerialsPage> {
+  const latestOrder = sql`${chapters.publishedAt} DESC NULLS LAST, ${chapters.position} DESC`;
+  const rows = await getDb()
+    .select({
+      editorId: novels.editorId,
+      id: novels.id,
+      title: novels.title,
+      slug: novels.slug,
+      language: novels.language,
+      status: novels.status,
+      visibility: novels.visibility,
+      coverKey: novels.coverKey,
+      blurb: sql<string | null>`NULLIF(left(split_part(${novels.blurb}, E'\n', 1), ${CARD_BLURB_CHARS}), '')`,
+      penName: editors.penName,
+      authorSlug: editors.slug,
+      avatar: editors.avatar,
+      photoKey: editors.photoKey,
+      chapterCount: sql<number>`count(${chapters.id})::int`,
+      wordCount: sql<number>`coalesce(sum(${chapters.wordCount}), 0)::int`,
+      chapterSlugs: sql<string[]>`array_agg(${chapters.slug} ORDER BY ${chapters.position})`,
+      latestSlug: sql<string>`(array_agg(${chapters.slug} ORDER BY ${latestOrder}))[1]`,
+      latestTitle: sql<string>`(array_agg(${chapters.title} ORDER BY ${latestOrder}))[1]`,
+      updatedAt: sql<Date | null>`max(${chapters.publishedAt})`.mapWith(chapters.publishedAt),
+    })
+    .from(novels)
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .innerJoin(chapters, and(eq(chapters.novelId, novels.id), chapterReleased()))
+    .where(and(isNotNull(editors.penName), isNotNull(editors.slug)))
+    .groupBy(novels.id, editors.id)
+    .orderBy(sql`max(${chapters.publishedAt}) DESC NULLS LAST`, asc(novels.title), asc(novels.id));
+  const page: SerialsPage = { ongoing: [], complete: [] };
+  for (const r of rows) {
+    const number = r.chapterSlugs.indexOf(r.latestSlug) + 1;
+    const updatedAt = r.updatedAt?.toISOString() ?? null;
+    const novel: SerialNovel = {
+      id: r.id,
+      title: r.title,
+      slug: r.slug,
+      language: r.language,
+      status: r.status,
+      visibility: r.visibility,
+      coverKey: r.coverKey,
+      blurb: r.blurb,
+      chapterCount: r.chapterCount,
+      wordCount: r.wordCount,
+      readingMinutes: readingMinutes(r.wordCount),
+      updatedAt,
+      editorId: r.editorId,
+      penName: r.penName!,
+      authorSlug: r.authorSlug!,
+      picture: authorPicture({ id: r.editorId, avatar: r.avatar, photoKey: r.photoKey }),
+      chapterSlugs: r.chapterSlugs,
+      latest: {
+        number,
+        title: r.latestTitle,
+        displayTitle: chapterDisplayTitle(r.latestTitle, number),
+        slug: r.latestSlug,
+        publishedAt: updatedAt,
+      },
+    };
+    (novel.status === "complete" ? page.complete : page.ongoing).push(novel);
+  }
+  return page;
 }
 
 /** The novel by author + novel slug, with its published chapters (no text), or null if it has none. */

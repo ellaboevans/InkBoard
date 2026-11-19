@@ -929,6 +929,41 @@ test("About and Privacy pages, phone and desktop; a missing poem in the overlay"
   await scan(page, "overlay: poem not found");
 });
 
+test("the novels page (ongoing serials): empty, and with an ongoing, a private and a finished novel and a saved place, phone and desktop", async ({ page }) => {
+  // Empty: no other test here makes a finished novel, and run alone (-g) nothing is published at all.
+  await page.goto("/novels");
+  await expect(page.getByText("No novel is finished yet.")).toBeVisible();
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await scan(page, `novels page: empty sections, ${width}px`);
+  }
+  const id = unique();
+  const email = `a11y-serials-${id}@example.com`;
+  await signUpAs(page, email, `Serial Writer ${id}`);
+  const { rows } = await sql(`SELECT id FROM editors WHERE email = '${email}'`);
+  await sql(`WITH n AS (INSERT INTO novels (editor_id, title, slug, status, visibility, password_hash, language, blurb) VALUES
+      ('${rows[0].id}', 'Ɔdɔ ne Ɛkɔm', 'odo', 'ongoing', 'public', NULL, 'ak', 'Every Thursday the ferry crosses the lake.'),
+      ('${rows[0].id}', 'The Locked Room', 'locked', 'ongoing', 'private', 'scrypt$16384$8$1$c2FsdA$aGFzaA', NULL, NULL),
+      ('${rows[0].id}', 'The Finished Book', 'finished', 'complete', 'public', NULL, NULL, 'All done.') RETURNING id, slug)
+    INSERT INTO chapters (novel_id, title, slug, body, position, status, published_at, release_at, word_count)
+    SELECT n.id, t.title, t.slug, 'Text.', t.pos, 'published', now() - t.ago, now() - t.ago, 900 FROM n,
+      (VALUES ('Thursday', 'thursday', 1, interval '2 days'), ('', 'chapter', 2, interval '1 day')) AS t(title, slug, pos, ago)`);
+  // A poem through the app refreshes the cached page.
+  await publish(page, `Serials board ${id}`, "a line");
+  const { rows: odo } = await sql(`SELECT id FROM novels WHERE editor_id = '${rows[0].id}' AND slug = 'odo'`);
+  await page.goto("/novels");
+  await page.evaluate((novelId) => {
+    localStorage.setItem("inkboard-reading", JSON.stringify({ v: 1, novels: { [novelId]: { chapter: "thursday", at: new Date().toISOString() } } }));
+  }, odo[0].id as string);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/novels");
+    await expect(page.getByRole("link", { name: "The Locked Room (novel, password protected)" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Continue: Chapter 1" })).toBeVisible();
+    await scan(page, `novels page: with novels, ${width}px`);
+  }
+});
+
 test("install nudge: every card state", async ({ browser }) => {
   // Chromium's beforeinstallprompt, simulated; this load counts as a second visit.
   const prompt = () =>

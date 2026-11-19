@@ -10,7 +10,7 @@
  *   1. Only reader pages: the board (/), poem pages (/p/a/b), author pages
  *      (/a/a), collection pages (/a/a/c/c), novel pages (/a/a/n/n) and
  *      chapter pages (/a/a/n/n/c; Phase 23b), and the About and Privacy pages
- *      (/about, /privacy; kind "page", Phase 19). A novel's own files
+ *      (/about, /privacy; kind "page", Phase 19; /novels, Phase 29). A novel's own files
  *      (opengraph-image, twitter-image, feed.xml) are never chapters. Never /admin, /sign-in, /api,
  *      the feeds, /sw.js, anything that isn't a GET, any RSC request
  *      (navigations, prefetches, the overlay) or Server Action.
@@ -38,7 +38,7 @@ var InkboardOffline = (function () {
   var NOVEL = /^\/a\/[^/]+\/n\/[^/]+$/;
   var CHAPTER = /^\/a\/[^/]+\/n\/[^/]+\/([^/]+)$/;
   var NOVEL_FILES = ["opengraph-image", "twitter-image", "feed.xml"];
-  var PAGES = ["/about", "/privacy"];
+  var PAGES = ["/about", "/privacy", "/novels"];
   // Hashed build assets (JS, CSS, next/font files), icons and avatars: cache-first.
   // Never /photos/ (profile photos, Phase 22) or /covers/ (novel covers, Phase
   // 25): they pass through to the browser's own cache (an hour), so a removed

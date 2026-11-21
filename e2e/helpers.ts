@@ -335,3 +335,22 @@ export async function optionNames(trigger: Locator): Promise<string[]> {
   await expect(list).toBeHidden();
   return names;
 }
+
+export type ReportEmail = {
+  targetKind: "poem" | "novel" | "chapter" | "author";
+  title: string;
+  path: string;
+  reason: string;
+  details: string | null;
+  earlier: number;
+  hasReplyTo: boolean;
+};
+
+/** Report emails to the owner (Phase 32) the server recorded, for one page (`path`, e.g. "/p/ama/dusk"). */
+export async function reportEmailsFor(path: string): Promise<ReportEmail[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { kind?: string } & ReportEmail)
+    .filter((m) => m.kind === "report" && m.path === path)
+    .map(({ targetKind, title, path: p, reason, details, earlier, hasReplyTo }) => ({ targetKind, title, path: p, reason, details, earlier, hasReplyTo }));
+}

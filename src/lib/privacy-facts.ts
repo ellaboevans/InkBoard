@@ -34,6 +34,8 @@ export const PRIVACY_FACTS = {
   shareVisitRepeat: "a day",
   /** CLEANUP_DAYS.pushDeliveries (src/server/maintenance.ts) */
   pushDeliveryCleanup: "two days",
+  /** CLEANUP_DAYS.reports (src/server/maintenance.ts): readers' reports are deleted this long after they were made. */
+  reportCleanup: "90 days",
   /** UNUSED_SUBSCRIPTION_DAYS (src/lib/push-rules.ts) */
   unusedSubscription: "90 days",
   /** PHOTO_CACHE_SECONDS (src/lib/photo-limits.ts): how long a browser may keep a served photo. */
@@ -57,7 +59,7 @@ export const PRIVACY_FACTS = {
 } as const;
 
 /** The date at the top of the Privacy page: change it whenever the page's facts change. */
-export const PRIVACY_UPDATED = "2026-11-19";
+export const PRIVACY_UPDATED = "2026-11-21";
 
 const WORDS: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3 };
 const UNIT_SECONDS: Record<string, number> = { minute: 60, hour: 3600, day: 86400, year: 365 * 86400 };

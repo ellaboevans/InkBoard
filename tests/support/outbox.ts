@@ -42,3 +42,6 @@ export const passkeyNotices: (
 
 /** "Your account was deleted" notices "sent" during a test. */
 export const deletionNotices: { to: string; penName: string | null; device: string; at: Date }[] = [];
+
+/** Readers' reports emailed to the owner during a test (Phase 32): the notice as the server built it. */
+export const reportNotices: import("@/server/reports").ReportNotice[] = [];

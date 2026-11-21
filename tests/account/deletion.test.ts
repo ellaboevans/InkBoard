@@ -10,6 +10,7 @@ import {
   passkeys,
   poems,
   rateLimits,
+  reports,
   retiredShortCodes,
   retiredSlugs,
   sessions,
@@ -102,6 +103,13 @@ async function populated(email: string, penName: string) {
   const ch = await createChapter(ed.id, book.novel.id, { title: "One", body: "It began.", status: "published" });
   if (!ch.ok) throw new Error(JSON.stringify(ch));
   await saveChapter(ed.id, ch.chapter.id, { title: "One", body: "It began, again." });
+  // Readers' reports of their poem, novel, chapter and of them (Phase 32).
+  await db.insert(reports).values([
+    { poemId: one.id, reason: "spam" },
+    { novelId: book.novel.id, reason: "copied" },
+    { chapterId: ch.chapter.id, reason: "other", details: "Hm." },
+    { editorId: ed.id, reason: "harassment" },
+  ]);
   return { ...ed, poemId: one.id, poemSlug: one.slug, collectionSlug: col.collection.slug };
 }
 
@@ -194,6 +202,7 @@ describe("deleting an account", () => {
         "chapters",
         "chapter_revisions",
         "recovery_codes",
+        "reports",
         "sessions",
         "short_links",
         "sign_in_devices",

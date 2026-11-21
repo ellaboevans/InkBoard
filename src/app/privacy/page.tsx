@@ -157,9 +157,20 @@ export default function PrivacyPage() {
               counted.
             </p>
           </Sub>
+          <Sub heading="Reports">
+            <p>
+              Anyone can report a poem, novel, chapter or writer with the Report link at the foot of its page. We store
+              what was reported, the reason you chose, the details you wrote and when, and the daily clean-up deletes the
+              report after {F.reportCleanup}. Reporting a work or writer that is later deleted deletes the report too. We
+              don’t store your IP address, browser, cookies or anything else about you with it. If you give an email
+              address for a reply, it goes only into the email that tells {SITE_OPERATOR} about the report (so a reply
+              reaches you), and is never stored or logged. To stop the link being misused, a report is counted against
+              your network like the attempts below.
+            </p>
+          </Sub>
           <Sub heading="Limits on repeated attempts">
             <p>
-              To stop abuse, such as guessing passwords or sign-in codes, or making pictures of chosen lines over and over,
+              To stop abuse, such as guessing passwords or sign-in codes, making pictures of chosen lines over and over, or sending many reports,
               we count recent attempts. The counters are named after an IP address (for IPv6, only its network part),
               a hash of an email address, or an account, session or poem id, and the daily clean-up deletes them{" "}
               {F.rateLimitCleanup} after they start.

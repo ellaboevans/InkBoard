@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { cardTitleClass, PoemCardFace } from "@/components/board/poem-card-face";
 import { Button } from "@/components/ui/button";
 import { SiteLinks } from "@/components/site-links";
+import { ReportLink } from "@/components/report/report-link";
 import { AuthorPicture } from "@/components/author/author-picture";
 import { CARD_H, sectionHue } from "@/lib/board-layout";
 import { BookCardFace, novelLinkSuffix } from "@/components/novel/book-card-face";
@@ -250,6 +251,9 @@ async function Author({ params }: Pick<Props, "params">) {
           )}
         </section>
       )}
+      <footer className="-mb-8 border-t pt-4">
+        <ReportLink target={{ kind: "author", author: a.slug }} />
+      </footer>
     </div>
   );
 }

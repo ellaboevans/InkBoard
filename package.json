@@ -17,7 +17,8 @@
     "db:check": "tsx scripts/check-migrations.ts",
     "video": "tsx video/run.ts",
     "storage:check": "tsx --conditions=react-server scripts/storage-check.ts",
-    "photo:remove": "tsx scripts/photo-remove.ts"
+    "photo:remove": "tsx scripts/photo-remove.ts",
+    "reports": "tsx --conditions=react-server scripts/reports.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

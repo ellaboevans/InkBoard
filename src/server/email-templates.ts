@@ -761,3 +761,79 @@ export function accountDeletedEmail(d: AccountDeletedDetails): EmailMessage {
   });
   return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
 }
+
+export type ReportEmailDetails = {
+  kind: "poem" | "novel" | "chapter" | "author";
+  /** The work's title (a chapter: "Novel, Chapter n"), or the pen name for an author. */
+  title: string;
+  penName: string;
+  /** Absolute link to the page. */
+  link: string;
+  /** The reason's label (src/lib/report.ts). */
+  reason: string;
+  /** The reader's words, as written: escaped here, never trusted. */
+  details: string | null;
+  at: Date;
+  /** Earlier reports of the same page still kept. */
+  earlier: number;
+  appUrl: string;
+};
+
+const REPORT_KIND_LABEL = { poem: "Poem", novel: "Novel", chapter: "Chapter", author: "Author" } as const;
+
+/**
+ * "Report: …" (Phase 32), to InkBoard's owner. Names the page, never its text.
+ * The reader's reply address, if any, is the message's Reply-To (set by the
+ * sender), so it isn't repeated in the body.
+ */
+export function reportEmail(d: ReportEmailDetails): EmailMessage {
+  const kind = REPORT_KIND_LABEL[d.kind];
+  const what = d.kind === "author" ? d.penName : `“${d.title}” by ${d.penName}`;
+  // One line, whatever the reader typed into the title fields (they can't, but a title can hold anything).
+  const subject = `Report: ${kind.toLowerCase()} ${what}`.replace(/\s+/g, " ").slice(0, 180);
+  const earlier =
+    d.earlier === 0 ? "None" : `${pluralCount(d.earlier, "earlier report")} of this page`;
+  const when = formatNoticeTime(d.at);
+  const rows: [string, string][] = [
+    ["What", `${kind}: ${d.kind === "author" ? d.penName : d.title}`],
+    ...(d.kind === "author" ? [] : ([["By", d.penName]] as [string, string][])),
+    ["Reason", d.reason],
+    ["When", when],
+    ["Earlier", earlier],
+  ];
+  const text = [
+    `A reader reported a page on InkBoard.`,
+    "",
+    ...rows.map(([k, v]) => `${k}: ${v}`),
+    `Link: ${d.link}`,
+    "",
+    "Details:",
+    d.details ?? "(none given)",
+    "",
+    "Reply to this email to answer the reader, if they left an address.",
+  ].join("\n");
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding:10px 0;border-bottom:1px solid ${C.line};width:96px;font-family:${SANS};font-size:13px;line-height:20px;color:${C.muted};vertical-align:top">${label}</td><td style="padding:10px 0;border-bottom:1px solid ${C.line};font-family:${SANS};font-size:14px;line-height:20px;font-weight:600;color:${C.ink}">${escapeHtml(value)}</td></tr>`;
+  const detailsHtml = d.details
+    ? `<div style="white-space:pre-wrap;padding:14px 16px;border-radius:12px;background:${C.well};font-family:${SANS};font-size:14px;line-height:22px;color:${C.ink}">${escapeHtml(d.details)}</div>`
+    : `<span style="color:${C.muted}">None given.</span>`;
+  const html = frame({
+    appUrl: d.appUrl,
+    preheader: `${d.reason}: ${kind.toLowerCase()} ${what}`,
+    footer: "Sent because a reader used a Report link.",
+    automated: false,
+    body: `
+${heading("A reader reported a page", { size: 26, lineHeight: 32 })}
+<tr><td style="padding:20px 40px 0">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.line}">
+${rows.map(([k, v]) => row(k, v)).join("\n")}
+</table>
+</td></tr>
+${para("<strong>Details</strong>", { top: 20, size: 15 })}
+<tr><td style="padding:8px 40px 0;font-family:${SANS};font-size:14px;line-height:22px">${detailsHtml}</td></tr>
+${button(d.link, "Open the page")}
+${para("Reply to this email to answer the reader, if they left an address.", { top: 16, size: 13, color: C.muted })}
+${bottomSpace}`,
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}

@@ -45,7 +45,7 @@ describe("cleanupExpiredRows", () => {
       { editorId: ed.id, deviceKey: "recent", lastSeenAt: ago("11 months") },
     ]);
 
-    expect(await cleanupExpiredRows()).toEqual({ otps: 2, stepUpCodes: 2, webauthnChallenges: 1, sessions: 1, rateLimits: 1, signInLocations: 1, signInDevices: 1, pushSubscriptions: 0, pushDeliveries: 0, orphanPhotos: 0, orphanCovers: 0 });
+    expect(await cleanupExpiredRows()).toEqual({ otps: 2, stepUpCodes: 2, webauthnChallenges: 1, sessions: 1, rateLimits: 1, signInLocations: 1, signInDevices: 1, pushSubscriptions: 0, pushDeliveries: 0, reports: 0, orphanPhotos: 0, orphanCovers: 0 });
     expect((await db.select().from(stepUpCodes)).map((r) => r.codeHash)).toEqual(["live"]);
     expect((await db.select().from(webauthnChallenges)).map((r) => r.tokenHash)).toEqual(["live"]);
     expect((await db.select().from(emailOtps)).map((r) => r.codeHash).sort()).toEqual(["just-expired", "live"]);
@@ -53,7 +53,7 @@ describe("cleanupExpiredRows", () => {
     expect((await db.select().from(rateLimits)).map((r) => r.key)).toEqual(["today"]);
     expect((await db.select().from(signInLocations)).map((r) => r.ipKey)).toEqual(["recent"]);
     expect((await db.select().from(signInDevices)).map((r) => r.deviceKey)).toEqual(["recent"]);
-    expect(await cleanupExpiredRows()).toEqual({ otps: 0, stepUpCodes: 0, webauthnChallenges: 0, sessions: 0, rateLimits: 0, signInLocations: 0, signInDevices: 0, pushSubscriptions: 0, pushDeliveries: 0, orphanPhotos: 0, orphanCovers: 0 });
+    expect(await cleanupExpiredRows()).toEqual({ otps: 0, stepUpCodes: 0, webauthnChallenges: 0, sessions: 0, rateLimits: 0, signInLocations: 0, signInDevices: 0, pushSubscriptions: 0, pushDeliveries: 0, reports: 0, orphanPhotos: 0, orphanCovers: 0 });
   });
 });
 

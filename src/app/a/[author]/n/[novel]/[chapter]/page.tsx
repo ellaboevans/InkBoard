@@ -14,6 +14,7 @@ import { UnlockForm } from "@/components/poem/unlock-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { chapterPageAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
+import { ReportLink } from "@/components/report/report-link";
 import type { ReaderChapter } from "@/lib/board-types";
 import { pluralCount } from "@/lib/plural";
 import { chapterDescription, chapterJsonLd, chapterPath, novelPath } from "@/lib/novel-seo";
@@ -233,6 +234,10 @@ async function Chapter({ params }: Pick<Props, "params">) {
           )}
         </div>
       </nav>
+      {/* Phase 32: report this chapter (released chapters only; the server checks again). */}
+      <div className="mx-auto -mt-8 flex max-w-[calc(34*21px)] justify-end px-5 pb-10 sm:-mt-10 sm:px-6 sm:pb-12">
+        <ReportLink target={{ kind: "chapter", author: c.authorSlug, novel: c.novel.slug, chapter: c.slug }} />
+      </div>
     </>
   );
 }

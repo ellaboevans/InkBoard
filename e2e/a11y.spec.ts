@@ -1349,3 +1349,28 @@ test("writer's stats: empty and with links, a novel and followers, phone and des
     await scan(page, `stats: with data at ${width}px`);
   }
 });
+
+test("report dialog (Phase 32): open, with a validation error, and thanked, phone and desktop", async ({ page }) => {
+  const id = unique();
+  const { rows } = await sql(`INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-report-${id}@example.com', 'Report A11y ${id}', 'a11y-report-${id}') RETURNING id`);
+  await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at)
+    VALUES ('${rows[0].id}', 'Flagged', 'flagged', 'A line.', 'public', 'published', now())`);
+  for (const width of [375, 1280]) {
+    await sql("DELETE FROM rate_limits");
+    await page.setViewportSize({ width, height: width < 640 ? 812 : 900 });
+    await page.goto(`/p/a11y-report-${id}/flagged`);
+    await page.getByRole("button", { name: "Report this poem" }).click();
+    const dialog = page.getByRole("dialog", { name: "Report this poem" });
+    await expect(dialog.getByRole("radio", { name: "Spam or advertising" })).toBeVisible();
+    await scan(page, `report dialog, ${width}px`);
+    await dialog.getByText("Something else", { exact: true }).click();
+    await dialog.getByRole("button", { name: "Send report" }).click();
+    await expect(dialog.getByText("Tell us what’s wrong.")).toBeVisible();
+    await scan(page, `report dialog with an error, ${width}px`);
+    await dialog.getByRole("textbox", { name: /^Details/ }).fill("Test.");
+    await dialog.getByRole("button", { name: "Send report" }).click();
+    await expect(dialog.getByRole("status")).toBeVisible({ timeout: 60_000 });
+    await scan(page, `report dialog thanked, ${width}px`);
+    await page.keyboard.press("Escape");
+  }
+});

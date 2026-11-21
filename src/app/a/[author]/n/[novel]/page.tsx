@@ -15,6 +15,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { AuthorFeedLink, NovelFeedLink } from "@/components/feeds/feed-link";
 import { novelPageAlternates } from "@/lib/feed-links";
 import { SiteLinks } from "@/components/site-links";
+import { ReportLink } from "@/components/report/report-link";
 import { Button } from "@/components/ui/button";
 import { sectionHue } from "@/lib/board-layout";
 import type { NovelPage } from "@/lib/board-types";
@@ -204,6 +205,9 @@ async function Novel({ params }: Pick<Props, "params">) {
       {/* New chapters reach followers only (Phase 24); renders nothing where notifications aren't possible. */}
       <div className="mt-3">
         <FollowAuthorToggle slug={n.authorSlug} penName={n.penName} writesNovels />
+      </div>
+      <div className="mt-8 flex justify-end">
+        <ReportLink target={{ kind: "novel", author: n.authorSlug, novel: n.slug }} />
       </div>
     </>
   );

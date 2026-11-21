@@ -29,6 +29,8 @@ export const CLEANUP_DAYS = {
   unusedSignInMemory: 365,
   /** Notification delivery records (the longest limit window is 24 hours). */
   pushDeliveries: 2,
+  /** Readers' reports (Phase 32), after they were made. */
+  reports: 90,
 } as const;
 
 const days = (n: number) => sql`make_interval(days => ${n})`;
@@ -43,6 +45,8 @@ export type CleanupResult = {
   signInDevices: number;
   pushSubscriptions: number;
   pushDeliveries: number;
+  /** Readers' reports older than CLEANUP_DAYS.reports (Phase 32). */
+  reports: number;
   /** Profile photos whose files no editor points at (Phase 22); null when photo storage isn't available. */
   orphanPhotos: number | null;
   /** Novel covers' files no novel points at (Phase 25); null when storage isn't available. */
@@ -107,6 +111,10 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
   const pushDeliveries = await db.execute(sql`
     DELETE FROM push_deliveries WHERE sent_at < now() - ${days(CLEANUP_DAYS.pushDeliveries)}
   `);
+  // Readers' reports (Phase 32): kept 90 days, then gone.
+  const reports = await db.execute(sql`
+    DELETE FROM reports WHERE created_at < now() - ${days(CLEANUP_DAYS.reports)}
+  `);
   // Profile photo files no editor points at (a failed or interrupted save, a
   // failed delete), once PHOTO_ORPHAN_GRACE_HOURS old so an upload in progress
   // is never touched. Storage trouble mustn't stop the rest of the cleanup.
@@ -133,6 +141,7 @@ export async function cleanupExpiredRows(): Promise<CleanupResult> {
     signInDevices: count(signInDevices),
     pushSubscriptions: count(pushSubscriptions),
     pushDeliveries: count(pushDeliveries),
+    reports: count(reports),
     orphanPhotos,
     orphanCovers,
   };

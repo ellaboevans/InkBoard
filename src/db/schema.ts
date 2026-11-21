@@ -689,3 +689,40 @@ export const rateLimits = pgTable("rate_limits", {
 
 export type Editor = typeof editors.$inferSelect;
 export type Poem = typeof poems.$inferSelect;
+
+/**
+ * Readers' reports of a poem, novel, chapter or author (docs/PLAN.md, Phase
+ * 32). Exactly one target; each cascades, so deleting the work or the account
+ * deletes its reports. Never anything about the reader: no IP, user agent,
+ * cookie or reply address (that goes only into the owner's email). Deleted by
+ * the daily cleanup after CLEANUP_DAYS.reports.
+ */
+export const reports = pgTable(
+  "reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    poemId: uuid("poem_id").references(() => poems.id, { onDelete: "cascade" }),
+    novelId: uuid("novel_id").references(() => novels.id, { onDelete: "cascade" }),
+    chapterId: uuid("chapter_id").references(() => chapters.id, { onDelete: "cascade" }),
+    editorId: uuid("editor_id").references(() => editors.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    details: text("details"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("reports_poem_idx").on(t.poemId),
+    index("reports_novel_idx").on(t.novelId),
+    index("reports_chapter_idx").on(t.chapterId),
+    index("reports_editor_idx").on(t.editorId),
+    index("reports_created_idx").on(t.createdAt),
+    check(
+      "reports_one_target",
+      sql`num_nonnulls(${t.poemId}, ${t.novelId}, ${t.chapterId}, ${t.editorId}) = 1`,
+    ),
+    check(
+      "reports_reason",
+      sql`${t.reason} IN ('spam', 'harassment', 'sexual-violent', 'copied', 'personal-info', 'other')`,
+    ),
+    check("reports_details_length", sql`char_length(${t.details}) <= 1000`),
+  ],
+);

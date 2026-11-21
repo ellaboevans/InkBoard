@@ -43,6 +43,7 @@ const ACTUAL: Record<keyof typeof PRIVACY_FACTS, number> = {
   rateLimitCleanup: CLEANUP_DAYS.rateLimitWindows * DAY,
   shareVisitRepeat: SHARE_VISIT_WINDOW_SECONDS,
   pushDeliveryCleanup: CLEANUP_DAYS.pushDeliveries * DAY,
+  reportCleanup: CLEANUP_DAYS.reports * DAY,
   unusedSubscription: UNUSED_SUBSCRIPTION_DAYS * DAY,
   photoCacheLife: PHOTO_CACHE_SECONDS,
   photoOrphanCleanup: PHOTO_ORPHAN_GRACE_HOURS * 3600,

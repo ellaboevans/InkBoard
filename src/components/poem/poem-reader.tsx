@@ -18,6 +18,7 @@ import { poemPath } from "@/lib/share-image/share-text";
 import { absoluteUrl } from "@/lib/site";
 import { ShareImageButton } from "./share-image-button";
 import { AuthorPicture } from "@/components/author/author-picture";
+import { ReportLink } from "@/components/report/report-link";
 
 /*
  * The reading view, shared by the full page (/p/[author]/[poem]) and the
@@ -107,6 +108,10 @@ export async function PoemReader({
         </Suspense>
       )}
       {poem.collection && <CollectionNav collection={poem.collection} authorSlug={poem.authorSlug} inDialog={inDialog} />}
+      {/* Phase 32: readers can flag a poem (its title is public even when the text isn't). */}
+      <footer className="mt-12 flex justify-end">
+        <ReportLink target={{ kind: "poem", author: poem.authorSlug, poem: poem.slug }} />
+      </footer>
     </article>
   );
 }

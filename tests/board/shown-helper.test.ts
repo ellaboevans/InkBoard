@@ -23,6 +23,8 @@ const READER_FILES = [
   "src/server/push.ts",
   "src/server/profile-photos.ts",
   "src/server/novel-covers.ts",
+  // Phase 33: what may be featured is what readers can see.
+  "src/server/featured.ts",
 ];
 
 /** Functions in reader modules that read these tables for someone other than readers, or by an id a helper already checked. */

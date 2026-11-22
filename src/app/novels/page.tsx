@@ -64,6 +64,9 @@ export default function NovelsPage() {
 
 async function Serials() {
   const { ongoing, complete } = await getSerialsPage();
+  const featured = [...ongoing, ...complete]
+    .filter((n) => n.featuredAt)
+    .sort((a, b) => (a.featuredAt! < b.featuredAt! ? 1 : a.featuredAt! > b.featuredAt! ? -1 : 0));
   return (
     <>
       <JsonLd
@@ -77,6 +80,8 @@ async function Serials() {
           hasPart: [...ongoing, ...complete].map((n) => ({ "@type": "Book", name: n.title, url: absoluteUrl(novelPath(n.authorSlug, n.slug)) })),
         }}
       />
+      {/* Phase 33: the owner's featured novels first, newest featured first (only while readers can see them). */}
+      {featured.length > 0 && <SerialSection id="featured" heading="Featured" novels={featured} empty="" />}
       <SerialSection id="ongoing" heading="Still being written" novels={ongoing} empty="No serial is being written right now." />
       <SerialSection id="finished" heading="Finished" novels={complete} empty="No novel is finished yet." />
     </>

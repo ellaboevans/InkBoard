@@ -42,7 +42,7 @@ import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import { poemPath } from "@/lib/share-image/share-text";
 import { ShareImageButton, ShareImageDialog } from "@/components/poem/share-image-button";
-import { HiddenBadge } from "@/components/admin/hidden-by-inkboard";
+import { FeaturedBadge, HiddenBadge } from "@/components/admin/hidden-by-inkboard";
 import { deletePoemAction } from "./poems/actions";
 import { setPinnedPoemAction } from "./actions";
 
@@ -58,6 +58,8 @@ export type DashboardPoem = {
   shareVisits: number;
   /** Hidden from readers by InkBoard's owner, itself or with the whole account (Phase 32 round 2). */
   hidden: boolean;
+  /** Featured by InkBoard's owner and shown to readers (Phase 33). */
+  featured: boolean;
 };
 
 /**
@@ -210,6 +212,8 @@ export function PoemsTable({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <StatusBadge status={poem.status} />
                         {poem.hidden && <HiddenBadge />}
+                    {poem.featured && <FeaturedBadge />}
+                        {poem.featured && <FeaturedBadge />}
                       </div>
                     </TableCell>
                     <TableCell>

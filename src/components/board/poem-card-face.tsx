@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { LibraryIcon, LockIcon } from "lucide-react";
+import { LibraryIcon, LockIcon, StarIcon } from "lucide-react";
 import { PoemText } from "@/components/poem/poem-text";
 import type { CollectionBadge } from "@/lib/board-types";
 import { languageName } from "@/lib/poem-languages";
@@ -25,6 +25,7 @@ export function PoemCardFace({
   hasMore,
   lang,
   collection,
+  featured = false,
   className,
   style,
   ...rest
@@ -37,6 +38,8 @@ export function PoemCardFace({
   lang?: string | null;
   /** Its collection: a quiet "Harmattan Cycle · 2/4" line at the bottom (Phase 14). */
   collection?: CollectionBadge | null;
+  /** Featured by InkBoard's owner (Phase 33): a small "Featured" mark. */
+  featured?: boolean;
 } & Omit<React.ComponentProps<"div">, "title" | "lang">) {
   return (
     <div
@@ -91,6 +94,8 @@ export function PoemCardFace({
           {hasMore && "\n…"}
         </p>
       )}
+      {/* At the foot, like the collection line: it takes its room from the excerpt, never the title's. */}
+      {featured && <FeaturedMark className="mt-2 self-start" />}
       {collection && <CollectionBadgeLine collection={collection} className="mt-2" />}
     </div>
   );
@@ -123,6 +128,25 @@ export function CollectionBadgeLine({ collection, className }: { collection: Col
       <span className="sr-only">
         , part {collection.part} of {collection.parts}
       </span>
+    </span>
+  );
+}
+
+/**
+ * "Featured" (Phase 33) on a featured poem's or novel's card: a decorative
+ * star plus the word, read as plain text (never an aria-label on the card).
+ */
+export function FeaturedMark({ className }: { className?: string }) {
+  return (
+    <span
+      data-featured-mark=""
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium tracking-normal text-primary normal-case",
+        className,
+      )}
+    >
+      <StarIcon className="size-3 fill-current" aria-hidden />
+      Featured
     </span>
   );
 }

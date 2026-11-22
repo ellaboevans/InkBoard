@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, EyeIcon, EyeOffIcon, Loader2Icon } from "lucide-react";
+import { CheckIcon, EyeIcon, EyeOffIcon, Loader2Icon, PlusIcon, StarIcon, XIcon } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import {
   AlertDialog,
@@ -13,12 +13,20 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import type { ReportKind } from "@/lib/report";
 import { StepUpCard } from "../profile/step-up-card";
-import { ownerMarkReviewedAction, ownerTakedownAction, type OwnerActionResult } from "./actions";
+import {
+  ownerFeatureAction,
+  ownerMarkReviewedAction,
+  ownerTakedownAction,
+  ownerUnfeatureAction,
+  type OwnerActionResult,
+} from "./actions";
 
 /*
  * The owner's page, in the browser (docs/PLAN.md, Phase 32 round 3). Every
@@ -49,6 +57,18 @@ export type HiddenView = {
   path: string;
   url: string;
   hiddenLabel: string;
+};
+
+export type FeaturedView = {
+  key: string;
+  kind: "poem" | "novel";
+  id: string;
+  title: string;
+  penName: string;
+  url: string;
+  featuredLabel: string;
+  /** False while readers can't see it: it stays featured until removed. */
+  shown: boolean;
 };
 
 type TakedownOp = {
@@ -114,6 +134,8 @@ export function OwnerPanel({
   open,
   reviewed,
   hidden,
+  featured,
+  featuredMax,
   reviewedDays,
   fresh: freshHint,
   email,
@@ -122,6 +144,8 @@ export function OwnerPanel({
   open: GroupView[];
   reviewed: GroupView[];
   hidden: HiddenView[];
+  featured: FeaturedView[];
+  featuredMax: number;
   reviewedDays: number;
   /** Recently verified (a hint: the server decides). */
   fresh: boolean;
@@ -187,15 +211,18 @@ export function OwnerPanel({
       )}
 
       <Tabs defaultValue="open" className="gap-5">
-        <TabsList className="h-auto w-full flex-wrap justify-start sm:w-fit">
-          <TabsTrigger value="open" className="min-h-10 px-3">
+        <TabsList className="w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto sm:w-fit">
+          <TabsTrigger value="open" className="h-auto min-h-10 flex-none px-3">
             Open <span className="tabular-nums text-muted-foreground">{open.length}</span>
           </TabsTrigger>
-          <TabsTrigger value="reviewed" className="min-h-10 px-3">
+          <TabsTrigger value="reviewed" className="h-auto min-h-10 flex-none px-3">
             Reviewed <span className="tabular-nums text-muted-foreground">{reviewed.length}</span>
           </TabsTrigger>
-          <TabsTrigger value="hidden" className="min-h-10 px-3">
+          <TabsTrigger value="hidden" className="h-auto min-h-10 flex-none px-3">
             Hidden now <span className="tabular-nums text-muted-foreground">{hidden.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="featured" className="h-auto min-h-10 flex-none px-3">
+            Featured <span className="tabular-nums text-muted-foreground">{featured.length}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -262,6 +289,9 @@ export function OwnerPanel({
               ))}
             </ul>
           )}
+        </TabsContent>
+        <TabsContent value="featured" className="grid gap-4">
+          <FeaturedTab featured={featured} max={featuredMax} />
         </TabsContent>
       </Tabs>
 
@@ -372,5 +402,131 @@ function Group({
         </div>
       </article>
     </li>
+  );
+}
+
+/**
+ * The Featured tab (Phase 33): add by link, remove with one press. No
+ * step-up and no confirm: featuring takes nothing from anyone. The server
+ * refuses what readers can't see, a duplicate and one past the cap.
+ */
+function FeaturedTab({ featured, max }: { featured: FeaturedView[]; max: number }) {
+  const [link, setLink] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const finish = (res: OwnerActionResult, onOk?: () => void) => {
+    if (res.ok) {
+      notify.success(res.title, res.description);
+      onOk?.();
+    } else if (res.reason === "error") {
+      notify.error(res.title, res.description);
+      setError(res.description);
+    }
+  };
+  const add = () =>
+    startTransition(async () => {
+      try {
+        finish(await ownerFeatureAction(link), () => {
+          setLink("");
+          setError(null);
+        });
+      } catch {
+        notify.error(UNEXPECTED_ERROR.title, UNEXPECTED_ERROR.description);
+      }
+    });
+  const remove = (f: FeaturedView) =>
+    startTransition(async () => {
+      try {
+        finish(await ownerUnfeatureAction(f.kind, f.id));
+      } catch {
+        notify.error(UNEXPECTED_ERROR.title, UNEXPECTED_ERROR.description);
+      }
+    });
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        New readers see these first: in Featured on the board, at the top of the list view and of Novels, with a mark on their cards.
+        Up to {max} at once, newest first.
+      </p>
+      <form
+        className="grid gap-2 rounded-xl border bg-card p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (link.trim()) add();
+        }}
+      >
+        <Label htmlFor="feature-link">Link to a poem or novel</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id="feature-link"
+            value={link}
+            onChange={(e) => {
+              setLink(e.target.value);
+              setError(null);
+            }}
+            placeholder="/p/author/poem or /a/author/n/novel"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-11"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "feature-link-error" : "feature-link-help"}
+          />
+          <Button type="submit" className="min-h-11 shrink-0" disabled={pending || !link.trim() || featured.length >= max}>
+            {pending ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
+            Feature
+          </Button>
+        </div>
+        {error ? (
+          <p id="feature-link-error" role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : (
+          <p id="feature-link-help" className="text-xs text-muted-foreground">
+            {featured.length >= max
+              ? `${max} are featured: remove one to add another.`
+              : "A chapter's link features its novel. Authors can't be featured."}
+          </p>
+        )}
+      </form>
+      {featured.length === 0 ? (
+        <Empty>Nothing is featured.</Empty>
+      ) : (
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-3" aria-label="Featured">
+          {featured.map((f) => (
+            <li key={f.key} className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center" data-featured-item={f.key}>
+              <div className="grid min-w-0 flex-1 gap-1">
+                <p className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{KIND_LABEL[f.kind]}</Badge>
+                  {!f.shown && (
+                    <Badge variant="destructive">
+                      <EyeOffIcon aria-hidden />
+                      Not shown to readers
+                    </Badge>
+                  )}
+                </p>
+                <p className="font-serif text-lg break-words">
+                  <StarIcon className="mr-1 inline size-4 text-primary" aria-hidden />
+                  {f.title}
+                </p>
+                <p className="text-sm text-muted-foreground">by {f.penName} · featured {f.featuredLabel}</p>
+                <a href={f.url} className="text-sm break-all underline underline-offset-4 hover:text-primary">
+                  {f.url}
+                </a>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 shrink-0 self-start sm:self-center"
+                disabled={pending}
+                onClick={() => remove(f)}
+              >
+                <XIcon />
+                Remove<span className="sr-only"> “{f.title}” from Featured</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 }

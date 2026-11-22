@@ -383,6 +383,14 @@ export const poems = pgTable(
     collectionId: uuid("collection_id").references(() => collections.id, { onDelete: "set null" }),
     collectionPosition: integer("collection_position"),
     /**
+     * Featured by InkBoard's owner (docs/PLAN.md, Phase 33): null = not. Readers
+     * see it featured only while they can see it at all and it's public (the
+     * reader loaders' `featuredAt`). `featured_notice_at`: when the writer was
+     * emailed about its first feature, claimed once so a re-feature stays quiet.
+     */
+    featuredAt: timestamp("featured_at", { withTimezone: true }),
+    featuredNoticeAt: timestamp("featured_notice_at", { withTimezone: true }),
+    /**
      * Hidden by InkBoard's owner after a report (docs/PLAN.md, Phase 32 round 2):
      * null = shown. To readers a hidden poem is missing everywhere (the reader
      * helpers in src/server/shown.ts); the writer still sees, edits, exports and
@@ -485,6 +493,14 @@ export const novels = pgTable(
      * novel, like its title and blurb.
      */
     coverKey: text("cover_key").unique(),
+    /**
+     * Featured by InkBoard's owner (docs/PLAN.md, Phase 33): null = not. Readers
+     * see it featured only while they can see it at all and it's public (the
+     * reader loaders' `featuredAt`). `featured_notice_at`: when the writer was
+     * emailed about its first feature, claimed once so a re-feature stays quiet.
+     */
+    featuredAt: timestamp("featured_at", { withTimezone: true }),
+    featuredNoticeAt: timestamp("featured_notice_at", { withTimezone: true }),
     /**
      * Hidden by InkBoard's owner after a report (docs/PLAN.md, Phase 32 round 2):
      * null = shown. To readers a hidden novel (with every chapter) is missing everywhere (the reader

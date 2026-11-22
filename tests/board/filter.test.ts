@@ -16,7 +16,7 @@ const poem = (id: string, language: string | null, visibility: BoardPoem["visibi
   language,
   excerpt: visibility === "public" ? "text" : null,
   hasMore: false,
-  collection: null,
+  collection: null, featuredAt: null,
 });
 const section = (editorId: string, poems: BoardPoem[], novels: BoardNovel[] = []): BoardSection => ({
   editorId,
@@ -38,7 +38,7 @@ const novel = (id: string, language: string | null): BoardNovel => ({
   chapterCount: 1,
   wordCount: 10,
   readingMinutes: 1,
-  updatedAt: null,
+  updatedAt: null, featuredAt: null,
 });
 
 const board = [

@@ -11,6 +11,7 @@ import {
   MinusIcon,
   PlusIcon,
   SearchIcon,
+  StarIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import Link from "next/link";
 import { cardTitleClass, PoemCardFace } from "./poem-card-face";
 import { BookCardFace, novelLinkSuffix } from "@/components/novel/book-card-face";
 import { novelPath } from "@/lib/novel-seo";
+import { featuredFromSections, type FeaturedEntry } from "@/lib/featured";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -392,7 +394,19 @@ export function BoardCanvas({
 
   // ---- render ----------------------------------------------------------------
 
-  const [authorsOpen, setAuthorsOpen] = useState(false);
+  const [authorsOpen, setAuthorsOpenState] = useState(false);
+  const [featuredOpen, setFeaturedOpenState] = useState(false);
+  // One panel at a time in the overlay column.
+  const setAuthorsOpen = (open: boolean) => {
+    setAuthorsOpenState(open);
+    if (open) setFeaturedOpenState(false);
+  };
+  const setFeaturedOpen = (open: boolean) => {
+    setFeaturedOpenState(open);
+    if (open) setAuthorsOpenState(false);
+  };
+  // Featured (Phase 33): from every section, whatever the language filter.
+  const featured = useMemo(() => featuredFromSections(allSections), [allSections]);
   const [searchOpen, setSearchOpen] = useState(false);
   const total = sections.reduce((n, s) => n + s.poems.length, 0);
   const novelTotal = sections.reduce((n, s) => n + s.novels.length, 0);
@@ -570,6 +584,9 @@ export function BoardCanvas({
       <AuthorsPanel
         open={authorsOpen}
         onOpenChange={setAuthorsOpen}
+        featured={featured}
+        featuredOpen={featuredOpen}
+        onFeaturedOpenChange={setFeaturedOpen}
         sections={sections}
         layout={layout}
         onPick={(rect) => {
@@ -756,6 +773,7 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
       excerpt={poem.excerpt}
       lang={poem.language}
       collection={poem.collection}
+      featured={poem.featuredAt !== null}
       hasMore={poem.hasMore}
       title={
         <Link
@@ -778,12 +796,19 @@ function PoemCard({ poem, authorSlug, rect }: { poem: BoardPoem; authorSlug: str
 function AuthorsPanel({
   open,
   onOpenChange,
+  featured,
+  featuredOpen,
+  onFeaturedOpenChange,
   sections,
   layout,
   onPick,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Featured works (Phase 33), newest first; nothing shows when empty. */
+  featured: FeaturedEntry[];
+  featuredOpen: boolean;
+  onFeaturedOpenChange: (open: boolean) => void;
   sections: BoardSection[];
   layout: BoardLayout;
   onPick: (rect: Rect) => void;
@@ -795,6 +820,19 @@ function AuthorsPanel({
           phones (two rows at 320px), and this column is in the flow, so it
           can't cover anything (docs/PLAN.md, Phase 19). */}
       <div className="flex flex-wrap gap-2">
+        {featured.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onFeaturedOpenChange(!featuredOpen)}
+            aria-expanded={featuredOpen}
+            aria-controls="featured-list"
+            className="pointer-events-auto bg-background/85 backdrop-blur"
+          >
+            {featuredOpen ? <XIcon /> : <StarIcon />}
+            Featured
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -821,6 +859,36 @@ function AuthorsPanel({
           </Link>
         </Button>
       </div>
+      {featuredOpen && featured.length > 0 && (
+        <nav
+          id="featured-list"
+          aria-label="Featured"
+          data-featured-panel
+          className="pointer-events-auto mt-2 w-72 max-w-full max-h-[min(60vh,28rem)] overflow-y-auto rounded-xl border bg-background/95 p-1 shadow-md backdrop-blur"
+        >
+          <ul>
+            {featured.map((f) => (
+              <li key={f.key}>
+                {/* A poem's link is a soft navigation, so it opens in the overlay over the board; a novel opens its page. */}
+                <Link
+                  href={f.href}
+                  onClick={() => {
+                    if (window.innerWidth < 640) onFeaturedOpenChange(false);
+                  }}
+                  className="grid gap-0.5 rounded-lg px-2.5 py-2 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                >
+                  <span lang={f.language ?? undefined} className="truncate font-serif text-[15px]">
+                    {f.title}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {f.kind === "novel" ? "Novel" : "Poem"} · {f.penName}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
       {open && (
         <nav
           id="authors-list"

@@ -71,6 +71,7 @@ export async function loadEditorExport(
         collectionId: poems.collectionId,
         collectionPosition: poems.collectionPosition,
         hiddenAt: poems.hiddenAt,
+        featuredAt: poems.featuredAt,
         // Visits through its short link (Phase 21 round 3): a number about the poem, nothing about visitors.
         shareVisits: sql<number>`coalesce(${shortLinks.visits}, 0)`,
       })
@@ -145,6 +146,7 @@ export async function loadEditorExport(
       updatedAt: p.updatedAt.toISOString(),
       shareVisits: Number(p.shareVisits),
       hiddenAt: iso(p.hiddenAt),
+      featuredAt: iso(p.featuredAt),
       collection:
         p.collectionId && p.collectionPosition !== null
           ? { id: p.collectionId, title: titles.get(p.collectionId) ?? "", position: p.collectionPosition }
@@ -170,6 +172,7 @@ export async function loadEditorExport(
           }
         : null,
       hiddenAt: iso(n.hiddenAt),
+      featuredAt: iso(n.featuredAt),
       createdAt: n.createdAt.toISOString(),
       updatedAt: n.updatedAt.toISOString(),
       chapters: n.chapters.map((c) => ({

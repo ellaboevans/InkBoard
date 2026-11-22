@@ -4,6 +4,7 @@ import type { BoardNovel } from "@/lib/board-types";
 import { languageName } from "@/lib/poem-languages";
 import { pluralCount } from "@/lib/plural";
 import { NovelCover } from "./novel-cover";
+import { FeaturedMark } from "@/components/board/poem-card-face";
 
 /** "12 chapters · ongoing": published chapters only. */
 export function novelFacts(novel: Pick<BoardNovel, "chapterCount" | "status">) {
@@ -62,6 +63,7 @@ export function BookCardFace({
       <div className="flex min-w-0 flex-col">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-primary uppercase">
           Novel
+          {novel.featuredAt && <FeaturedMark />}
           {languageName(lang) && (
             <span className="rounded-full border px-2 py-0.5 font-normal tracking-normal text-muted-foreground normal-case">
               {languageName(lang)}

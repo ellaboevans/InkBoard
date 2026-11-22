@@ -939,3 +939,40 @@ export function contentRestoredEmail(d: TakedownNoticeDetails): EmailMessage {
     preheader: `Readers can see ${what} again.`,
   });
 }
+
+export type FeaturedNoticeDetails = {
+  penName: string | null;
+  kind: "poem" | "novel";
+  title: string;
+  /** Absolute link to the work's page. */
+  link: string;
+  appUrl: string;
+};
+
+/**
+ * "Your poem is featured on InkBoard" (Phase 33): sent once, the first time a
+ * work is featured; nothing on removal. The notice rules: no 4–8 digit
+ * numbers and no "code" in what we write (takedownTitle leaves out a title
+ * that would break them).
+ */
+export function featuredEmail(d: FeaturedNoticeDetails): EmailMessage {
+  const title = takedownTitle(d.title);
+  const what = title ? `your ${d.kind} “${title}”` : `one of your ${d.kind}s`;
+  const subject = `Your ${d.kind} is featured on InkBoard`;
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const intro = `InkBoard's owner has featured ${what}. New readers see it first: in Featured on the board${d.kind === "novel" ? " and on the Novels page" : ""}, and with a Featured mark on its card.`;
+  const text = [greeting, "", intro, "", `See it: ${d.link}`, "", "Thank you for writing on InkBoard.", "", "InkBoard"].join("\n");
+  const html = frame({
+    appUrl: d.appUrl,
+    preheader: `New readers see ${what} first.`,
+    footer: "Sent to the address on your InkBoard account.",
+    automated: false,
+    body: `
+${heading(escapeHtml(`Your ${d.kind} is featured`), { size: 26, lineHeight: 32 })}
+${para(`${escapeHtml(greeting)} ${escapeHtml(intro)}`, { top: 14 })}
+${button(d.link, `Open your ${d.kind}`)}
+${para("Thank you for writing on InkBoard.", { top: 16, size: 14, color: C.muted })}
+${bottomSpace}`,
+  });
+  return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}

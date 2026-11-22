@@ -159,6 +159,13 @@ test("the filter works from the keyboard", async ({ page }) => {
  */
 test("the filter indicator stays one tidy line from phones to desktops", async ({ page }) => {
   const id = unique();
+  // Phase 33: a featured poem (written straight to the database; the publish below refreshes the cached board),
+  // so the overlay column's Featured panel is checked too.
+  const { rows: featuredBy } = await sql(
+    `INSERT INTO editors (email, pen_name, slug) VALUES ('lang-fit-featured-${id}@example.com', 'Featured Poet ${id}', 'lang-fit-featured-${id}') RETURNING id`,
+  );
+  await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at, featured_at)
+    VALUES ('${featuredBy[0].id}', 'A featured poem with a long title ${id}', 'featured', 'A line.', 'public', 'published', now(), now())`);
   await signUpAs(page, `lang-fit-${id}@example.com`, `Narrow Screen Poet ${id}`);
   await publish(page, `Ŋkɔ ${id}`, "Ŋutifafa", "Ewe");
 
@@ -172,7 +179,7 @@ test("the filter indicator stays one tidy line from phones to desktops", async (
       const text = pill.querySelector("[data-filter-status-text]")!;
       const button = pill.querySelector("button")!;
       const visible = (el: Element) => (el as HTMLElement).offsetParent !== null;
-      const others = [...document.querySelectorAll("header a, header button, header select, button[aria-controls='authors-list']")]
+      const others = [...document.querySelectorAll("header a, header button, header select, button[aria-controls='authors-list'], button[aria-controls='featured-list']")]
         .filter((el) => visible(el) && !pill.contains(el))
         .map(box);
       return {
@@ -253,6 +260,16 @@ test("the filter indicator stays one tidy line from phones to desktops", async (
     await expect(page.getByRole("navigation", { name: "Authors" })).toBeVisible();
     await expectTidy(`board with Authors open at ${width}px`);
     await page.getByRole("button", { name: /^Authors/ }).click();
+
+    // The Featured panel (Phase 33), in the same column: nothing covered, the toolbar unchanged.
+    await page.getByRole("button", { name: "Featured", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Featured" })).toBeVisible();
+    await expectTidy(`board with Featured open at ${width}px`);
+    await expectToolbar(`board toolbar with Featured open at ${width}px`);
+    const panel = await page.getByRole("navigation", { name: "Featured" }).boundingBox();
+    expect(panel!.x, `Featured panel inside the screen at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(panel!.x + panel!.width, `Featured panel inside the screen at ${width}px`).toBeLessThanOrEqual(width);
+    await page.getByRole("button", { name: "Featured", exact: true }).click();
 
     await page.getByRole("button", { name: "List view", exact: true }).click();
     await expect(page.getByRole("button", { name: "Board view" })).toBeVisible();

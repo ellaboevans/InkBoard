@@ -274,7 +274,7 @@ describe("the writer still has everything", () => {
     expect(await hiddenStateFor(kofi)).toEqual({ account: false, poems: 0, novels: 0 });
 
     const data = await loadEditorExport(ama, { site: "https://inkboard.example" });
-    expect(data?.version).toBe(9);
+    expect(data?.version).toBe(10);
     expect(data?.profile.hiddenAt).toEqual(expect.any(String));
     expect(data?.poems.find((p) => p.slug === "dusk")?.hiddenAt).toEqual(expect.any(String));
     expect(data?.poems.find((p) => p.slug === "dawn")?.hiddenAt).toBeNull();

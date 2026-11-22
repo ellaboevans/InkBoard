@@ -77,6 +77,9 @@ export const accountButton = (page: Page, penName: string) =>
 export async function signOut(page: Page) {
   await page.getByRole("button", { name: /^Account menu:/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
+  // Sign out is a full page load (window.location.replace): wait for it, or the
+  // test's next page.goto() races it and is aborted (net::ERR_ABORTED).
+  await page.waitForURL(/\/sign-in(\?|$)/, { timeout: 45_000 });
 }
 
 /** Welcome emails recorded for this address by the E2E outbox. */
@@ -375,6 +378,16 @@ export async function signInAsOwner(page: Page, email: string, penName = "InkBoa
   if (page.url().includes("/admin/onboarding")) {
     await page.getByRole("textbox", { name: "Pen name" }).fill(penName);
     await page.getByRole("button", { name: "Continue to dashboard" }).click();
-    await expect(page).toHaveURL(/\/admin(\?.*)?$/, { timeout: 45_000 });
+    // Often a run's first Server Action, compiled on demand by a cold `next dev`.
+    await expect(page).toHaveURL(/\/admin(\?.*)?$/, { timeout: 120_000 });
   }
+}
+
+/** "Your poem is featured" emails (Phase 33) the server recorded, for one address. */
+export async function featuredNoticesFor(email: string): Promise<{ what: string; title: string; path: string }[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string; kind?: string; what: string; title: string; path: string })
+    .filter((m) => m.to === email && m.kind === "featured")
+    .map(({ what, title, path }) => ({ what, title, path }));
 }

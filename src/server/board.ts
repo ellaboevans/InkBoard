@@ -37,6 +37,15 @@ import type { ReaderPath } from "@/lib/reader-paths";
 export { EXCERPT_CHARS, EXCERPT_LINES };
 
 const lines = sql`string_to_array(${poems.body}, E'\\n')`;
+
+/**
+ * Featured (Phase 33): the owner's mark, for readers only on a public work.
+ * Used only inside queries that already apply poemShown()/novelShown() and
+ * authorShown(), so a hidden, unpublished or unreleased work never carries it.
+ */
+const poemFeaturedAt = sql<Date | null>`CASE WHEN ${poems.visibility} = 'public' THEN ${poems.featuredAt} END`.mapWith(poems.featuredAt);
+const novelFeaturedAt = sql<Date | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${novels.featuredAt} END`.mapWith(novels.featuredAt);
+const iso = (d: Date | null) => d?.toISOString() ?? null;
 const isPublic = sql`${poems.visibility} = 'public'`;
 
 /** A card's text: the first lines of a public poem, never a private one's (N1). */
@@ -110,6 +119,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       slug: poems.slug,
       visibility: poems.visibility,
       language: poems.language,
+      featuredAt: poemFeaturedAt,
       ...cardColumns,
       ...badgeColumns,
     })
@@ -141,6 +151,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       excerpt: row.excerpt,
       hasMore: row.hasMore,
       collection: badge(row),
+      featuredAt: iso(row.featuredAt),
     });
   }
   for (const { editorId, novel } of await loadNovelCards(onboarded)) sections.get(editorId)?.novels.push(novel);
@@ -177,6 +188,7 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
       status: novels.status,
       visibility: novels.visibility,
       coverKey: novels.coverKey,
+      featuredAt: novelFeaturedAt,
       blurb: sql<string | null>`NULLIF(left(split_part(${novels.blurb}, E'\n', 1), ${CARD_BLURB_CHARS}), '')`,
       chapterCount: sql<number>`count(${chapters.id})::int`,
       wordCount: sql<number>`coalesce(sum(${chapters.wordCount}), 0)::int`,
@@ -188,9 +200,9 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
     .where(and(novelShown(), authorShown(), where))
     .groupBy(novels.id)
     .orderBy(desc(sql`max(${chapters.publishedAt})`), asc(novels.title), asc(novels.id));
-  return rows.map(({ editorId, updatedAt, ...n }) => ({
+  return rows.map(({ editorId, updatedAt, featuredAt, ...n }) => ({
     editorId,
-    novel: { ...n, readingMinutes: readingMinutes(n.wordCount), updatedAt: updatedAt?.toISOString() ?? null },
+    novel: { ...n, readingMinutes: readingMinutes(n.wordCount), updatedAt: updatedAt?.toISOString() ?? null, featuredAt: iso(featuredAt) },
   }));
 }
 
@@ -219,6 +231,7 @@ export async function loadSerialsPage(): Promise<SerialsPage> {
       authorSlug: editors.slug,
       avatar: editors.avatar,
       photoKey: editors.photoKey,
+      featuredAt: novelFeaturedAt,
       chapterCount: sql<number>`count(${chapters.id})::int`,
       wordCount: sql<number>`coalesce(sum(${chapters.wordCount}), 0)::int`,
       chapterSlugs: sql<string[]>`array_agg(${chapters.slug} ORDER BY ${chapters.position})`,
@@ -244,6 +257,7 @@ export async function loadSerialsPage(): Promise<SerialsPage> {
       status: r.status,
       visibility: r.visibility,
       coverKey: r.coverKey,
+      featuredAt: iso(r.featuredAt),
       blurb: r.blurb,
       chapterCount: r.chapterCount,
       wordCount: r.wordCount,
@@ -279,6 +293,7 @@ async function loadNovelWithChapters(authorSlug: string, novelSlug: string) {
       status: novels.status,
       visibility: novels.visibility,
       coverKey: novels.coverKey,
+      featuredAt: novelFeaturedAt,
       blurb: novels.blurb,
       sharedPassword: sql<boolean>`${editors.passwordMode} = 'shared'`,
       editorId: editors.id,
@@ -343,6 +358,7 @@ export async function loadNovelPage(authorSlug: string, novelSlug: string): Prom
     status: n.status,
     visibility: n.visibility,
     coverKey: n.coverKey,
+    featuredAt: iso(n.featuredAt),
     sharedPassword: n.sharedPassword,
     blurb: firstParagraph,
     fullBlurb: n.blurb,
@@ -743,6 +759,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
       ...cardColumns,
       ...badgeColumns,
       publishedAt: poems.publishedAt,
+      featuredAt: poemFeaturedAt,
     })
     .from(poems)
     .leftJoin(collections, eq(collections.id, poems.collectionId))
@@ -754,6 +771,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
     collection: badge({ collectionTitle, collectionSlug, collectionPart, collectionParts }),
     pinned: r.id === author.pinnedPoemId,
     publishedAt: r.publishedAt?.toISOString() ?? null,
+    featuredAt: iso(r.featuredAt),
   }));
   list.sort((a, b) => Number(b.pinned) - Number(a.pinned));
   return {
@@ -820,6 +838,7 @@ export async function loadCollectionPage(authorSlug: string, collectionSlug: str
       visibility: poems.visibility,
       language: poems.language,
       publishedAt: poems.publishedAt,
+      featuredAt: poemFeaturedAt,
       ...cardColumns,
     })
     .from(poems)
@@ -838,6 +857,7 @@ export async function loadCollectionPage(authorSlug: string, collectionSlug: str
     poems: rows.map((r, i) => ({
       ...r,
       publishedAt: r.publishedAt?.toISOString() ?? null,
+      featuredAt: iso(r.featuredAt),
       part: i + 1,
       collection: { title: c.title, slug: c.slug, part: i + 1, parts: rows.length },
     })),

@@ -157,6 +157,7 @@ async function Collection({ params }: Pick<Props, "params">) {
                 isPrivate={p.visibility === "private"}
                 excerpt={p.excerpt}
                 lang={p.language}
+                featured={p.featuredAt !== null}
                 hasMore={p.hasMore}
                 title={
                   <Link href={`/p/${c.authorSlug}/${p.slug}`} className={cardTitleClass}>

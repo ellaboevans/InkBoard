@@ -1,4 +1,4 @@
-import { EyeOffIcon } from "lucide-react";
+import { EyeOffIcon, StarIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { pluralCount } from "@/lib/plural";
 import { PRIVACY_CONTACT_EMAIL } from "@/lib/site";
@@ -73,5 +73,15 @@ export function HiddenNotice({ account, poems = 0, novels = 0 }: { account: bool
         <HiddenExplainer className="text-sm text-muted-foreground" />
       </div>
     </section>
+  );
+}
+
+/** "Featured" (Phase 33): on the writer's row while InkBoard's owner features it and readers can see it. */
+export function FeaturedBadge() {
+  return (
+    <Badge variant="secondary" className="shrink-0 font-sans" data-featured-badge>
+      <StarIcon aria-hidden />
+      Featured
+    </Badge>
   );
 }

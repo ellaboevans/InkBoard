@@ -1,9 +1,12 @@
 "use server";
 
 import { refresh, updateTag } from "next/cache";
+import { after } from "next/server";
 import { requireOwner } from "@/server/auth/dal";
 import { isSessionFresh } from "@/server/auth/step-up";
-import { sendTakedownEmail } from "@/server/email";
+import { sendFeaturedEmail, sendTakedownEmail } from "@/server/email";
+import { BOARD_TAG } from "@/server/cache-tags";
+import { FEATURE_REFUSAL_MESSAGE, featureWork, unfeatureWork } from "@/server/featured";
 import { markReportsReviewed } from "@/server/owner-reports";
 import { runTakedown } from "@/server/takedown-route";
 
@@ -65,4 +68,37 @@ export async function ownerMarkReviewedAction(kind: string, id: string): Promise
     title: "Marked as reviewed",
     description: res.count === 1 ? "That report is closed." : res.count === 0 ? "Nothing was open." : `Its ${res.count} reports are closed.`,
   };
+}
+
+/**
+ * Feature a work (Phase 33): owner only, no step-up (featuring takes nothing
+ * from anyone). The writer is emailed in after() the first time a work is
+ * ever featured; nothing on removal.
+ */
+export async function ownerFeatureAction(link: string): Promise<OwnerActionResult> {
+  await requireOwner();
+  const res = await featureWork(link);
+  if (!res.ok) return { ok: false, reason: "error", title: "Not featured", description: FEATURE_REFUSAL_MESSAGE[res.error] };
+  updateTag(BOARD_TAG);
+  refresh();
+  if (res.firstTime) {
+    const { email, penName, kind, title, path } = res;
+    after(async () => {
+      try {
+        await sendFeaturedEmail(email, { penName, kind, title, path });
+      } catch {
+        console.error("[owner] featured email failed");
+      }
+    });
+  }
+  return { ok: true, title: "Featured", description: `“${res.title}” by ${res.penName} is featured now.` };
+}
+
+export async function ownerUnfeatureAction(kind: string, id: string): Promise<OwnerActionResult> {
+  await requireOwner();
+  const removed = await unfeatureWork(kind, id);
+  if (!removed) return { ok: false, reason: "error", title: "Nothing changed", description: "That one isn't featured any more." };
+  updateTag(BOARD_TAG);
+  refresh();
+  return { ok: true, title: "Removed from Featured", description: "Readers no longer see it under Featured." };
 }

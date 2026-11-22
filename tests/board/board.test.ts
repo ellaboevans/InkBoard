@@ -85,6 +85,8 @@ describe("loadBoardSections", () => {
       excerpt: null,
       hasMore: false,
       collection: null,
+      // Phase 33: never featured for readers while private.
+      featuredAt: null,
     });
     const json = JSON.stringify(sections);
     expect(json).not.toContain(SECRET);

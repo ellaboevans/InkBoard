@@ -23,8 +23,9 @@ import { parseProse } from "./prose";
  * 7: chapters carry `shareVisits` (Phase 25, "Share a passage").
  * 8: chapters carry `scheduledFor`, and a scheduled chapter's `status` is "scheduled" (Phase 28).
  * 9: `profile`, poems and novels carry `hiddenAt`: when InkBoard's owner hid it from readers, or null (Phase 32 round 2).
+ * 10: poems and novels carry `featuredAt`: when InkBoard's owner featured it, or null (Phase 33).
  */
-export const EXPORT_FORMAT_VERSION = 9;
+export const EXPORT_FORMAT_VERSION = 10;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -50,6 +51,8 @@ export type ExportedPoem = {
   shareVisits: number;
   /** When InkBoard's owner hid it from readers (Phase 32 round 2), or null: shown. */
   hiddenAt: string | null;
+  /** When InkBoard's owner featured it (Phase 33), or null. */
+  featuredAt: string | null;
   /** Saved versions, oldest first (the newest matches the poem). */
   revisions: { savedAt: string; title: string; text: string; language: string | null }[];
 };
@@ -91,6 +94,8 @@ export type ExportedNovel = {
   cover: ExportedPhoto | null;
   /** When InkBoard's owner hid it (and its chapters) from readers (Phase 32 round 2), or null: shown. */
   hiddenAt: string | null;
+  /** When InkBoard's owner featured it (Phase 33), or null. */
+  featuredAt: string | null;
   createdAt: string;
   updatedAt: string;
   /** In reading order, drafts included. */

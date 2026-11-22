@@ -19,6 +19,8 @@ import {
   recoveryCodeUsedEmail,
   reportEmail,
   contentHiddenEmail,
+  featuredEmail,
+  type FeaturedNoticeDetails,
   contentRestoredEmail,
   type TakedownNoticeDetails,
   signInAlertEmail,
@@ -189,4 +191,11 @@ export async function sendTakedownEmail(
   const full = { ...details, contact: PRIVACY_CONTACT_EMAIL, appUrl: env().APP_URL };
   const message = change === "hidden" ? contentHiddenEmail(full) : contentRestoredEmail(full);
   await deliver(to, message, { kind: change === "hidden" ? "content-hidden" : "content-restored", what: details.kind, title: details.title });
+}
+
+/** The writer's one email when their work is first featured (Phase 33). */
+export async function sendFeaturedEmail(to: string, details: Omit<FeaturedNoticeDetails, "appUrl" | "link"> & { path: string }): Promise<void> {
+  const { APP_URL } = env();
+  const message = featuredEmail({ ...details, link: new URL(details.path, APP_URL).href, appUrl: APP_URL });
+  await deliver(to, message, { kind: "featured", what: details.kind, title: details.title, path: details.path });
 }

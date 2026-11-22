@@ -27,6 +27,8 @@ import { NovelCover } from "@/components/novel/novel-cover";
 import { novelPath } from "@/lib/novel-seo";
 import { CollectionBadgeLine } from "./poem-card-face";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
+import { featuredFromSections } from "@/lib/featured";
+import { StarIcon } from "lucide-react";
 
 /**
  * Canvas by default, with a plain list as an accessible alternative (N7).
@@ -132,6 +134,7 @@ function BoardList({
         </header>
         <OfflineIndicator className="-mt-6 mb-8" />
         <LanguageFilterStatus filter={filter} total={total} selectId="list-language" className="-mt-6 mb-8" />
+        <FeaturedList sections={sections} />
         <div className="grid gap-12">
           {sections.map((s) => (
             <section key={s.editorId} aria-labelledby={`author-${s.editorId}`} style={{ ["--hue" as string]: sectionHue(s.editorId) }}>
@@ -248,5 +251,33 @@ function EmptyBoard() {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The list view's "Featured" section (Phase 33), above the authors; nothing when nothing is featured. */
+function FeaturedList({ sections }: { sections: BoardSection[] }) {
+  const featured = featuredFromSections(sections);
+  if (featured.length === 0) return null;
+  return (
+    <section aria-labelledby="featured-heading" className="mb-12" data-featured-section>
+      <h2 id="featured-heading" className="flex items-center gap-2 border-b pb-2 font-serif text-2xl">
+        <StarIcon className="size-5 fill-current text-primary" aria-hidden />
+        Featured
+      </h2>
+      <ul className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-1">
+        {featured.map((f) => (
+          <li key={f.key}>
+            <Link href={f.href} className="grid gap-0.5 rounded-lg px-2 py-2 hover:bg-card focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
+              <span lang={f.language ?? undefined} className="truncate font-serif text-lg">
+                {f.title}
+              </span>
+              <span className="text-sm text-muted-foreground">
+                {f.kind === "novel" ? "Novel" : "Poem"} by {f.penName}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

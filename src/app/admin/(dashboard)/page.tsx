@@ -59,6 +59,7 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     shareVisits: visits.get(p.id) ?? 0,
     // Hidden by InkBoard's owner (Phase 32 round 2): itself, or with the whole account.
     hidden: p.hidden || hidden.account,
+    featured: p.featured && !hidden.account,
   }));
   // Just published (from the editor, `?published=<id>`): only one of this editor's own rows.
   const justPublished = typeof flash.published === "string" ? rows.find((r) => r.id === flash.published) : undefined;

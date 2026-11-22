@@ -151,6 +151,8 @@ const summaryColumns = {
   collectionId: poems.collectionId,
   /** Hidden from readers by InkBoard's owner (Phase 32 round 2); never the time. */
   hidden: sql<boolean>`${poems.hiddenAt} IS NOT NULL`,
+  /** Featured by InkBoard's owner and readers can see it as featured (public, published, not hidden: Phase 33). */
+  featured: sql<boolean>`(${poems.featuredAt} IS NOT NULL AND ${poems.status} = 'published' AND ${poems.visibility} = 'public' AND ${poems.hiddenAt} IS NULL)`,
 };
 const editorColumns = { ...summaryColumns, body: poems.body };
 
@@ -169,6 +171,7 @@ export type EditorPoem = {
   collectionId: string | null;
   /** Hidden from readers by InkBoard's owner (Phase 32 round 2): the writer still sees and edits it. */
   hidden: boolean;
+  featured: boolean;
 };
 
 export type EditorPoemSummary = Omit<EditorPoem, "body">;

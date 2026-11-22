@@ -55,3 +55,6 @@ export const takedownNotices: {
   title: string | null;
   at: Date;
 }[] = [];
+
+/** Writers' "featured" notices (Phase 33). */
+export const featuredNotices: { to: string; penName: string | null; kind: "poem" | "novel"; title: string; path: string }[] = [];

@@ -183,6 +183,8 @@ describe("novels on the board and the author page", () => {
         wordCount: 2860,
         readingMinutes: 12,
         updatedAt: at("2026-10-16").toISOString(),
+        // Phase 33: not featured.
+        featuredAt: null,
       },
     ]);
     expect(amaSection.poems.map((p) => p.slug)).toEqual(["a-poem"]);

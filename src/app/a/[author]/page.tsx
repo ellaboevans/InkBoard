@@ -236,6 +236,7 @@ async function Author({ params }: Pick<Props, "params">) {
                     excerpt={p.excerpt}
                     lang={p.language}
                     collection={p.collection}
+                    featured={p.featuredAt !== null}
                     hasMore={p.hasMore}
                     title={
                       <Link href={`/p/${a.slug}/${p.slug}`} className={cardTitleClass}>

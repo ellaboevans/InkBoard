@@ -11,6 +11,7 @@ import { languageName } from "@/lib/poem-languages";
 import { novelLinkSuffix } from "./book-card-face";
 import { NovelCover } from "./novel-cover";
 import { SerialContinue } from "./novel-reading";
+import { FeaturedMark } from "@/components/board/poem-card-face";
 
 /*
  * A novel on /novels (docs/PLAN.md, Phase 29). Like the book cards, the title
@@ -53,6 +54,7 @@ export function SerialCard({ novel: n }: { novel: SerialNovel }) {
       <div className="flex min-w-0 flex-col">
         <p className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-primary uppercase">
           Novel
+          {n.featuredAt && <FeaturedMark />}
           {language && (
             <span className="rounded-full border px-2 py-0.5 font-normal tracking-normal text-muted-foreground normal-case">{language}</span>
           )}

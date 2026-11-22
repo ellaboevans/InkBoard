@@ -318,6 +318,7 @@ export type NovelSummary = {
   updatedAt: Date;
   /** Hidden from readers by InkBoard's owner (Phase 32 round 2): the writer still sees and edits it. */
   hidden: boolean;
+  featured: boolean;
 };
 
 export type EditorChapterSummary = {
@@ -357,6 +358,8 @@ const novelColumns = {
   updatedAt: novels.updatedAt,
   /** Hidden from readers by InkBoard's owner (Phase 32 round 2). */
   hidden: sql<boolean>`${novels.hiddenAt} IS NOT NULL`,
+  /** Featured and public, not hidden (Phase 33); the list also needs a released chapter for readers to see it. */
+  featured: sql<boolean>`(${novels.featuredAt} IS NOT NULL AND ${novels.visibility} = 'public' AND ${novels.hiddenAt} IS NULL)`,
 };
 
 const chapterSummaryColumns = {
@@ -994,6 +997,8 @@ export type NovelForExport = {
   coverKey: string | null;
   /** When InkBoard's owner hid it from readers (Phase 32 round 2), or null. */
   hiddenAt: Date | null;
+  /** When InkBoard's owner featured it (Phase 33), or null. */
+  featuredAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   chapters: {
@@ -1034,6 +1039,7 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
       visibility: novels.visibility,
       coverKey: novels.coverKey,
       hiddenAt: novels.hiddenAt,
+      featuredAt: novels.featuredAt,
       createdAt: novels.createdAt,
       updatedAt: novels.updatedAt,
     })

@@ -1437,3 +1437,28 @@ test("the owner's page (Phase 32 round 3): report groups, one hidden, and the Hi
     await scan(page, `owner page: hidden now, ${width}px`);
   }
 });
+
+test("Featured (Phase 33): the owner's Featured tab and the board's Featured panel, phone and desktop", async ({ page }) => {
+  test.setTimeout(400_000);
+  const id = unique();
+  const { rows } = await sql(`INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-featured-${id}@example.com', 'Featured A11y ${id}', 'a11y-featured-${id}') RETURNING id`);
+  await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at)
+    VALUES ('${rows[0].id}', 'Featured one ${id}', 'one', 'A line.', 'public', 'published', now())`);
+  await signInAsOwner(page, E2E_OWNER_EMAIL);
+  await page.goto("/admin/owner");
+  await page.getByRole("tab", { name: /Featured/ }).click();
+  await page.getByRole("textbox", { name: "Link to a poem or novel" }).fill(`/p/a11y-featured-${id}/one`);
+  await page.getByRole("button", { name: "Feature", exact: true }).click();
+  await expect(page.locator("[data-featured-item]").filter({ hasText: `Featured one ${id}` })).toBeVisible({ timeout: 45_000 });
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin/owner");
+    await page.getByRole("tab", { name: /Featured/ }).click();
+    await expect(page.locator("[data-featured-item]").first()).toBeVisible();
+    await scan(page, `owner page: Featured tab, ${width}px`);
+    await openBoard(page);
+    await page.getByRole("button", { name: "Featured", exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Featured" })).toBeVisible();
+    await scan(page, `board with the Featured panel open, ${width}px`);
+  }
+});

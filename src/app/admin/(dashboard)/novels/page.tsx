@@ -7,7 +7,7 @@ import { NOVELS_MAX } from "@/lib/novel-limits";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { listNovels } from "@/server/novels";
 import { NewNovelDialog } from "./novel-forms";
-import { HiddenBadge, HiddenNotice } from "@/components/admin/hidden-by-inkboard";
+import { FeaturedBadge, HiddenBadge, HiddenNotice } from "@/components/admin/hidden-by-inkboard";
 import { hiddenStateFor } from "@/server/takedown";
 
 export const metadata: Metadata = { title: "Novels" };
@@ -63,6 +63,11 @@ async function Novels({ searchParams }: Pick<PageProps<"/admin/novels">, "search
                     {(n.hidden || hidden.account) && (
                       <span className="mt-1 block">
                         <HiddenBadge />
+                      </span>
+                    )}
+                    {n.featured && n.publishedCount > 0 && !hidden.account && (
+                      <span className="mt-1 block">
+                        <FeaturedBadge />
                       </span>
                     )}
                     <span className="mt-0.5 flex flex-wrap gap-x-2 text-sm text-muted-foreground">

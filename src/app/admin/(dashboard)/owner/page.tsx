@@ -5,7 +5,8 @@ import { listPasskeys } from "@/server/auth/passkeys";
 import { isSessionFresh } from "@/server/auth/step-up";
 import { loadHiddenNow, loadOpenReportGroups, loadReviewedReportGroups, REVIEWED_SHOWN_DAYS, type ReportGroup } from "@/server/owner-reports";
 import { absoluteUrl } from "@/lib/site";
-import { OwnerPanel, type GroupView, type HiddenView } from "./owner-panel";
+import { FEATURED_MAX, loadFeaturedForOwner } from "@/server/featured";
+import { OwnerPanel, type FeaturedView, type GroupView, type HiddenView } from "./owner-panel";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -59,13 +60,24 @@ function view(g: ReportGroup): GroupView {
 
 async function Owner() {
   const { editor, sessionId } = await requireOwner();
-  const [open, reviewed, hidden, fresh, keys] = await Promise.all([
+  const [open, reviewed, hidden, fresh, keys, featured] = await Promise.all([
     loadOpenReportGroups(),
     loadReviewedReportGroups(),
     loadHiddenNow(),
     isSessionFresh(editor.id, sessionId),
     listPasskeys(editor.id),
+    loadFeaturedForOwner(),
   ]);
+  const featuredViews: FeaturedView[] = featured.map((f) => ({
+    key: `${f.kind}:${f.id}`,
+    kind: f.kind,
+    id: f.id,
+    title: f.title,
+    penName: f.penName,
+    url: absoluteUrl(f.path),
+    featuredLabel: label(f.featuredAt),
+    shown: f.shown,
+  }));
   const hiddenViews: HiddenView[] = hidden.map((h) => ({
     key: `${h.kind}:${h.id}`,
     kind: h.kind,
@@ -80,6 +92,8 @@ async function Owner() {
       open={open.map(view)}
       reviewed={reviewed.map(view)}
       hidden={hiddenViews}
+      featured={featuredViews}
+      featuredMax={FEATURED_MAX}
       reviewedDays={REVIEWED_SHOWN_DAYS}
       fresh={fresh}
       email={editor.email}

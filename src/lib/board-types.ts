@@ -15,6 +15,8 @@ export type BoardPoem = {
   hasMore: boolean;
   /** Its collection, for the card's badge; null when it's in none (docs/PLAN.md, Phase 14). */
   collection: CollectionBadge | null;
+  /** When the owner featured it (ISO, Phase 33), only while it's public and readers can see it; else null. */
+  featuredAt: string | null;
 };
 
 /** "Harmattan Cycle · 2/4": numbered over the collection's published poems only. */
@@ -56,6 +58,8 @@ export type BoardNovel = {
   readingMinutes: number;
   /** The latest published chapter's first publish (ISO). */
   updatedAt: string | null;
+  /** When the owner featured it (ISO, Phase 33), only while it's public and readers can see it; else null. */
+  featuredAt: string | null;
 };
 
 /** A published chapter in reading order: `number` is 1..n over published chapters only. */

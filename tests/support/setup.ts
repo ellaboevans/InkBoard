@@ -2,11 +2,11 @@ import { rm } from "node:fs/promises";
 import { sql } from "drizzle-orm";
 import { beforeEach, vi } from "vitest";
 import { getDb } from "@/db";
-import { alerts, deletionNotices, outbox, passkeyNotices, recoveryNotices, reportNotices, stepUpCodes, takedownNotices, welcomes } from "./outbox";
+import { alerts, deletionNotices, outbox, passkeyNotices, recoveryNotices, reportNotices, stepUpCodes, takedownNotices, welcomes, featuredNotices } from "./outbox";
 
 // Capture outgoing emails instead of sending/logging them.
 vi.mock("@/server/email", async () => {
-  const { alerts, deletionNotices, outbox, passkeyNotices, recoveryNotices, reportNotices, stepUpCodes, takedownNotices, welcomes } =
+  const { alerts, deletionNotices, outbox, passkeyNotices, recoveryNotices, reportNotices, stepUpCodes, takedownNotices, welcomes, featuredNotices } =
     await import("./outbox");
   return {
     sendOtpEmail: vi.fn(async (to: string, code: string, linkToken: string) => {
@@ -51,6 +51,11 @@ vi.mock("@/server/email", async () => {
         takedownNotices.push({ to, change, ...d });
       },
     ),
+    sendFeaturedEmail: vi.fn(
+      async (to: string, d: { penName: string | null; kind: "poem" | "novel"; title: string; path: string }) => {
+        featuredNotices.push({ to, ...d });
+      },
+    ),
     sendReportEmail: vi.fn(async (notice: import("@/server/reports").ReportNotice) => {
       reportNotices.push(notice);
     }),
@@ -80,6 +85,7 @@ beforeEach(async () => {
   deletionNotices.length = 0;
   reportNotices.length = 0;
   takedownNotices.length = 0;
+  featuredNotices.length = 0;
   await getDb().execute(
     sql`TRUNCATE editors, email_otps, sessions, poems, rate_limits, retired_slugs, retired_short_codes, push_subscriptions CASCADE`,
   );

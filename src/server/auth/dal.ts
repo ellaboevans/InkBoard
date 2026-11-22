@@ -1,11 +1,12 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { env } from "@/env";
 import { generateToken } from "@/server/crypto";
 import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE, SESSION_COOKIE } from "./cookie";
 import { clientIpFromForwardedFor } from "./ip";
+import { resolveOwner, type OwnerSession } from "./owner";
 import {
   createSession,
   revokeSessionToken,
@@ -60,6 +61,25 @@ export async function requireOnboardedEditor(): Promise<
   const editor = await requireEditor();
   if (!editor.penName || !editor.slug) redirect("/admin/onboarding");
   return editor as SessionEditor & { penName: string; slug: string };
+}
+
+/**
+ * The owner's session (docs/PLAN.md, Phase 32 round 3), or null for anyone
+ * else: see resolveOwner. For hints only (the sidebar's "Owner" item).
+ */
+export async function getOwnerSession(): Promise<OwnerSession | null> {
+  return resolveOwner(await getCurrentSession());
+}
+
+/**
+ * Every owner page and owner action starts here. Anyone who isn't the owner
+ * (signed out included) gets notFound(), exactly like a missing page: never
+ * "forbidden", so the page's existence isn't confirmed.
+ */
+export async function requireOwner(): Promise<OwnerSession> {
+  const owner = await getOwnerSession();
+  if (!owner) notFound();
+  return owner;
 }
 
 /** Client metadata for auditing and rate limiting. */

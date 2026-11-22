@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { authorPicture } from "@/lib/author-picture";
-import { getCurrentEditor } from "@/server/auth/dal";
+import { getCurrentEditor, getOwnerSession } from "@/server/auth/dal";
+import { NavOwner } from "@/components/admin/nav-owner";
 import { InstallSlot } from "@/components/install/install-nudge";
 
 // The editor dashboard is private: keep it out of search results.
@@ -75,6 +76,10 @@ export default function DashboardLayout({ children }: LayoutProps<"/admin">) {
             <Suspense fallback={<NavMainItems pathname={null} />}>
               <NavMain />
             </Suspense>
+            {/* Phase 32 round 3: only the owner sees it (a hint; the page checks requireOwner). */}
+            <Suspense fallback={null}>
+              <OwnerNav />
+            </Suspense>
             <SidebarGroup className="mt-auto">
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -119,4 +124,8 @@ async function CurrentUser() {
   // Pages redirect signed-out or not-yet-onboarded editors themselves.
   if (!editor?.penName) return null;
   return <NavUser user={{ penName: editor.penName, email: editor.email, picture: authorPicture(editor) }} />;
+}
+
+async function OwnerNav() {
+  return (await getOwnerSession()) ? <NavOwner /> : null;
 }

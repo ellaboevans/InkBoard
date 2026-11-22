@@ -134,13 +134,24 @@ const TABLE = { poem: sql.raw("poems"), novel: sql.raw("novels"), author: sql.ra
  * Hide or restore the target. `changed` is false when it already was so
  * (hiding something hidden, restoring something shown): nothing is written.
  * Lock order as everywhere: the editor row, then novel rows, then poems.
+ * `guard` (the owner's page) runs first in the same transaction; when it
+ * says no, nothing is written (`step_up_required`).
  *
  * Restoring a novel or an author settles the "new chapter" notifications of
  * chapters released while hidden (never to be sent, like updateNovel's
  * visibility rule): hidden work is never announced, then or later.
  */
-export async function applyTakedown(target: TakedownTarget, action: "hide" | "restore"): Promise<{ changed: boolean; at: Date }> {
+export type TakedownTx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+/** Checked first inside the writing transaction (the owner's page: isSessionFresh); false = nothing written. */
+export type TakedownGuard = (tx: TakedownTx) => Promise<boolean>;
+
+export async function applyTakedown(
+  target: TakedownTarget,
+  action: "hide" | "restore",
+  { guard }: { guard?: TakedownGuard } = {},
+): Promise<{ ok: true; changed: boolean; at: Date } | { ok: false; error: "step_up_required" }> {
   return getDb().transaction(async (tx) => {
+    if (guard && !(await guard(tx))) return { ok: false as const, error: "step_up_required" as const };
     await tx.execute(sql`SELECT 1 FROM editors WHERE id = ${target.editorId} FOR NO KEY UPDATE`);
     const novelIds =
       target.kind === "novel"
@@ -163,7 +174,7 @@ export async function applyTakedown(target: TakedownTarget, action: "hide" | "re
       `);
     }
     const at = r.rows[0]?.at ?? (((await tx.execute(sql`SELECT now() AS at`)) as unknown as { rows: { at: Date }[] }).rows[0].at);
-    return { changed, at: new Date(at) };
+    return { ok: true as const, changed, at: new Date(at) };
   });
 }
 

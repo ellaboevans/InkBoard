@@ -16,10 +16,11 @@ import {
   expectBackOnList,
   virtualAuthenticator,
   chooseOption,
+  signInAsOwner,
 } from "./helpers";
 import { fakePush, type FakePush } from "./push-stub";
 import { VIDEO_HOST_ORIGIN } from "../src/lib/site";
-import { E2E_CRON_SECRET } from "../playwright.config";
+import { E2E_CRON_SECRET, E2E_OWNER_EMAIL } from "../playwright.config";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -1406,5 +1407,33 @@ test("dashboard with work hidden by InkBoard (Phase 32 round 2): a hidden poem, 
       await expect(page.getByRole("main").locator("[data-hidden-badge]").filter({ visible: true }).first()).toBeVisible();
       await scan(page, `dashboard with ${state}, ${width}px`);
     }
+  }
+});
+
+test("the owner's page (Phase 32 round 3): report groups, one hidden, and the Hide dialog, phone and desktop", async ({ page }) => {
+  test.setTimeout(400_000);
+  const id = unique();
+  const { rows } = await sql(`INSERT INTO editors (email, pen_name, slug) VALUES ('a11y-owner-case-${id}@example.com', 'Reported A11y ${id}', 'a11y-owner-${id}') RETURNING id`);
+  const { rows: made } = await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at) VALUES
+      ('${rows[0].id}', 'Reported one ${id}', 'one', 'A line.', 'public', 'published', now()),
+      ('${rows[0].id}', 'Reported two ${id}', 'two', 'A line.', 'public', 'published', now()) RETURNING id, slug`);
+  const one = made.find((r) => r.slug === "one")!.id;
+  const two = made.find((r) => r.slug === "two")!.id;
+  await sql(`INSERT INTO reports (poem_id, reason, details) VALUES ('${one}', 'spam', 'Selling things.'), ('${two}', 'other', 'Looks copied.')`);
+  await sql(`UPDATE poems SET hidden_at = now() WHERE id = '${two}'`);
+  await signInAsOwner(page, E2E_OWNER_EMAIL);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/admin/owner");
+    const group = page.locator("[data-report-group]").filter({ hasText: `Reported one ${id}` });
+    await expect(group).toBeVisible();
+    await scan(page, `owner page with report groups, ${width}px`);
+    await group.getByRole("button", { name: /^Hide poem/ }).click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await scan(page, `owner page: the Hide dialog, ${width}px`);
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("tab", { name: /Hidden now/ }).click();
+    await expect(page.locator("[data-hidden-item]").first()).toBeVisible();
+    await scan(page, `owner page: hidden now, ${width}px`);
   }
 });

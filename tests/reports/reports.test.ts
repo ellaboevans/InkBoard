@@ -194,7 +194,7 @@ describe("what's stored", () => {
       SELECT column_name FROM information_schema.columns WHERE table_name = 'reports' ORDER BY column_name
     `)) as unknown as { rows: { column_name: string }[] };
     expect(cols.rows.map((r) => r.column_name)).toEqual(
-      ["chapter_id", "created_at", "details", "editor_id", "id", "novel_id", "poem_id", "reason"],
+      ["chapter_id", "created_at", "details", "editor_id", "id", "novel_id", "poem_id", "reason", "reviewed_at"],
     );
     const dump = JSON.stringify(await db.select().from(reports));
     expect(dump).not.toContain("reader@example.org");

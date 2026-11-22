@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { isVapidKeyPair, resolveVapidSubject } from "@/lib/push-rules";
 import { siteUrl } from "@/lib/site";
+import { normalizeEmail } from "@/server/auth/email";
 
 const schema = z
   .object({
@@ -27,6 +28,17 @@ const schema = z
       .optional()
       .default(""),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(1).max(10).default(1),
+    /**
+     * InkBoard's owner (docs/PLAN.md, Phase 32 round 3): the onboarded editor
+     * whose account email is this address (compared after normalizeEmail) gets
+     * the owner's page, /admin/owner. Empty = nobody is the owner. Never in
+     * code or on a page: src/server/auth/owner.ts reads it.
+     */
+    OWNER_EMAIL: z
+      .string()
+      .optional()
+      .default("")
+      .refine((v) => v.trim() === "" || normalizeEmail(v) !== null, "OWNER_EMAIL must be an email address (or empty)"),
     /**
      * Notifications about new poems (docs/PLAN.md, Phase 18; docs/NOTIFICATIONS.md).
      * Both keys or neither: without them the feature is off. Generate with

@@ -22,6 +22,7 @@ A one-time setup, about 20 minutes. After it, every push to `main` deploys to pr
 | `EMAIL_FROM` | ✅ | ✅ | e.g. `InkBoard <login@yourdomain.com>`, on your verified domain. |
 | `APP_URL` | ✅ `https://yourdomain.com` | optional | Used in sign-in emails. |
 | `CRON_SECRET` | ✅ | optional | `openssl rand -base64 32`. Vercel Cron sends it to `/api/cron/cleanup`. |
+| `OWNER_EMAIL` | recommended | optional | The email of *your own* InkBoard account. That editor (signed in, onboarded, not on a "This isn't my device" session) gets **Owner** in the dashboard: readers' reports, Hide and Restore, with a fresh sign-in or emailed code for each change. Empty = nobody; the `pnpm content:hide`/`content:restore`/`reports` commands still work. |
 | `TRUSTED_PROXY_HOPS` | `1` | `1` | Correct for Vercel. It's how the client IP is found for rate limits. |
 | `EDITOR_ALLOWLIST` | empty | optional | Leave empty: anyone who verifies their email can be an editor. |
 

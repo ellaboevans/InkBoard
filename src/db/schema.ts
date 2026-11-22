@@ -732,6 +732,11 @@ export const reports = pgTable(
     reason: text("reason").notNull(),
     details: text("details"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When the owner marked it reviewed on their page (Phase 32 round 3); null
+     * = open. Nothing about the reader; the 90-day cleanup still applies.
+     */
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   },
   (t) => [
     index("reports_poem_idx").on(t.poemId),

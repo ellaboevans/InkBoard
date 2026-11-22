@@ -44,6 +44,9 @@ async function warmUp() {
     ["/admin/poems/00000000-0000-0000-0000-000000000000"],
     ["/admin/settings"],
     ["/admin/stats"],
+    // The owner's page (Phase 32 round 3) and its 404 for everyone else.
+    ["/admin/owner"],
+    ["/missing/page"],
     ["/admin/collections"],
     ["/admin/collections/00000000-0000-0000-0000-000000000000"],
     ["/admin/novels"],

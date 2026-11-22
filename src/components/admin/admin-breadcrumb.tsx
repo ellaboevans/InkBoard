@@ -26,6 +26,7 @@ function crumbsFor(pathname: string): { label: string; href?: string }[] {
   if (pathname.startsWith("/admin/profile")) return [{ label: "Profile" }];
   if (pathname.startsWith("/admin/settings")) return [{ label: "Settings" }];
   if (pathname.startsWith("/admin/stats")) return [{ label: "Stats" }];
+  if (pathname.startsWith("/admin/owner")) return [{ label: "Owner" }, { label: "Reports" }];
   return [{ label: "Poems" }];
 }
 

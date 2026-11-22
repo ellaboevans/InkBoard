@@ -165,7 +165,8 @@ export default function PrivacyPage() {
               don’t store your IP address, browser, cookies or anything else about you with it. If you give an email
               address for a reply, it goes only into the email that tells {SITE_OPERATOR} about the report (so a reply
               reaches you), and is never stored or logged. To stop the link being misused, a report is counted against
-              your network like the attempts below.
+              your network like the attempts below. When {SITE_OPERATOR} has looked at a report, it is marked as
+              reviewed (we keep when), and it is still deleted on the same schedule.
             </p>
             <p>
               After a report, {SITE_OPERATOR} may hide a poem, a novel (with its chapters) or a writer’s whole page from

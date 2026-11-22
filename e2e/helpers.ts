@@ -363,3 +363,18 @@ export async function takedownNoticesFor(email: string): Promise<{ change: "hidd
     .filter((m) => m.to === email && (m.kind === "content-hidden" || m.kind === "content-restored"))
     .map((m) => ({ change: m.kind === "content-hidden" ? ("hidden" as const) : ("restored" as const), what: m.what, title: m.title }));
 }
+
+/**
+ * Sign in as the E2E server's owner (OWNER_EMAIL = E2E_OWNER_EMAIL, Phase 32
+ * round 3), onboarding them the first time in this run's database. Ends on /admin.
+ */
+export async function signInAsOwner(page: Page, email: string, penName = "InkBoard Owner") {
+  await requestCode(page, email);
+  await typeCode(page, await latestCode(email));
+  await expect(page).toHaveURL(/\/admin(\/onboarding)?(\?.*)?$/, { timeout: 45_000 });
+  if (page.url().includes("/admin/onboarding")) {
+    await page.getByRole("textbox", { name: "Pen name" }).fill(penName);
+    await page.getByRole("button", { name: "Continue to dashboard" }).click();
+    await expect(page).toHaveURL(/\/admin(\?.*)?$/, { timeout: 45_000 });
+  }
+}

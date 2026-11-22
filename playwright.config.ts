@@ -11,6 +11,11 @@ export const OTP_OUTBOX = path.resolve("test-results/otp-outbox.jsonl");
 export const PUSH_OUTBOX = path.resolve("test-results/push-outbox.jsonl");
 // Profile photos (Phase 22): the local storage driver, in this run's own folder.
 export const E2E_PHOTO_DIR = path.resolve(".storage/e2e");
+/**
+ * The E2E server's owner (Phase 32 round 3): the editor signed up with this
+ * address gets /admin/owner. A throwaway test address, never a real one.
+ */
+export const E2E_OWNER_EMAIL = "e2e-owner@example.com";
 /** The owner's secret on the E2E server only (Phase 32 round 2: the takedown route); never a real one. */
 export const E2E_CRON_SECRET = "e2e-owner-secret-not-for-production-0000";
 // Notifications (Phase 18): a throwaway VAPID key pair per run, never in git.
@@ -72,6 +77,7 @@ export default defineConfig({
       VAPID_SUBJECT: "mailto:e2e@inkboard.app",
       PHOTO_STORAGE_DIR: E2E_PHOTO_DIR,
       CRON_SECRET: E2E_CRON_SECRET,
+      OWNER_EMAIL: E2E_OWNER_EMAIL,
       R2_ACCOUNT_ID: "",
       R2_ACCESS_KEY_ID: "",
       R2_SECRET_ACCESS_KEY: "",

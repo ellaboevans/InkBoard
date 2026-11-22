@@ -784,6 +784,9 @@ export type ReportEmailDetails = {
 /** The owner's command to hide a reported page (scripts/content-takedown.ts). */
 export const hideCommand = (path: string) => `pnpm content:hide ${path}`;
 
+/** The owner's page (Phase 32 round 3), where a report is reviewed: absolute, from the app's URL. */
+export const ownerPageUrl = (appUrl: string) => new URL("/admin/owner", appUrl).href;
+
 const REPORT_KIND_LABEL = { poem: "Poem", novel: "Novel", chapter: "Chapter", author: "Author" } as const;
 
 /**
@@ -817,6 +820,8 @@ export function reportEmail(d: ReportEmailDetails): EmailMessage {
     "",
     "Reply to this email to answer the reader, if they left an address.",
     "",
+    `Review it on InkBoard: ${ownerPageUrl(d.appUrl)}`,
+    "",
     "To hide this page from readers:",
     hideCommand(d.path),
   ].join("\n");
@@ -841,6 +846,7 @@ ${para("<strong>Details</strong>", { top: 20, size: 15 })}
 <tr><td style="padding:8px 40px 0;font-family:${SANS};font-size:14px;line-height:22px">${detailsHtml}</td></tr>
 ${button(d.link, "Open the page")}
 ${para("Reply to this email to answer the reader, if they left an address.", { top: 16, size: 13, color: C.muted })}
+${para(`Review it on InkBoard: <a href="${escapeHtml(ownerPageUrl(d.appUrl))}" style="color:${C.primary}">${escapeHtml(ownerPageUrl(d.appUrl))}</a>`, { top: 16, size: 13, color: C.muted })}
 ${para(`To hide this page from readers: <code style="font-family:${MONO};font-size:13px;background:${C.well};padding:2px 6px;border-radius:6px">${escapeHtml(hideCommand(d.path))}</code>`, { top: 12, size: 13, color: C.muted })}
 ${bottomSpace}`,
   });

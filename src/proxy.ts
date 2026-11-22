@@ -3,6 +3,8 @@ import { env } from "@/env";
 import { isDocumentRequest, readerPathFromPathname } from "@/lib/reader-paths";
 import { SESSION_COOKIE } from "@/server/auth/cookie";
 import { clientIpFromForwardedFor, ipBucket } from "@/server/auth/ip";
+import { resolveOwner } from "@/server/auth/owner";
+import { validateSession } from "@/server/auth/sessions";
 import { readerPathExists } from "@/server/board";
 import { handleShortLink, SHORT_LINK_CACHE_CONTROL } from "@/server/short-link-route";
 import { countChapterShareVisit, countShareVisit, resolveShortCode } from "@/server/short-links";
@@ -13,6 +15,10 @@ import { countChapterShareVisit, countShareVisit, resolveShortCode } from "@/ser
  * 1. /admin: optimistic check only. Visitors without a session cookie are
  *    bounced to /sign-in. The real check (is the session valid?) happens in
  *    the Data Access Layer (src/server/auth/dal.ts) on every request.
+ *    The owner's page (/admin/owner, Phase 32 round 3): on a full page load,
+ *    anyone who isn't the owner is rewritten to /missing/page, so the status
+ *    is a real 404 like any missing address (its requireOwner() is the check;
+ *    a streamed notFound() there can't change the status).
  *
  * 2. Reader pages (/a/x, /a/x/c/y, /p/x/y, and the novel pages /a/x/n/y and
  *    /a/x/n/y/z of Phase 23b): real 404s (docs/PLAN.md, Phase 19).
@@ -86,6 +92,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     if (!request.cookies.has(SESSION_COOKIE)) {
       return NextResponse.redirect(new URL("/sign-in", request.url));
+    }
+    if ((pathname === "/admin/owner" || pathname.startsWith("/admin/owner/")) && isDocumentRequest(request)) {
+      let owner = true;
+      try {
+        owner = (await resolveOwner(await validateSession(request.cookies.get(SESSION_COOKIE)?.value ?? ""))) !== null;
+      } catch (error) {
+        // Fail open: the page's own requireOwner() still answers "not found".
+        console.error("owner check failed", error);
+      }
+      if (!owner) return missing(request, "page");
     }
     return NextResponse.next();
   }

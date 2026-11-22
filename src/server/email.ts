@@ -18,6 +18,9 @@ import {
   recoveryCodesChangedEmail,
   recoveryCodeUsedEmail,
   reportEmail,
+  contentHiddenEmail,
+  contentRestoredEmail,
+  type TakedownNoticeDetails,
   signInAlertEmail,
   signInLinkUrl,
   stepUpEmail,
@@ -154,6 +157,7 @@ export async function sendReportEmail(notice: ReportNotice): Promise<void> {
     details: notice.details,
     at: notice.at,
     earlier: notice.earlier,
+    path: notice.target.path,
     appUrl: APP_URL,
   });
   await deliver(
@@ -171,4 +175,18 @@ export async function sendReportEmail(notice: ReportNotice): Promise<void> {
     },
     { replyTo: notice.replyTo ?? undefined },
   );
+}
+
+/**
+ * The writer's notice that InkBoard's owner hid (or restored) a work of theirs
+ * or their author page (Phase 32 round 2). Never the report's details.
+ */
+export async function sendTakedownEmail(
+  to: string,
+  change: "hidden" | "restored",
+  details: Omit<TakedownNoticeDetails, "appUrl" | "contact">,
+): Promise<void> {
+  const full = { ...details, contact: PRIVACY_CONTACT_EMAIL, appUrl: env().APP_URL };
+  const message = change === "hidden" ? contentHiddenEmail(full) : contentRestoredEmail(full);
+  await deliver(to, message, { kind: change === "hidden" ? "content-hidden" : "content-restored", what: details.kind, title: details.title });
 }

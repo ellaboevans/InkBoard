@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { editors, novels } from "@/db/schema";
+import { authorShown, novelShown } from "./shown";
 import { parseCrop } from "@/lib/photo-crop";
 import {
   COVER_JPEG_WIDTH,
@@ -170,10 +171,19 @@ export async function removeCover(editorId: string, novelId: string, storage?: O
 /** Delete one cover's files (never throws; the sweep retries). Novel and account deletion call it after their commit. */
 export const deleteCoverFiles = (key: string, storage?: ObjectStorage) => deleteImageFiles(COVER_KIND, key, storage);
 
-/** Whether `key` is some novel's current cover (the serving route checks before reading storage). */
+/**
+ * Whether `key` is the current cover of a novel readers could see (the serving
+ * route checks before reading storage): not hidden, nor its author (Phase 32
+ * round 2), like a removed cover until they're restored.
+ */
 export async function isCurrentCover(key: string): Promise<boolean> {
   if (!COVER_KEY.test(key)) return false;
-  const [row] = await getDb().select({ id: novels.id }).from(novels).where(eq(novels.coverKey, key)).limit(1);
+  const [row] = await getDb()
+    .select({ id: novels.id })
+    .from(novels)
+    .innerJoin(editors, eq(editors.id, novels.editorId))
+    .where(and(eq(novels.coverKey, key), novelShown(), authorShown()))
+    .limit(1);
   return Boolean(row);
 }
 

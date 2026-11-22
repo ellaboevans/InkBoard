@@ -1,7 +1,8 @@
 import "server-only";
-import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
+import { and, eq, exists, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { chapters, editors, novels, poems } from "@/db/schema";
 import { hmac, safeEqual } from "./crypto";
 import { verifyPassword } from "./passwords";
@@ -71,9 +72,9 @@ async function loadLock(authorSlug: string, poemSlug: string): Promise<Lock | nu
       and(
         eq(editors.slug, authorSlug),
         eq(poems.slug, poemSlug),
-        eq(poems.status, "published"),
+        poemShown(),
         eq(poems.visibility, "private"),
-        isNotNull(editors.penName),
+        authorShown(),
       ),
     )
     .limit(1);
@@ -134,7 +135,8 @@ async function loadNovelLock(authorSlug: string, novelSlug: string): Promise<Loc
         eq(editors.slug, authorSlug),
         eq(novels.slug, novelSlug),
         eq(novels.visibility, "private"),
-        isNotNull(editors.penName),
+        novelShown(),
+        authorShown(),
         exists(
           getDb()
             .select({ one: sql`1` })

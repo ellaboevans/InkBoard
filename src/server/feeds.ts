@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { chapters, editors, novels, poems } from "@/db/schema";
 import { buildAtomFeed, type FeedEntry } from "@/lib/atom-feed";
 import { authorFeedPath, novelFeedPath, SITE_FEED_PATH } from "@/lib/feed-links";
@@ -54,9 +55,9 @@ async function loadEntries(editorId?: string): Promise<FeedEntry[]> {
     .innerJoin(editors, eq(editors.id, poems.editorId))
     .where(
       and(
-        eq(poems.status, "published"),
+        poemShown(),
         isNotNull(poems.publishedAt),
-        isNotNull(editors.penName),
+        authorShown(),
         isNotNull(editors.slug),
         editorId ? eq(editors.id, editorId) : undefined,
       ),
@@ -112,8 +113,9 @@ async function loadChapterEntries({ scope, firstOnly = false }: { scope?: SQL; f
       .where(
         and(
           chapterReleased(),
+          novelShown(),
           isNotNull(chapters.publishedAt),
-          isNotNull(editors.penName),
+          authorShown(),
           isNotNull(editors.slug),
           scope,
         ),
@@ -181,7 +183,7 @@ export async function loadAuthorFeed(authorSlug: string): Promise<string | null>
   const [author] = await getDb()
     .select({ id: editors.id, penName: editors.penName, slug: editors.slug, updatedAt: editors.updatedAt })
     .from(editors)
-    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName)))
+    .where(and(eq(editors.slug, authorSlug), authorShown()))
     .limit(1);
   if (!author) return null;
   const entries = merge(await loadEntries(author.id), await loadChapterEntries({ scope: eq(editors.id, author.id) }));
@@ -208,7 +210,7 @@ export async function loadNovelFeed(authorSlug: string, novelSlug: string): Prom
     .select({ id: novels.id, title: novels.title, slug: novels.slug, penName: editors.penName, authorSlug: editors.slug })
     .from(novels)
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName), eq(novels.slug, novelSlug)))
+    .where(and(eq(editors.slug, authorSlug), authorShown(), eq(novels.slug, novelSlug), novelShown()))
     .limit(1);
   if (!novel) return null;
   const entries = await loadChapterEntries({ scope: eq(novels.id, novel.id) });

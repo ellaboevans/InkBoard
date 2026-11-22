@@ -45,3 +45,13 @@ export const deletionNotices: { to: string; penName: string | null; device: stri
 
 /** Readers' reports emailed to the owner during a test (Phase 32): the notice as the server built it. */
 export const reportNotices: import("@/server/reports").ReportNotice[] = [];
+
+/** Writers' takedown notices (Phase 32 round 2): hidden or restored, and what. */
+export const takedownNotices: {
+  to: string;
+  change: "hidden" | "restored";
+  penName: string | null;
+  kind: "poem" | "novel" | "author";
+  title: string | null;
+  at: Date;
+}[] = [];

@@ -18,7 +18,9 @@
     "video": "tsx video/run.ts",
     "storage:check": "tsx --conditions=react-server scripts/storage-check.ts",
     "photo:remove": "tsx scripts/photo-remove.ts",
-    "reports": "tsx --conditions=react-server scripts/reports.ts"
+    "reports": "tsx --conditions=react-server scripts/reports.ts",
+    "content:hide": "tsx scripts/content-takedown.ts hide",
+    "content:restore": "tsx scripts/content-takedown.ts restore"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

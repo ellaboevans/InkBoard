@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import webpush from "web-push";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { safeEqual, sha256 } from "@/server/crypto";
 import { env } from "@/env";
 import {
@@ -105,7 +106,7 @@ async function addFollows(tx: Tx, subscriptionId: string, slugs: string[]) {
   await tx.execute(sql`
     INSERT INTO push_follows (subscription_id, editor_id)
     SELECT ${subscriptionId}, e.id FROM editors e
-    WHERE e.slug IN (${list}) AND e.pen_name IS NOT NULL
+    WHERE e.slug IN (${list}) AND ${authorShown("e")}
       AND (SELECT count(*) FROM push_follows f WHERE f.subscription_id = ${subscriptionId}) < ${MAX_FOLLOWS}
     ON CONFLICT (subscription_id, editor_id) DO NOTHING
   `);
@@ -116,7 +117,7 @@ async function readPrefs(tx: Tx | ReturnType<typeof getDb>, subscriptionId: stri
     SELECT s.mode, e.slug, e.pen_name
     FROM push_subscriptions s
     LEFT JOIN push_follows f ON f.subscription_id = s.id
-    LEFT JOIN editors e ON e.id = f.editor_id AND e.pen_name IS NOT NULL
+    LEFT JOIN editors e ON e.id = f.editor_id AND ${authorShown("e")}
     WHERE s.id = ${subscriptionId}
     ORDER BY lower(e.pen_name)
   `)) as unknown as { rows: { mode: PushMode; slug: string | null; pen_name: string | null }[] };
@@ -233,14 +234,14 @@ export async function announcePoem(
   const config = pushConfig();
   if (!config) return { ...emptyResult(), skipped: "not-configured" };
 
-  // Checked again at send time: claimed, still published, still public, pen name set.
+  // Checked again at send time: claimed, still published and shown, still public, pen name set, not hidden.
   const poem = (
     (await getDb().execute(sql`
       SELECT p.id, p.title, p.slug, p.editor_id, e.pen_name, e.slug AS author_slug
       FROM poems p JOIN editors e ON e.id = p.editor_id
       WHERE p.id = ${poemId} AND p.notified_at IS NOT NULL
-        AND p.status = 'published' AND p.visibility = 'public'
-        AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+        AND ${poemShown("p")} AND p.visibility = 'public'
+        AND ${authorShown("e")} AND e.slug IS NOT NULL
     `)) as unknown as {
       rows: { id: string; title: string; slug: string; editor_id: string; pen_name: string; author_slug: string }[];
     }
@@ -289,7 +290,7 @@ export async function announceChapter(
           WHERE o.novel_id = c.novel_id AND ${chapterReleased("o")} AND o.position <= c.position) AS number
       FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
       WHERE c.id = ${chapterId} AND c.notified_at > '-infinity' AND ${chapterReleased("c")}
-        AND n.visibility = 'public' AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+        AND n.visibility = 'public' AND ${novelShown("n")} AND ${authorShown("e")} AND e.slug IS NOT NULL
     `)) as unknown as {
       rows: {
         id: string;

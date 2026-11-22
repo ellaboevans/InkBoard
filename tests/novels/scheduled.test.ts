@@ -282,7 +282,7 @@ describe("the writer's download (Phase 28: export version 8)", () => {
     const at = inDays(2);
     await scheduleChapter(ama, landing, at);
     const data = await loadEditorExport(ama, { site: "https://inkboard.test" });
-    expect(data!.version).toBe(8);
+    expect(data!.version).toBeGreaterThanOrEqual(8);
     expect(data!.novels[0].chapters.map((c) => [c.title, c.status, c.scheduledFor, c.publishedAt === null])).toEqual([
       ["Thursday", "published", null, false],
       ["The Landing", "scheduled", at, true],

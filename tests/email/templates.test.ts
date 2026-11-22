@@ -4,6 +4,8 @@ import { EMAIL_LOGO_PNG_BASE64 } from "@/server/email-logo";
 import { describe, expect, it } from "vitest";
 import {
   accountDeletedEmail,
+  contentHiddenEmail,
+  contentRestoredEmail,
   escapeHtml,
   formatAlertTime,
   formatNoticeTime,
@@ -292,5 +294,33 @@ describe("account deleted email", () => {
   it("escapes editor-controlled text", () => {
     expect(mail.html).toContain("Ama &#60;S&#62;");
     expect(mail.html).not.toContain("<S>");
+  });
+});
+
+describe("takedown notices (Phase 32 round 2)", () => {
+  const base = { penName: "Ama", title: "Dusk", at: new Date("2026-12-31T23:59:00Z"), contact: "owner@inkboard.example", appUrl: "https://poemhub.example" };
+  const all = (["poem", "novel", "author"] as const).flatMap((kind) => [
+    contentHiddenEmail({ ...base, kind }),
+    contentRestoredEmail({ ...base, kind }),
+  ]);
+
+  it("contain no 4–8 digit numbers and never the word code (the notice rules)", () => {
+    for (const mail of all) {
+      for (const part of [mail.subject, mail.text, visibleText(mail.html)]) {
+        expect(digitRuns(part)).toEqual([]);
+        expect(part).not.toMatch(/\bcodes?\b/i);
+      }
+      const hrefs = [...mail.html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1]);
+      expect(hrefs.flatMap(digitRuns)).toEqual([]);
+    }
+  });
+
+  it("leave out a title with a digit run or the word code", () => {
+    for (const title of ["Poem 2026", "The Code"]) {
+      const mail = contentHiddenEmail({ ...base, kind: "poem", title });
+      expect(digitRuns(mail.text)).toEqual([]);
+      expect(mail.text).not.toMatch(/\bcode\b/i);
+      expect(mail.text).toContain("one of your poems");
+    }
   });
 });

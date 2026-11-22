@@ -90,6 +90,14 @@ export const editors = pgTable(
      */
     authorPageSharedAt: timestamp("author_page_shared_at", { withTimezone: true }),
     checklistHiddenAt: timestamp("checklist_hidden_at", { withTimezone: true }),
+    /**
+     * Hidden by InkBoard's owner after a report (docs/PLAN.md, Phase 32 round 2):
+     * null = shown. To readers a hidden author (and everything of theirs, their page included) is missing everywhere (the reader
+     * helpers in src/server/shown.ts); the writer still sees, edits, exports and
+     * deletes it. Set and cleared only by the owner's takedown
+     * (src/server/takedown.ts); saving or publishing never touches it.
+     */
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -374,6 +382,14 @@ export const poems = pgTable(
      */
     collectionId: uuid("collection_id").references(() => collections.id, { onDelete: "set null" }),
     collectionPosition: integer("collection_position"),
+    /**
+     * Hidden by InkBoard's owner after a report (docs/PLAN.md, Phase 32 round 2):
+     * null = shown. To readers a hidden poem is missing everywhere (the reader
+     * helpers in src/server/shown.ts); the writer still sees, edits, exports and
+     * deletes it. Set and cleared only by the owner's takedown
+     * (src/server/takedown.ts); saving or publishing never touches it.
+     */
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -469,6 +485,14 @@ export const novels = pgTable(
      * novel, like its title and blurb.
      */
     coverKey: text("cover_key").unique(),
+    /**
+     * Hidden by InkBoard's owner after a report (docs/PLAN.md, Phase 32 round 2):
+     * null = shown. To readers a hidden novel (with every chapter) is missing everywhere (the reader
+     * helpers in src/server/shown.ts); the writer still sees, edits, exports and
+     * deletes it. Set and cleared only by the owner's takedown
+     * (src/server/takedown.ts); saving or publishing never touches it.
+     */
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex("novels_editor_slug_key").on(t.editorId, t.slug)],

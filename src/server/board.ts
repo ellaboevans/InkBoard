@@ -4,6 +4,7 @@ import { authorPicture, type AuthorPicture } from "@/lib/author-picture";
 import { and, asc, desc, eq, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { chapters, collections, editors, novels, poems, shortLinks } from "@/db/schema";
 import type {
   AuthorCollection,
@@ -76,7 +77,7 @@ function badge(r: {
 
 export async function loadBoardSections(): Promise<BoardSection[]> {
   const db = getDb();
-  const onboarded = and(isNotNull(editors.penName), isNotNull(editors.slug));
+  const onboarded = and(authorShown(), isNotNull(editors.slug));
   // Authors with something published (a poem, or a novel's chapter), in
   // catalogue order: A–Z by pen name. Sorted here in SQL, once, so a section
   // made only of novels lands in the same order as any other.
@@ -93,9 +94,9 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
       and(
         onboarded,
         or(
-          sql`EXISTS (SELECT 1 FROM ${poems} WHERE ${poems.editorId} = ${editors.id} AND ${poems.status} = 'published')`,
+          sql`EXISTS (SELECT 1 FROM ${poems} WHERE ${poems.editorId} = ${editors.id} AND ${poemShown()})`,
           sql`EXISTS (SELECT 1 FROM ${novels} JOIN ${chapters} ON ${chapters.novelId} = ${novels.id}
-            WHERE ${novels.editorId} = ${editors.id} AND ${chapterReleased()})`,
+            WHERE ${novels.editorId} = ${editors.id} AND ${novelShown()} AND ${chapterReleased()})`,
         ),
       ),
     )
@@ -115,7 +116,7 @@ export async function loadBoardSections(): Promise<BoardSection[]> {
     .from(poems)
     .innerJoin(editors, eq(editors.id, poems.editorId))
     .leftJoin(collections, eq(collections.id, poems.collectionId))
-    .where(and(eq(poems.status, "published"), onboarded))
+    .where(and(poemShown(), onboarded))
     // Newest poems first within a section.
     .orderBy(desc(poems.publishedAt), asc(poems.title));
 
@@ -184,7 +185,7 @@ async function loadNovelCards(where: SQL | undefined): Promise<{ editorId: strin
     .from(novels)
     .innerJoin(editors, eq(editors.id, novels.editorId))
     .innerJoin(chapters, and(eq(chapters.novelId, novels.id), chapterReleased()))
-    .where(where)
+    .where(and(novelShown(), authorShown(), where))
     .groupBy(novels.id)
     .orderBy(desc(sql`max(${chapters.publishedAt})`), asc(novels.title), asc(novels.id));
   return rows.map(({ editorId, updatedAt, ...n }) => ({
@@ -228,7 +229,7 @@ export async function loadSerialsPage(): Promise<SerialsPage> {
     .from(novels)
     .innerJoin(editors, eq(editors.id, novels.editorId))
     .innerJoin(chapters, and(eq(chapters.novelId, novels.id), chapterReleased()))
-    .where(and(isNotNull(editors.penName), isNotNull(editors.slug)))
+    .where(and(authorShown(), isNotNull(editors.slug), novelShown()))
     .groupBy(novels.id, editors.id)
     .orderBy(sql`max(${chapters.publishedAt}) DESC NULLS LAST`, asc(novels.title), asc(novels.id));
   const page: SerialsPage = { ongoing: [], complete: [] };
@@ -288,7 +289,7 @@ async function loadNovelWithChapters(authorSlug: string, novelSlug: string) {
     })
     .from(novels)
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName), eq(novels.slug, novelSlug)))
+    .where(and(eq(editors.slug, authorSlug), authorShown(), eq(novels.slug, novelSlug), novelShown()))
     .limit(1);
   if (!n) return null;
   const rows = await db
@@ -378,7 +379,7 @@ export async function loadReaderChapter(
     .select({ body: sql<string | null>`CASE WHEN ${novels.visibility} = 'public' THEN ${chapters.body} END` })
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
-    .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), chapterReleased()))
+    .where(and(eq(chapters.id, list[i].id), eq(chapters.novelId, n.id), chapterReleased(), novelShown()))
     .limit(1);
   // Unpublished between the two queries: not found, like any draft.
   if (!row) return null;
@@ -432,7 +433,7 @@ export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .where(and(chapterReleased(), isNotNull(editors.penName), isNotNull(editors.slug)))
+    .where(and(chapterReleased(), novelShown(), authorShown(), isNotNull(editors.slug)))
     .orderBy(asc(editors.slug), asc(novels.slug), asc(chapters.position));
   return rows.map((r) => ({
     authorSlug: r.authorSlug!,
@@ -453,7 +454,7 @@ export async function loadSitemapChapters(): Promise<SitemapChapter[]> {
  */
 export async function readerPathExists(path: ReaderPath): Promise<boolean> {
   const db = getDb();
-  const author = and(eq(editors.slug, path.author), isNotNull(editors.penName));
+  const author = and(eq(editors.slug, path.author), authorShown());
   if (path.kind === "author") {
     const rows = await db.select({ one: sql`1` }).from(editors).where(author).limit(1);
     return rows.length > 0;
@@ -463,7 +464,7 @@ export async function readerPathExists(path: ReaderPath): Promise<boolean> {
       .select({ one: sql`1` })
       .from(poems)
       .innerJoin(editors, eq(editors.id, poems.editorId))
-      .where(and(author, eq(poems.slug, path.poem), eq(poems.status, "published")))
+      .where(and(author, eq(poems.slug, path.poem), poemShown()))
       .limit(1);
     return rows.length > 0;
   }
@@ -481,7 +482,7 @@ export async function readerPathExists(path: ReaderPath): Promise<boolean> {
           path.kind === "chapter" ? eq(chapters.slug, path.chapter) : undefined,
         ),
       )
-      .where(and(author, eq(novels.slug, path.novel)))
+      .where(and(author, eq(novels.slug, path.novel), novelShown()))
       .limit(1);
     return rows.length > 0;
   }
@@ -491,7 +492,7 @@ export async function readerPathExists(path: ReaderPath): Promise<boolean> {
     .innerJoin(editors, eq(editors.id, collections.editorId))
     .innerJoin(
       poems,
-      and(eq(poems.collectionId, collections.id), eq(poems.editorId, collections.editorId), eq(poems.status, "published")),
+      and(eq(poems.collectionId, collections.id), eq(poems.editorId, collections.editorId), poemShown()),
     )
     .where(and(author, eq(collections.slug, path.collection)))
     .limit(1);
@@ -526,8 +527,8 @@ export async function loadReaderPoem(
       and(
         eq(editors.slug, authorSlug),
         eq(poems.slug, poemSlug),
-        eq(poems.status, "published"),
-        isNotNull(editors.penName),
+        poemShown(),
+        authorShown(),
       ),
     )
     .limit(1);
@@ -589,9 +590,9 @@ export async function loadSharePoem(authorSlug: string, poemSlug: string): Promi
       and(
         eq(editors.slug, authorSlug),
         eq(poems.slug, poemSlug),
-        eq(poems.status, "published"),
+        poemShown(),
         eq(poems.visibility, "public"),
-        isNotNull(editors.penName),
+        authorShown(),
       ),
     )
     .limit(1);
@@ -661,8 +662,9 @@ export async function loadShareChapter(authorSlug: string, novelSlug: string, ch
         eq(novels.slug, novelSlug),
         eq(chapters.slug, chapterSlug),
         chapterReleased(),
+        novelShown(),
         eq(novels.visibility, "public"),
-        isNotNull(editors.penName),
+        authorShown(),
       ),
     )
     .limit(1);
@@ -698,7 +700,7 @@ async function loadReaderCollection(collectionId: string, poemId: string): Promi
   const list = await db
     .select({ id: poems.id, title: poems.title, slug: poems.slug, visibility: poems.visibility, language: poems.language })
     .from(poems)
-    .where(and(eq(poems.collectionId, collectionId), eq(poems.status, "published")))
+    .where(and(eq(poems.collectionId, collectionId), poemShown()))
     .orderBy(asc(poems.collectionPosition));
   const i = list.findIndex((p) => p.id === poemId);
   if (i < 0) return null;
@@ -727,7 +729,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
       pinnedPoemId: editors.pinnedPoemId,
     })
     .from(editors)
-    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName)))
+    .where(and(eq(editors.slug, authorSlug), authorShown()))
     .limit(1);
   if (!author) return null;
 
@@ -744,7 +746,7 @@ export async function loadAuthorPage(authorSlug: string): Promise<AuthorPage | n
     })
     .from(poems)
     .leftJoin(collections, eq(collections.id, poems.collectionId))
-    .where(and(eq(poems.editorId, author.editorId), eq(poems.status, "published")))
+    .where(and(eq(poems.editorId, author.editorId), poemShown()))
     .orderBy(desc(poems.publishedAt), asc(poems.title));
 
   const list = rows.map(({ collectionTitle, collectionSlug, collectionPart, collectionParts, ...r }) => ({
@@ -779,7 +781,7 @@ async function loadAuthorCollections(editorId: string): Promise<AuthorCollection
       poemCount: sql<number>`count(${poems.id})::int`,
     })
     .from(collections)
-    .innerJoin(poems, and(eq(poems.collectionId, collections.id), eq(poems.status, "published")))
+    .innerJoin(poems, and(eq(poems.collectionId, collections.id), poemShown()))
     .where(eq(collections.editorId, editorId))
     .groupBy(collections.id)
     .orderBy(asc(sql`lower(${collections.title})`), asc(collections.id));
@@ -806,7 +808,7 @@ export async function loadCollectionPage(authorSlug: string, collectionSlug: str
     })
     .from(collections)
     .innerJoin(editors, eq(editors.id, collections.editorId))
-    .where(and(eq(editors.slug, authorSlug), isNotNull(editors.penName), eq(collections.slug, collectionSlug)))
+    .where(and(eq(editors.slug, authorSlug), authorShown(), eq(collections.slug, collectionSlug)))
     .limit(1);
   if (!c) return null;
 
@@ -821,7 +823,7 @@ export async function loadCollectionPage(authorSlug: string, collectionSlug: str
       ...cardColumns,
     })
     .from(poems)
-    .where(and(eq(poems.collectionId, c.id), eq(poems.editorId, c.editorId), eq(poems.status, "published")))
+    .where(and(eq(poems.collectionId, c.id), eq(poems.editorId, c.editorId), poemShown()))
     .orderBy(asc(poems.collectionPosition));
   if (rows.length === 0) return null;
 

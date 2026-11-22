@@ -37,9 +37,11 @@ async function main() {
       const at = new Date(r.at).toISOString().replace("T", " ").slice(0, 16) + " UTC";
       const reason = isReportReason(r.reason) ? reportReasonLabel(r.reason) : r.reason;
       const what = r.kind === "author" ? `author ${r.penName}` : `${r.kind} “${r.title}” by ${r.penName}`;
-      console.log(`${at}  ${reason}`);
+      console.log(`${at}  ${reason}${r.hidden ? "  [hidden now]" : ""}`);
       console.log(`  ${what}`);
       console.log(`  ${site ? new URL(r.path, site).href : r.path}`);
+      // Hidden: the page itself, its novel or its author (restore with the link that was hidden).
+      console.log(r.hidden ? "  Hidden from readers now." : `  Shown to readers. To hide: pnpm content:hide ${r.path}`);
       if (r.details) console.log(`  ${r.details.replace(/\n/g, "\n  ")}`);
       console.log("");
     }

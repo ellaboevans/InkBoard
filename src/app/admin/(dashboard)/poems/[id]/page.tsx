@@ -10,6 +10,8 @@ import { getEditorPoem } from "@/server/poems";
 import { deletePoemAction, updatePoemAction } from "../actions";
 import { PoemForm } from "../poem-form";
 import { EditorSkeleton } from "../skeleton";
+import { HiddenBadge, HiddenExplainer } from "@/components/admin/hidden-by-inkboard";
+import { hiddenStateFor } from "@/server/takedown";
 
 export const metadata: Metadata = { title: "Edit poem" };
 
@@ -32,16 +34,26 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
   const poem = await getEditorPoem(editor.id, id);
   if (!poem) notFound();
   const { created, version } = await searchParams;
-  const [passwordMode, collections, revisions, selected] = await Promise.all([
+  const [passwordMode, collections, revisions, selected, hiddenState] = await Promise.all([
     getPasswordMode(editor.id),
     collectionOptions(editor.id),
     // History is editor-only: scoped by the DAL-resolved id, like the poem.
     listPoemRevisions(editor.id, poem.id),
     typeof version === "string" ? getPoemRevision(editor.id, poem.id, version) : null,
+    hiddenStateFor(editor.id),
   ]);
+  // Phase 32 round 2: hidden from readers by InkBoard's owner (itself or the whole account). Saving never unhides.
+  const hidden = poem.hidden || hiddenState.account;
   const currentId = revisions[0]?.id;
 
   return (
+    <>
+    {hidden && (
+      <div className="mx-auto mb-6 grid w-full max-w-6xl gap-1.5 rounded-xl border border-destructive/30 bg-destructive/5 p-4" data-poem-hidden>
+        <HiddenBadge />
+        <HiddenExplainer className="text-sm text-muted-foreground" />
+      </div>
+    )}
     <PoemForm
       // Remount with fresh state if the editor navigates between poems.
       key={poem.id}
@@ -81,5 +93,6 @@ async function EditPoem({ params, searchParams }: PageProps<"/admin/poems/[id]">
         hasPassword: poem.hasPassword,
       }}
     />
+    </>
   );
 }

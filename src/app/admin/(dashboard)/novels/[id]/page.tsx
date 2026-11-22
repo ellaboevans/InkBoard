@@ -12,6 +12,8 @@ import { ChapterOrder, DeleteNovel } from "../chapter-order";
 import { sectionHue } from "@/lib/board-layout";
 import { CoverPanel } from "../cover-panel";
 import { NovelDetailsForm } from "../novel-forms";
+import { HiddenBadge, HiddenExplainer } from "@/components/admin/hidden-by-inkboard";
+import { hiddenStateFor } from "@/server/takedown";
 
 export const metadata: Metadata = { title: "Edit novel" };
 
@@ -37,8 +39,15 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
   const editor = await requireOnboardedEditor();
   const { id } = await params;
   // Scoped to the signed-in editor: someone else's novel is simply "not found".
-  const [novel, flags, passwordMode] = await Promise.all([getNovel(editor.id, id), searchParams, getPasswordMode(editor.id)]);
+  const [novel, flags, passwordMode, hiddenState] = await Promise.all([
+    getNovel(editor.id, id),
+    searchParams,
+    getPasswordMode(editor.id),
+    hiddenStateFor(editor.id),
+  ]);
   if (!novel) notFound();
+  // Phase 32 round 2: hidden by InkBoard's owner, itself or with the whole account.
+  const hidden = novel.hidden || hiddenState.account;
   return (
     <>
       {flags.created === "1" && (
@@ -47,6 +56,12 @@ async function EditNovel({ params, searchParams }: PageProps<"/admin/novels/[id]
       {flags["chapter-deleted"] === "1" && <FlashToast param="chapter-deleted" title="Chapter deleted" />}
       <div className="min-w-0">
         <h1 className="font-serif text-3xl break-words">{novel.title}</h1>
+        {hidden && (
+          <div className="mt-2 grid gap-1.5" data-novel-hidden>
+            <HiddenBadge />
+            <HiddenExplainer className="text-sm text-muted-foreground" />
+          </div>
+        )}
         <p className="mt-1 text-muted-foreground">
           {novel.status === "complete" ? "Complete" : "Ongoing"} ·{" "}
           {novel.visibility === "private"

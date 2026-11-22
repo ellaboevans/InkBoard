@@ -42,6 +42,7 @@ import { notify, UNEXPECTED_ERROR } from "@/lib/notify";
 import { pluralCount } from "@/lib/plural";
 import { poemPath } from "@/lib/share-image/share-text";
 import { ShareImageButton, ShareImageDialog } from "@/components/poem/share-image-button";
+import { HiddenBadge } from "@/components/admin/hidden-by-inkboard";
 import { deletePoemAction } from "./poems/actions";
 import { setPinnedPoemAction } from "./actions";
 
@@ -55,6 +56,8 @@ export type DashboardPoem = {
   updatedLabel: string;
   /** Visits through the short link on its shared pictures (0 if none yet). Only ever shown here, to its writer. */
   shareVisits: number;
+  /** Hidden from readers by InkBoard's owner, itself or with the whole account (Phase 32 round 2). */
+  hidden: boolean;
 };
 
 /**
@@ -62,7 +65,7 @@ export type DashboardPoem = {
  * poem, the same rule as the reading page. Derived from each render's rows,
  * so a poem made private or unpublished loses it on the next render.
  */
-const shareable = (p: DashboardPoem) => p.status === "published" && p.visibility === "public";
+const shareable = (p: DashboardPoem) => p.status === "published" && p.visibility === "public" && !p.hidden;
 
 /** What the share sheet needs besides the row: the site's origin (APP_URL, resolved on the server) and the pen name. */
 export type ShareContext = { origin: string; penName: string };
@@ -204,7 +207,10 @@ export function PoemsTable({
                       <ShareVisits poem={poem} />
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={poem.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={poem.status} />
+                        {poem.hidden && <HiddenBadge />}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <VisibilityBadge visibility={poem.visibility} />
@@ -239,6 +245,7 @@ export function PoemsTable({
                   <div className="flex flex-wrap items-center gap-2">
                     {poem.id === justPublishedId && <JustPublishedBadge />}
                     <StatusBadge status={poem.status} />
+                    {poem.hidden && <HiddenBadge />}
                     <VisibilityBadge visibility={poem.visibility} />
                     {poem.id === pinnedPoemId && <PinnedBadge />}
                   </div>
@@ -357,16 +364,21 @@ function RowActions({
         </DropdownMenuItem>
         {published && (
           <>
-            <DropdownMenuItem asChild>
-              <Link href={path}>
-                <ExternalLinkIcon />
-                View on the board
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={copyLink}>
-              <LinkIcon />
-              Copy link
-            </DropdownMenuItem>
+            {/* A hidden poem's page is "not found" to everyone (Phase 32 round 2): no link to it. */}
+            {!poem.hidden && (
+              <>
+                <DropdownMenuItem asChild>
+                  <Link href={path}>
+                    <ExternalLinkIcon />
+                    View on the board
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={copyLink}>
+                  <LinkIcon />
+                  Copy link
+                </DropdownMenuItem>
+              </>
+            )}
             {shareable(poem) && (
               <DropdownMenuItem onSelect={() => setSharing(true)}>
                 <ImageIcon />

@@ -49,6 +49,7 @@ export async function loadEditorExport(
       photoKey: editors.photoKey,
       pinnedPoemId: editors.pinnedPoemId,
       joinedAt: editors.createdAt,
+      hiddenAt: editors.hiddenAt,
     })
     .from(editors)
     .where(eq(editors.id, editorId));
@@ -69,6 +70,7 @@ export async function loadEditorExport(
         updatedAt: poems.updatedAt,
         collectionId: poems.collectionId,
         collectionPosition: poems.collectionPosition,
+        hiddenAt: poems.hiddenAt,
         // Visits through its short link (Phase 21 round 3): a number about the poem, nothing about visitors.
         shareVisits: sql<number>`coalesce(${shortLinks.visits}, 0)`,
       })
@@ -116,6 +118,7 @@ export async function loadEditorExport(
         : null,
       pinnedPoemId: profile.pinnedPoemId,
       joinedAt: profile.joinedAt.toISOString(),
+      hiddenAt: iso(profile.hiddenAt),
     },
     collections: collectionRows.map((c) => ({
       id: c.id,
@@ -141,6 +144,7 @@ export async function loadEditorExport(
       createdAt: p.createdAt.toISOString(),
       updatedAt: p.updatedAt.toISOString(),
       shareVisits: Number(p.shareVisits),
+      hiddenAt: iso(p.hiddenAt),
       collection:
         p.collectionId && p.collectionPosition !== null
           ? { id: p.collectionId, title: titles.get(p.collectionId) ?? "", position: p.collectionPosition }
@@ -165,6 +169,7 @@ export async function loadEditorExport(
             base64: Buffer.from(coverJpegs[i]!).toString("base64"),
           }
         : null,
+      hiddenAt: iso(n.hiddenAt),
       createdAt: n.createdAt.toISOString(),
       updatedAt: n.updatedAt.toISOString(),
       chapters: n.chapters.map((c) => ({

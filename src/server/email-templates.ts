@@ -776,8 +776,13 @@ export type ReportEmailDetails = {
   at: Date;
   /** Earlier reports of the same page still kept. */
   earlier: number;
+  /** The page's path ("/p/ama/dusk"), for the owner's hide command (Phase 32 round 2). */
+  path: string;
   appUrl: string;
 };
+
+/** The owner's command to hide a reported page (scripts/content-takedown.ts). */
+export const hideCommand = (path: string) => `pnpm content:hide ${path}`;
 
 const REPORT_KIND_LABEL = { poem: "Poem", novel: "Novel", chapter: "Chapter", author: "Author" } as const;
 
@@ -811,6 +816,9 @@ export function reportEmail(d: ReportEmailDetails): EmailMessage {
     d.details ?? "(none given)",
     "",
     "Reply to this email to answer the reader, if they left an address.",
+    "",
+    "To hide this page from readers:",
+    hideCommand(d.path),
   ].join("\n");
   const row = (label: string, value: string) =>
     `<tr><td style="padding:10px 0;border-bottom:1px solid ${C.line};width:96px;font-family:${SANS};font-size:13px;line-height:20px;color:${C.muted};vertical-align:top">${label}</td><td style="padding:10px 0;border-bottom:1px solid ${C.line};font-family:${SANS};font-size:14px;line-height:20px;font-weight:600;color:${C.ink}">${escapeHtml(value)}</td></tr>`;
@@ -833,7 +841,95 @@ ${para("<strong>Details</strong>", { top: 20, size: 15 })}
 <tr><td style="padding:8px 40px 0;font-family:${SANS};font-size:14px;line-height:22px">${detailsHtml}</td></tr>
 ${button(d.link, "Open the page")}
 ${para("Reply to this email to answer the reader, if they left an address.", { top: 16, size: 13, color: C.muted })}
+${para(`To hide this page from readers: <code style="font-family:${MONO};font-size:13px;background:${C.well};padding:2px 6px;border-radius:6px">${escapeHtml(hideCommand(d.path))}</code>`, { top: 12, size: 13, color: C.muted })}
 ${bottomSpace}`,
   });
   return { subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+export type TakedownNoticeDetails = {
+  penName: string | null;
+  /** What was hidden or restored: one poem, one novel (with its chapters), or the whole author page. */
+  kind: "poem" | "novel" | "author";
+  /** The poem's or novel's title (unused for "author"). */
+  title: string | null;
+  at: Date;
+  /** Where to ask about it: PRIVACY_CONTACT_EMAIL. */
+  contact: string;
+  appUrl: string;
+};
+
+/**
+ * A work's title in a takedown notice, or null when it would break the
+ * notice rules (a 4+ digit run a code detector could offer, or the word
+ * "code"); the email then says "one of your poems".
+ */
+export function takedownTitle(title: string | null): string | null {
+  if (!title) return null;
+  return /\d{4}|code/i.test(title) ? null : title;
+}
+
+function takedownWhat(d: TakedownNoticeDetails): { what: string; noun: string } {
+  const title = takedownTitle(d.title);
+  if (d.kind === "author") return { what: "your author page and all your poems and novels", noun: "author page" };
+  if (d.kind === "novel") return { what: title ? `your novel “${title}” and its chapters` : "one of your novels", noun: "novel" };
+  return { what: title ? `your poem “${title}”` : "one of your poems", noun: "poem" };
+}
+
+/** Shared look of the two takedown notices: heading, intro, the time, a closing line with the contact, a button. */
+function takedownNotice(d: TakedownNoticeDetails, o: { subject: string; heading: string; intro: string; detail: string; preheader: string }): EmailMessage {
+  const greeting = d.penName ? `Hi ${d.penName},` : "Hi,";
+  const when = formatNoticeTime(d.at);
+  const ask = `If you'd like to ask about it, write to ${d.contact}.`;
+  const dashboard = new URL("/admin", d.appUrl).href;
+  const text = [greeting, "", o.intro, "", o.detail, "", `When: ${when}`, "", ask, "", `Your dashboard: ${dashboard}`, "", "InkBoard"].join("\n");
+  const mail = escapeHtml(d.contact);
+  const html = frame({
+    appUrl: d.appUrl,
+    preheader: o.preheader,
+    footer: "Sent to the address on your InkBoard account.",
+    automated: false,
+    body: `
+${heading(escapeHtml(o.heading), { size: 26, lineHeight: 32 })}
+${para(`${escapeHtml(greeting)} ${escapeHtml(o.intro)}`, { top: 14 })}
+${para(escapeHtml(o.detail), { top: 12, size: 15 })}
+${para(`When: ${escapeHtml(when)}`, { top: 12, size: 14, color: C.muted })}
+${para(`If you&#39;d like to ask about it, write to <a href="mailto:${mail}" style="color:${C.primary}">${mail}</a>.`, { top: 16, size: 15 })}
+${button(dashboard, "Open your dashboard")}
+${bottomSpace}`,
+  });
+  return { subject: o.subject, text, html, headers: { ...AUTOMATED_HEADERS } };
+}
+
+/**
+ * "Your poem was hidden on InkBoard" (Phase 32 round 2): the owner hid a work
+ * (or the whole author page) after a report. What, when, that nothing is
+ * deleted, and where to ask; never the report's reason or details, or
+ * anything about the reader. No 4–8 digit numbers and no "code", like the
+ * other notices (formatNoticeTime, takedownTitle).
+ */
+export function contentHiddenEmail(d: TakedownNoticeDetails): EmailMessage {
+  const { what, noun } = takedownWhat(d);
+  const subject = d.kind === "author" ? "Your InkBoard author page was hidden" : `Your ${noun} was hidden on InkBoard`;
+  return takedownNotice(d, {
+    subject,
+    heading: d.kind === "author" ? "Your author page was hidden" : `Your ${noun} was hidden`,
+    intro: `InkBoard's owner has hidden ${what} from readers, after a report.`,
+    detail:
+      "Nothing is deleted. You can still see, edit, download and delete it from your dashboard, but readers can't open it, and it isn't on the board, in search or in feeds.",
+    preheader: `Readers can't see ${what} for now. Nothing is deleted.`,
+  });
+}
+
+/** "Your poem is back on InkBoard": the owner restored what they hid, exactly as it was. */
+export function contentRestoredEmail(d: TakedownNoticeDetails): EmailMessage {
+  const { what, noun } = takedownWhat(d);
+  const subject = d.kind === "author" ? "Your InkBoard author page is back" : `Your ${noun} is back on InkBoard`;
+  return takedownNotice(d, {
+    subject,
+    heading: d.kind === "author" ? "Your author page is back" : `Your ${noun} is back`,
+    intro: `InkBoard's owner has restored ${what}.`,
+    detail: "Readers can see it again, exactly as it was: the same address, text and settings.",
+    preheader: `Readers can see ${what} again.`,
+  });
 }

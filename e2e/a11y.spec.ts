@@ -19,6 +19,7 @@ import {
 } from "./helpers";
 import { fakePush, type FakePush } from "./push-stub";
 import { VIDEO_HOST_ORIGIN } from "../src/lib/site";
+import { E2E_CRON_SECRET } from "../playwright.config";
 
 /*
  * Automated accessibility checks (N7) with axe-core, against WCAG 2.2 A/AA.
@@ -1372,5 +1373,38 @@ test("report dialog (Phase 32): open, with a validation error, and thanked, phon
     await expect(dialog.getByRole("status")).toBeVisible({ timeout: 60_000 });
     await scan(page, `report dialog thanked, ${width}px`);
     await page.keyboard.press("Escape");
+  }
+});
+
+test("dashboard with work hidden by InkBoard (Phase 32 round 2): a hidden poem, then the whole account, phone and desktop", async ({ page }) => {
+  test.setTimeout(400_000);
+  const id = unique();
+  const email = `a11y-hidden-${id}@example.com`;
+  await signUpAs(page, email, `Hidden A11y ${id}`);
+  const { rows } = await sql(`SELECT id, slug FROM editors WHERE email = '${email}'`);
+  await sql(`INSERT INTO poems (editor_id, title, slug, body, visibility, status, published_at) VALUES
+    ('${rows[0].id}', 'Hidden one', 'hidden-one', 'A line.', 'public', 'published', now()),
+    ('${rows[0].id}', 'Still shown', 'still-shown', 'A line.', 'public', 'published', now())`);
+  const takedown = async (link: string) => {
+    const res = await page.request.post("/api/owner/takedown", {
+      headers: { Authorization: `Bearer ${E2E_CRON_SECRET}` },
+      data: { link, action: "hide" },
+    });
+    expect(res.status()).toBe(200);
+  };
+  await takedown(`/p/${rows[0].slug}/hidden-one`);
+  for (const [state, heading] of [
+    ["a hidden poem", "InkBoard has hidden one of your poems from readers"],
+    ["a hidden account", "InkBoard has hidden your author page"],
+  ] as const) {
+    if (state === "a hidden account") await takedown(`/a/${rows[0].slug}`);
+    for (const width of [375, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/admin");
+      await expect(page.getByRole("main").getByRole("heading", { name: heading })).toBeVisible();
+      // The phone list or the desktop table, whichever shows at this width.
+      await expect(page.getByRole("main").locator("[data-hidden-badge]").filter({ visible: true }).first()).toBeVisible();
+      await scan(page, `dashboard with ${state}, ${width}px`);
+    }
   }
 });

@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { editors } from "@/db/schema";
+import { authorShown } from "./shown";
 import { parseCrop } from "@/lib/photo-crop";
 import {
   PHOTO_JPEG_SIZE,
@@ -177,10 +178,18 @@ async function unlink(who: ReturnType<typeof eq>, key: string, storage?: ObjectS
  */
 export const deletePhotoFiles = (key: string, storage?: ObjectStorage) => deleteImageFiles(PHOTO_KIND, key, storage);
 
-/** Whether `key` is someone's current photo (the serving route checks before reading storage). */
+/**
+ * Whether `key` is the current photo of an author readers can see (the serving
+ * route checks before reading storage). A hidden author's photo (Phase 32
+ * round 2) isn't served, like a removed one, until they're restored.
+ */
 export async function isCurrentPhoto(key: string): Promise<boolean> {
   if (!PHOTO_KEY.test(key)) return false;
-  const [row] = await getDb().select({ id: editors.id }).from(editors).where(eq(editors.photoKey, key)).limit(1);
+  const [row] = await getDb()
+    .select({ id: editors.id })
+    .from(editors)
+    .where(and(eq(editors.photoKey, key), authorShown()))
+    .limit(1);
   return Boolean(row);
 }
 

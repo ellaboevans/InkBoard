@@ -2,6 +2,7 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { toNfc } from "@/lib/letters";
 import type { SearchResults } from "@/lib/search-types";
 
@@ -75,13 +76,13 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
       ((await tx.execute(sql`
         SELECT e.id AS "editorId", e.pen_name AS "penName", e.slug,
                (SELECT count(*)::int FROM poems p
-                WHERE p.editor_id = e.id AND p.status = 'published') AS "poemCount"
+                WHERE p.editor_id = e.id AND ${poemShown("p")}) AS "poemCount"
         FROM editors e, ${q} q
-        WHERE e.pen_name IS NOT NULL AND e.slug IS NOT NULL
-          -- On the board: a published poem or a novel's released chapter.
-          AND (EXISTS (SELECT 1 FROM poems p WHERE p.editor_id = e.id AND p.status = 'published')
+        WHERE ${authorShown("e")} AND e.slug IS NOT NULL
+          -- On the board: a shown poem or a shown novel's released chapter.
+          AND (EXISTS (SELECT 1 FROM poems p WHERE p.editor_id = e.id AND ${poemShown("p")})
                OR EXISTS (SELECT 1 FROM novels n JOIN chapters c ON c.novel_id = n.id
-                          WHERE n.editor_id = e.id AND ${chapterReleased("c")}))
+                          WHERE n.editor_id = e.id AND ${novelShown("n")} AND ${chapterReleased("c")}))
           AND ${fuzzy ? everyWordRoughly(authorName) : sql`to_tsvector('simple', ${authorName}) @@ q.tsq`}
         ORDER BY ${fuzzy ? sql`word_similarity(q.norm, ${authorName})` : sql`ts_rank(to_tsvector('simple', ${authorName}), q.tsq)`} DESC,
                  lower(e.pen_name)
@@ -93,7 +94,7 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
         SELECT p.id, p.title, p.slug, p.visibility,
                e.id AS "editorId", e.pen_name AS "penName", e.slug AS "authorSlug"
         FROM poems p JOIN editors e ON e.id = p.editor_id, ${q} q
-        WHERE p.status = 'published' AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+        WHERE ${poemShown("p")} AND ${authorShown("e")} AND e.slug IS NOT NULL
           AND ${fuzzy ? everyWordRoughly(poemTitle) : sql`to_tsvector('simple', ${poemTitle}) @@ q.tsq`}
         ORDER BY ${fuzzy ? sql`word_similarity(q.norm, ${poemTitle})` : sql`ts_rank(to_tsvector('simple', ${poemTitle}), q.tsq)`} DESC,
                  p.published_at DESC
@@ -106,7 +107,7 @@ export async function searchBoard(raw: unknown): Promise<SearchResults> {
         SELECT n.id, n.title, n.slug,
                e.id AS "editorId", e.pen_name AS "penName", e.slug AS "authorSlug"
         FROM novels n JOIN editors e ON e.id = n.editor_id, ${q} q
-        WHERE e.pen_name IS NOT NULL AND e.slug IS NOT NULL
+        WHERE ${authorShown("e")} AND e.slug IS NOT NULL AND ${novelShown("n")}
           AND EXISTS (SELECT 1 FROM chapters c WHERE c.novel_id = n.id AND ${chapterReleased("c")})
           AND ${fuzzy ? everyWordRoughly(novelTitle) : sql`to_tsvector('simple', ${novelTitle}) @@ q.tsq`}
         ORDER BY ${fuzzy ? sql`word_similarity(q.norm, ${novelTitle})` : sql`ts_rank(to_tsvector('simple', ${novelTitle}), q.tsq)`} DESC,

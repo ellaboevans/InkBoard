@@ -11,6 +11,7 @@ import { firstFreeSlug, isCheckViolation, isUniqueViolation, slugify } from "@/l
 import { hashPassword } from "./passwords";
 import { compactCollection, lockCollections, placePoem } from "./collections";
 import { recordRevision, sameContent } from "./poem-history";
+import { authorShown, poemShown } from "./shown";
 
 /*
  * Editor-side poem management (R2, R3, N5, N6).
@@ -148,6 +149,8 @@ const summaryColumns = {
   updatedAt: poems.updatedAt,
   hasPassword: sql<boolean>`${poems.passwordHash} IS NOT NULL`,
   collectionId: poems.collectionId,
+  /** Hidden from readers by InkBoard's owner (Phase 32 round 2); never the time. */
+  hidden: sql<boolean>`${poems.hiddenAt} IS NOT NULL`,
 };
 const editorColumns = { ...summaryColumns, body: poems.body };
 
@@ -164,6 +167,8 @@ export type EditorPoem = {
   updatedAt: Date;
   hasPassword: boolean;
   collectionId: string | null;
+  /** Hidden from readers by InkBoard's owner (Phase 32 round 2): the writer still sees and edits it. */
+  hidden: boolean;
 };
 
 export type EditorPoemSummary = Omit<EditorPoem, "body">;
@@ -261,8 +266,8 @@ async function claimAnnouncement(tx: Tx, poemId: string): Promise<boolean> {
   const r = await tx.execute(sql`
     UPDATE poems SET notified_at = now()
     FROM editors e
-    WHERE poems.id = ${poemId} AND e.id = poems.editor_id AND e.pen_name IS NOT NULL
-      AND poems.notified_at IS NULL AND poems.status = 'published' AND poems.visibility = 'public'
+    WHERE poems.id = ${poemId} AND e.id = poems.editor_id AND ${authorShown("e")}
+      AND poems.notified_at IS NULL AND ${poemShown("poems")} AND poems.visibility = 'public'
   `);
   return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
 }

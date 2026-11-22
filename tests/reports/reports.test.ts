@@ -239,10 +239,15 @@ describe("what's stored", () => {
       { editorId: ama, reason: "copied", createdAt: sql`now() - interval '40 days'` },
     ]);
     const rows = await recentReports();
-    expect(rows.map((r) => [r.kind, r.title, r.path])).toEqual([
-      ["chapter", "The Ferry, Landing", "/a/ama/n/the-ferry/landing"],
-      ["poem", "Harmattan", "/p/ama/harmattan"],
+    expect(rows.map((r) => [r.kind, r.title, r.path, r.hidden])).toEqual([
+      ["chapter", "The Ferry, Landing", "/a/ama/n/the-ferry/landing", false],
+      ["poem", "Harmattan", "/p/ama/harmattan", false],
     ]);
+    // Phase 32 round 2: whether each reported page is hidden now (itself, its novel or its author).
+    await db.update(novels).set({ hiddenAt: new Date() }).where(eq(novels.id, novelId));
+    expect((await recentReports()).map((r) => r.hidden)).toEqual([true, false]);
+    await db.update(editors).set({ hiddenAt: new Date() }).where(eq(editors.id, ama));
+    expect((await recentReports()).map((r) => r.hidden)).toEqual([true, true]);
   });
 });
 
@@ -276,6 +281,7 @@ describe("the owner's email", () => {
     details: null,
     at: new Date("2026-11-21T10:30:00Z"),
     earlier: 0,
+    path: "/p/ama/harmattan",
     appUrl: "https://inkboard.example",
   };
 
@@ -289,6 +295,9 @@ describe("the owner's email", () => {
       expect(part).toContain("2 earlier reports of this page");
     }
     expect(m.text).toContain("(none given)");
+    // Phase 32 round 2: the owner's command to hide that page.
+    expect(m.text).toContain("pnpm content:hide /p/ama/harmattan");
+    expect(m.html).toContain("pnpm content:hide /p/ama/harmattan");
   });
 
   it("escapes the reader's details and the title in HTML", () => {
@@ -300,7 +309,7 @@ describe("the owner's email", () => {
   });
 
   it("an author report names the author once", () => {
-    const m = reportEmail({ ...base, kind: "author", title: "Ama Sɛwaa", link: "https://inkboard.example/a/ama" });
+    const m = reportEmail({ ...base, kind: "author", title: "Ama Sɛwaa", link: "https://inkboard.example/a/ama", path: "/a/ama" });
     expect(m.subject).toBe("Report: author Ama Sɛwaa");
     expect(m.text).not.toContain("By:");
   });

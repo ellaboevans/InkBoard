@@ -22,8 +22,9 @@ import { parseProse } from "./prose";
  * 6: novels carry `cover`, the uploaded cover itself (Phase 25), or null.
  * 7: chapters carry `shareVisits` (Phase 25, "Share a passage").
  * 8: chapters carry `scheduledFor`, and a scheduled chapter's `status` is "scheduled" (Phase 28).
+ * 9: `profile`, poems and novels carry `hiddenAt`: when InkBoard's owner hid it from readers, or null (Phase 32 round 2).
  */
-export const EXPORT_FORMAT_VERSION = 8;
+export const EXPORT_FORMAT_VERSION = 9;
 
 /**
  * The profile photo inside the JSON download (Phase 22): our processed
@@ -47,6 +48,8 @@ export type ExportedPoem = {
   collection: { id: string; title: string; position: number } | null;
   /** Visits through the short link printed on its shared pictures (0 if never shared as a picture). */
   shareVisits: number;
+  /** When InkBoard's owner hid it from readers (Phase 32 round 2), or null: shown. */
+  hiddenAt: string | null;
   /** Saved versions, oldest first (the newest matches the poem). */
   revisions: { savedAt: string; title: string; text: string; language: string | null }[];
 };
@@ -86,6 +89,8 @@ export type ExportedNovel = {
   visibility: "public" | "private";
   /** The uploaded cover: our processed 2:3 JPEG copy (no metadata), base64; null for a drawn cover. */
   cover: ExportedPhoto | null;
+  /** When InkBoard's owner hid it (and its chapters) from readers (Phase 32 round 2), or null: shown. */
+  hiddenAt: string | null;
   createdAt: string;
   updatedAt: string;
   /** In reading order, drafts included. */
@@ -108,6 +113,8 @@ export type EditorExport = {
     photo: ExportedPhoto | null;
     pinnedPoemId: string | null;
     joinedAt: string;
+    /** When InkBoard's owner hid the author page and everything on it from readers (Phase 32 round 2), or null. */
+    hiddenAt: string | null;
   };
   /** In the order of the editor's Collections page; poemIds in reading order. */
   collections: {

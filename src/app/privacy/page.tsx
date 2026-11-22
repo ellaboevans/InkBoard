@@ -167,6 +167,15 @@ export default function PrivacyPage() {
               reaches you), and is never stored or logged. To stop the link being misused, a report is counted against
               your network like the attempts below.
             </p>
+            <p>
+              After a report, {SITE_OPERATOR} may hide a poem, a novel (with its chapters) or a writer’s whole page from
+              readers. Nothing is deleted: the writer still sees, edits, downloads and deletes their work, and it can be
+              restored exactly as it was. We keep when it was hidden, on the work or the account itself, until it is
+              restored or deleted, and the writer’s download shows it. The writer gets an email when something of theirs
+              is hidden and when it’s restored; it says what and how to ask about it, never what the report said or
+              anything about who sent it. Copies a reader’s browser already saved for reading offline stay on that
+              device.
+            </p>
           </Sub>
           <Sub heading="Limits on repeated attempts">
             <p>

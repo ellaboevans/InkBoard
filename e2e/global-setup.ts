@@ -68,6 +68,8 @@ async function warmUp() {
     ["/covers/AAAAAAAAAAAAAAAAAAAAAA/128.webp"],
     // POST-only, like the passkey options.
     ["/api/owner/photo-takedown"],
+    // The owner's takedown (Phase 32 round 2), POST-only too.
+    ["/api/owner/takedown"],
     ["/a/warm-up/opengraph-image"],
     ["/p/warm-up/warm-up/opengraph-image"],
     ["/manifest.webmanifest"],

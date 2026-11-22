@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { chapters, editors, novels, poems, reports } from "@/db/schema";
 import { chapterDisplayTitle } from "@/lib/novel-limits";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/report";
 import { ipBucket } from "./auth/ip";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { rateLimit } from "./rate-limit";
 
 /*
@@ -25,7 +26,7 @@ import { rateLimit } from "./rate-limit";
  *
  * Only what the reader can see can be reported: a published poem, a novel
  * with a released chapter, a released chapter, an author with a pen name
- * (readerPathExists' rules). Private poems and novels can be: their titles
+ * (readerPathExists' rules), never one hidden by the owner (Phase 32 round 2). Private poems and novels can be: their titles
  * are public, and nothing here ever selects poem or chapter text.
  *
  * Nothing about the reader is stored: not the IP (only its bucket, inside a
@@ -43,10 +44,10 @@ export type ResolvedReportTarget = {
   path: string;
 };
 
-const authorVisible = (slug: string) => and(eq(editors.slug, slug), isNotNull(editors.penName));
 
 /** The target if a reader can see it now, else null (draft, scheduled, missing: the same null). */
 export async function resolveReportTarget(t: ReportTarget): Promise<ResolvedReportTarget | null> {
+  const authorVisible = (slug: string) => and(eq(editors.slug, slug), authorShown());
   const db = getDb();
   const path = reportTargetPath(t);
   if (t.kind === "author") {
@@ -58,7 +59,7 @@ export async function resolveReportTarget(t: ReportTarget): Promise<ResolvedRepo
       .select({ id: poems.id, title: poems.title, penName: editors.penName })
       .from(poems)
       .innerJoin(editors, eq(editors.id, poems.editorId))
-      .where(and(authorVisible(t.author), eq(poems.slug, t.poem), eq(poems.status, "published")))
+      .where(and(authorVisible(t.author), eq(poems.slug, t.poem), poemShown()))
       .limit(1);
     return row ? { kind: "poem", id: row.id, title: row.title, penName: row.penName!, path } : null;
   }
@@ -68,7 +69,7 @@ export async function resolveReportTarget(t: ReportTarget): Promise<ResolvedRepo
       .from(novels)
       .innerJoin(editors, eq(editors.id, novels.editorId))
       .innerJoin(chapters, and(eq(chapters.novelId, novels.id), chapterReleased()))
-      .where(and(authorVisible(t.author), eq(novels.slug, t.novel)))
+      .where(and(authorVisible(t.author), eq(novels.slug, t.novel), novelShown()))
       .limit(1);
     return row ? { kind: "novel", id: row.id, title: row.title, penName: row.penName!, path } : null;
   }
@@ -85,7 +86,7 @@ export async function resolveReportTarget(t: ReportTarget): Promise<ResolvedRepo
     .from(chapters)
     .innerJoin(novels, eq(novels.id, chapters.novelId))
     .innerJoin(editors, eq(editors.id, novels.editorId))
-    .where(and(authorVisible(t.author), eq(novels.slug, t.novel), eq(chapters.slug, t.chapter), chapterReleased()))
+    .where(and(authorVisible(t.author), eq(novels.slug, t.novel), novelShown(), eq(chapters.slug, t.chapter), chapterReleased()))
     .limit(1);
   if (!row) return null;
   const title = `${row.novelTitle}, ${chapterDisplayTitle(row.title, Number(row.number))}`;
@@ -178,6 +179,8 @@ export type ReportListing = {
   title: string | null;
   penName: string | null;
   path: string;
+  /** Whether readers can't see that page now: it, its novel or its author is hidden by the owner (Phase 32 round 2). */
+  hidden: boolean;
 };
 
 /** For `pnpm reports` (scripts/reports.ts): the last `days` days, newest first, with their pages. */
@@ -195,7 +198,8 @@ export async function recentReports(
         WHEN p.id IS NOT NULL THEN '/p/' || pe.slug || '/' || p.slug
         WHEN n.id IS NOT NULL THEN '/a/' || ne.slug || '/n/' || n.slug
         WHEN c.id IS NOT NULL THEN '/a/' || ce.slug || '/n/' || cn.slug || '/' || c.slug
-        ELSE '/a/' || e.slug END AS "path"
+        ELSE '/a/' || e.slug END AS "path",
+      COALESCE(p.hidden_at, pe.hidden_at, n.hidden_at, ne.hidden_at, cn.hidden_at, ce.hidden_at, e.hidden_at) IS NOT NULL AS "hidden"
     FROM reports r
     LEFT JOIN poems p ON p.id = r.poem_id LEFT JOIN editors pe ON pe.id = p.editor_id
     LEFT JOIN novels n ON n.id = r.novel_id LEFT JOIN editors ne ON ne.id = n.editor_id

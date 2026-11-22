@@ -15,6 +15,8 @@ import { PoemsTable, type DashboardPoem } from "./poems-table";
 import { FlashToast } from "@/components/flash-toast";
 import { FirstPublishFlash } from "@/components/install/install-nudge";
 import { RecoveryNotice } from "./recovery-notice";
+import { HiddenNotice } from "@/components/admin/hidden-by-inkboard";
+import { hiddenStateFor } from "@/server/takedown";
 import { PasskeyOffer } from "./passkey-offer";
 import { ChecklistAllSet, WelcomeChecklist } from "./welcome-checklist";
 import { getWelcomeChecklist } from "@/server/welcome-checklist";
@@ -34,7 +36,7 @@ export default function AdminHomePage(props: PageProps<"/admin">) {
 
 async function Dashboard({ searchParams }: PageProps<"/admin">) {
   const { editor, sessionId } = await requireOnboardedSession();
-  const [poems, stats, profile, recovery, offerPasskey, checklist, flash, visits] = await Promise.all([
+  const [poems, stats, profile, recovery, offerPasskey, checklist, flash, visits, hidden] = await Promise.all([
     listEditorPoems(editor.id),
     getEditorStats(editor.id),
     getProfile(editor.id),
@@ -43,6 +45,7 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     getWelcomeChecklist(editor.id),
     searchParams,
     shareVisitsForEditor(editor.id),
+    hiddenStateFor(editor.id),
   ]);
   const lowCodes = recovery.total > 0 && recovery.unused <= RECOVERY_CODES_LOW;
   const rows: DashboardPoem[] = poems.map((p) => ({
@@ -54,6 +57,8 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
     updatedLabel: dateFormat.format(p.updatedAt),
     // Visits through the short link printed on its pictures (Phase 21 round 3): the writer's eyes only.
     shareVisits: visits.get(p.id) ?? 0,
+    // Hidden by InkBoard's owner (Phase 32 round 2): itself, or with the whole account.
+    hidden: p.hidden || hidden.account,
   }));
   // Just published (from the editor, `?published=<id>`): only one of this editor's own rows.
   const justPublished = typeof flash.published === "string" ? rows.find((r) => r.id === flash.published) : undefined;
@@ -99,6 +104,8 @@ async function Dashboard({ searchParams }: PageProps<"/admin">) {
           first, then the checklist (folded whenever another notice is up, so it's
           one line plus its progress), then the low-codes reminder. While the
           checklist is up it replaces the recovery-code setup prompt. */}
+      {/* Phase 32 round 2: first, above every other card, while anything of theirs is hidden from readers. */}
+      <HiddenNotice account={hidden.account} poems={hidden.poems} novels={hidden.novels} />
       {offerPasskey && <PasskeyOffer />}
       {checklist?.kind === "steps" && (
         <WelcomeChecklist

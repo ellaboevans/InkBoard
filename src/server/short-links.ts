@@ -1,8 +1,9 @@
 import "server-only";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db";
 import { chapterReleased } from "./chapter-release";
+import { authorShown, novelShown, poemShown } from "./shown";
 import { chapters, editors, novels, poems, shortLinks } from "@/db/schema";
 import { newShortCode, parseShortCode } from "@/lib/share-image/short-code";
 import { SHARE_VISIT_WINDOW_SECONDS, shareVisitKey } from "@/lib/share-image/visits";
@@ -45,8 +46,8 @@ export async function ensureShortCode(poemId: string): Promise<string | null> {
     try {
       await db.execute(sql`
         INSERT INTO short_links (poem_id, code)
-        SELECT ${poems.id}, ${newShortCode()} FROM ${poems}
-        WHERE ${poems.id} = ${poemId} AND ${poems.status} = 'published' AND ${poems.visibility} = 'public'
+        SELECT ${poems.id}, ${newShortCode()} FROM ${poems} JOIN editors e ON e.id = ${poems.editorId}
+        WHERE ${poems.id} = ${poemId} AND ${poemShown()} AND ${poems.visibility} = 'public' AND ${authorShown("e")}
         ON CONFLICT (poem_id) DO NOTHING
       `);
     } catch (err) {
@@ -66,8 +67,8 @@ export async function ensureChapterShortCode(chapterId: string): Promise<string 
     try {
       await db.execute(sql`
         INSERT INTO short_links (chapter_id, code)
-        SELECT c.id, ${newShortCode()} FROM chapters c JOIN novels n ON n.id = c.novel_id
-        WHERE c.id = ${chapterId} AND ${chapterReleased("c")} AND n.visibility = 'public'
+        SELECT c.id, ${newShortCode()} FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
+        WHERE c.id = ${chapterId} AND ${chapterReleased("c")} AND n.visibility = 'public' AND ${novelShown("n")} AND ${authorShown("e")}
         ON CONFLICT (chapter_id) DO NOTHING
       `);
     } catch (err) {
@@ -88,7 +89,7 @@ export type ShortLinkTarget =
 /**
  * Where /s/<code> goes: a published public poem by an author with a pen name,
  * a published chapter of a public novel by one, or null for anything else
- * (malformed, unknown, private, draft, unpublished, deleted: one answer, one
+ * (malformed, unknown, private, draft, unpublished, deleted, hidden: one answer, one
  * query whatever the case, so a private poem's or novel's code can't be told
  * from one that never existed). Capitals are accepted.
  */
@@ -108,11 +109,11 @@ export async function resolveShortCode(raw: string): Promise<ShortLinkTarget | n
       novelAuthor: novelAuthor.slug,
     })
     .from(shortLinks)
-    .leftJoin(poems, and(eq(poems.id, shortLinks.poemId), eq(poems.status, "published"), eq(poems.visibility, "public")))
-    .leftJoin(poemAuthor, and(eq(poemAuthor.id, poems.editorId), isNotNull(poemAuthor.penName)))
+    .leftJoin(poems, and(eq(poems.id, shortLinks.poemId), poemShown(), eq(poems.visibility, "public")))
+    .leftJoin(poemAuthor, and(eq(poemAuthor.id, poems.editorId), authorShown(poemAuthor)))
     .leftJoin(chapters, and(eq(chapters.id, shortLinks.chapterId), chapterReleased()))
-    .leftJoin(novels, and(eq(novels.id, chapters.novelId), eq(novels.visibility, "public")))
-    .leftJoin(novelAuthor, and(eq(novelAuthor.id, novels.editorId), isNotNull(novelAuthor.penName)))
+    .leftJoin(novels, and(eq(novels.id, chapters.novelId), eq(novels.visibility, "public"), novelShown()))
+    .leftJoin(novelAuthor, and(eq(novelAuthor.id, novels.editorId), authorShown(novelAuthor)))
     .where(eq(shortLinks.code, code))
     .limit(1);
   if (!row) return null;

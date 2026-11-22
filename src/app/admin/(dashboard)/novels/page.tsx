@@ -7,6 +7,8 @@ import { NOVELS_MAX } from "@/lib/novel-limits";
 import { requireOnboardedEditor } from "@/server/auth/dal";
 import { listNovels } from "@/server/novels";
 import { NewNovelDialog } from "./novel-forms";
+import { HiddenBadge, HiddenNotice } from "@/components/admin/hidden-by-inkboard";
+import { hiddenStateFor } from "@/server/takedown";
 
 export const metadata: Metadata = { title: "Novels" };
 
@@ -31,9 +33,11 @@ export default function NovelsPage({ searchParams }: PageProps<"/admin/novels">)
 
 async function Novels({ searchParams }: Pick<PageProps<"/admin/novels">, "searchParams">) {
   const editor = await requireOnboardedEditor();
-  const [list, { deleted }] = await Promise.all([listNovels(editor.id), searchParams]);
+  const [list, { deleted }, hidden] = await Promise.all([listNovels(editor.id), searchParams, hiddenStateFor(editor.id)]);
   return (
     <>
+      {/* Phase 32 round 2: novels hidden from readers by InkBoard's owner (or the whole account). */}
+      <HiddenNotice account={hidden.account} novels={hidden.novels} />
       {deleted === "1" && <FlashToast param="deleted" title="Novel deleted" description="Its chapters went with it." />}
       <section aria-labelledby="your-novels" className="grid gap-3">
         <h2 id="your-novels" className="font-serif text-xl">
@@ -56,6 +60,11 @@ async function Novels({ searchParams }: Pick<PageProps<"/admin/novels">, "search
                   <BookOpenIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-serif text-lg">{n.title}</span>
+                    {(n.hidden || hidden.account) && (
+                      <span className="mt-1 block">
+                        <HiddenBadge />
+                      </span>
+                    )}
                     <span className="mt-0.5 flex flex-wrap gap-x-2 text-sm text-muted-foreground">
                       <span>{n.status === "complete" ? "Complete" : "Ongoing"}</span>
                       {n.visibility === "private" && (

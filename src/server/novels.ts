@@ -21,6 +21,7 @@ import { hashPassword } from "./passwords";
 import { PASSWORD_SETTINGS_CHANGED } from "./poems";
 import { deleteCoverFiles } from "./novel-covers";
 import { chapterReleased, chapterScheduled } from "./chapter-release";
+import { authorShown, novelShown } from "./shown";
 import { SCHEDULE_INVALID, SCHEDULE_MAX_DAYS, SCHEDULE_MIN_LEAD_MINUTES, SCHEDULE_TOO_LATE, SCHEDULE_TOO_SOON } from "@/lib/chapter-schedule";
 import { compact, endPosition, moveItem, reorderItems, type Direction, type PositionSpec, type Tx } from "./positions";
 import { recordVersion, type RevisionSpec } from "./revisions";
@@ -315,6 +316,8 @@ export type NovelSummary = {
   /** Published with a release time still ahead (Phase 28). */
   scheduledCount: number;
   updatedAt: Date;
+  /** Hidden from readers by InkBoard's owner (Phase 32 round 2): the writer still sees and edits it. */
+  hidden: boolean;
 };
 
 export type EditorChapterSummary = {
@@ -352,6 +355,8 @@ const novelColumns = {
   visibility: novels.visibility,
   language: sql<PoemLanguage | null>`${novels.language}`,
   updatedAt: novels.updatedAt,
+  /** Hidden from readers by InkBoard's owner (Phase 32 round 2). */
+  hidden: sql<boolean>`${novels.hiddenAt} IS NOT NULL`,
 };
 
 const chapterSummaryColumns = {
@@ -577,8 +582,8 @@ async function claimChapterAnnouncement(tx: Tx, chapterId: string): Promise<bool
   const r = await tx.execute(sql`
     UPDATE chapters SET notified_at = now()
     FROM novels n JOIN editors e ON e.id = n.editor_id
-    WHERE chapters.id = ${chapterId} AND n.id = chapters.novel_id AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL
-      AND n.visibility = 'public'
+    WHERE chapters.id = ${chapterId} AND n.id = chapters.novel_id AND ${authorShown("e")} AND e.slug IS NOT NULL
+      AND n.visibility = 'public' AND ${novelShown("n")}
       AND chapters.notified_at IS NULL AND ${chapterReleased()} AND chapters.published_at = now()
   `);
   return ((r as { rowCount?: number | null }).rowCount ?? 0) > 0;
@@ -860,9 +865,9 @@ export async function claimReleasedChapters(onlyEditorId?: string): Promise<stri
   const db = getDb();
   const due = (await db.execute(sql`
     SELECT DISTINCT n.editor_id AS "editorId", n.id AS "novelId"
-    FROM chapters c JOIN novels n ON n.id = c.novel_id
+    FROM chapters c JOIN novels n ON n.id = c.novel_id JOIN editors e ON e.id = n.editor_id
     WHERE c.notified_at IS NULL AND ${chapterReleased("c")} AND c.published_at = c.release_at
-      AND n.visibility = 'public' ${onlyEditorId ? sql`AND n.editor_id = ${onlyEditorId}` : sql``}
+      AND n.visibility = 'public' AND ${novelShown("n")} AND ${authorShown("e")} ${onlyEditorId ? sql`AND n.editor_id = ${onlyEditorId}` : sql``}
     ORDER BY 1, 2
   `)) as unknown as { rows: { editorId: string; novelId: string }[] };
   const byEditor = new Map<string, string[]>();
@@ -876,7 +881,7 @@ export async function claimReleasedChapters(onlyEditorId?: string): Promise<stri
         UPDATE chapters c SET notified_at = now()
         FROM novels n JOIN editors e ON e.id = n.editor_id
         WHERE n.id = c.novel_id AND n.editor_id = ${editorId} AND c.novel_id IN (${sql.join(novelIds.map((id) => sql`${id}::uuid`), sql`, `)})
-          AND e.pen_name IS NOT NULL AND e.slug IS NOT NULL AND n.visibility = 'public'
+          AND ${authorShown("e")} AND e.slug IS NOT NULL AND n.visibility = 'public' AND ${novelShown("n")}
           AND c.notified_at IS NULL AND ${chapterReleased("c")} AND c.published_at = c.release_at
         RETURNING c.id
       `)) as unknown as { rows: { id: string }[] };
@@ -987,6 +992,8 @@ export type NovelForExport = {
   visibility: "public" | "private";
   /** For export.ts to read the cover's JPEG; never written into the download itself. */
   coverKey: string | null;
+  /** When InkBoard's owner hid it from readers (Phase 32 round 2), or null. */
+  hiddenAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   chapters: {
@@ -1026,6 +1033,7 @@ export async function novelsForExport(editorId: string): Promise<NovelForExport[
       status: novels.status,
       visibility: novels.visibility,
       coverKey: novels.coverKey,
+      hiddenAt: novels.hiddenAt,
       createdAt: novels.createdAt,
       updatedAt: novels.updatedAt,
     })

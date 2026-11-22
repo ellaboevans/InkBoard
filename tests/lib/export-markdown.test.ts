@@ -114,7 +114,7 @@ describe("poem text in the Markdown download", () => {
 describe("the whole Markdown file", () => {
   const data: EditorExport = {
     format: "inkboard-export",
-    version: 8,
+    version: 9,
     exportedAt: "2026-11-16T10:00:00.000Z",
     site: "https://inkboard.example",
     profile: {
@@ -127,6 +127,7 @@ describe("the whole Markdown file", () => {
       photo: null,
       pinnedPoemId: null,
       joinedAt: "2026-01-01T00:00:00.000Z",
+      hiddenAt: null,
     },
     collections: [],
     poems: [
@@ -143,6 +144,7 @@ describe("the whole Markdown file", () => {
         updatedAt: "2026-02-01T00:00:00.000Z",
         collection: null,
         shareVisits: 0,
+        hiddenAt: null,
         revisions: [],
       },
     ],

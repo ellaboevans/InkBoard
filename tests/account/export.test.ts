@@ -96,7 +96,7 @@ describe("what the export contains", () => {
   it("has the profile, collections in order and every poem, drafts and private ones with their text", async () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
-    expect(data).toMatchObject({ format: "inkboard-export", version: 8, exportedAt: NOW.toISOString(), site: SITE });
+    expect(data).toMatchObject({ format: "inkboard-export", version: 9, exportedAt: NOW.toISOString(), site: SITE });
     expect(data.profile).toEqual({
       penName: "Ada Verse",
       slug: "ada-verse",
@@ -107,6 +107,8 @@ describe("what the export contains", () => {
       photo: null,
       pinnedPoemId: a.ewe,
       joinedAt: a.ed.createdAt.toISOString(),
+      // Phase 32 round 2: when InkBoard's owner hid the author page, or null.
+      hiddenAt: null,
     });
     expect(data.collections).toEqual([
       expect.objectContaining({ title: "Coastline", intro: "Poems from the shore.", poemIds: [a.ewe, a.draft] }),
@@ -121,7 +123,7 @@ describe("what the export contains", () => {
     expect(draft).toMatchObject({ text: "half a line", publishedAt: null, collection: { title: "Coastline", position: 2 } });
     expect(ewe).toMatchObject({ language: "ee", collection: { id: a.collectionId, title: "Coastline", position: 1 } });
     expect(Object.keys(ewe).sort()).toEqual(
-      ["collection", "createdAt", "id", "language", "publishedAt", "revisions", "shareVisits", "slug", "status", "text", "title", "updatedAt", "visibility"],
+      ["collection", "createdAt", "hiddenAt", "id", "language", "publishedAt", "revisions", "shareVisits", "slug", "status", "text", "title", "updatedAt", "visibility"],
     );
     // Never shared as a picture yet: no visits (Phase 21 round 3).
     expect(data.poems.map((p) => p.shareVisits)).toEqual([0, 0, 0]);
@@ -137,7 +139,7 @@ describe("what the export contains", () => {
     await countShareVisit(a.ewe, "198.51.100.2");
     for (let i = 0; i < 5; i++) await countShareVisit(theirs.id, `198.51.100.${10 + i}`);
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(8);
+    expect(data.version).toBe(9);
     expect(data.poems.map((p) => [p.title, p.shareVisits])).toEqual([
       ["Ŋkɔ", 2],
       ["Locked room", 0],
@@ -222,7 +224,7 @@ describe("the files", () => {
     const a = await ada();
     const data = await exportOf(a.ed.id);
     const json = exportToJson(data);
-    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 8,')).toBe(true);
+    expect(json.startsWith('{\n  "format": "inkboard-export",\n  "version": 9,')).toBe(true);
     expect(json.endsWith("}\n")).toBe(true);
     expect(JSON.parse(json)).toEqual(data);
   });
@@ -365,7 +367,7 @@ describe("novels in the export (Phase 23)", () => {
     await moveChapter(a.ed.id, book.novel.id, two.chapter.id, "first");
 
     const data = await exportOf(a.ed.id);
-    expect(data.version).toBe(8);
+    expect(data.version).toBe(9);
     expect(data.novels).toHaveLength(1);
     const [n] = data.novels;
     expect(n).toMatchObject({ title: "Ɔdɔ ne Asuo", slug: "odo-ne-asuo", blurb: "A ferry.\nA brother.", language: "ak", status: "ongoing", visibility: "public" });
@@ -398,7 +400,7 @@ describe("novels in the export (Phase 23)", () => {
     const data = await exportOf(ed.id);
     expect(data.novels[0]).toMatchObject({ title: "Behind the Door", visibility: "private" });
     expect(Object.keys(data.novels[0]).sort()).toEqual(
-      ["blurb", "chapters", "cover", "createdAt", "id", "language", "slug", "status", "title", "updatedAt", "visibility"].sort(),
+      ["blurb", "chapters", "cover", "createdAt", "hiddenAt", "id", "language", "slug", "status", "title", "updatedAt", "visibility"].sort(),
     );
     // The writer's own text is theirs to keep, private or not.
     expect(data.novels[0].chapters[0].text).toBe("LOCKED-CHAPTER-TEXT");

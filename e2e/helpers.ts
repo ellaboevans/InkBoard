@@ -354,3 +354,12 @@ export async function reportEmailsFor(path: string): Promise<ReportEmail[]> {
     .filter((m) => m.kind === "report" && m.path === path)
     .map(({ targetKind, title, path: p, reason, details, earlier, hasReplyTo }) => ({ targetKind, title, path: p, reason, details, earlier, hasReplyTo }));
 }
+
+/** The writer's takedown notices (Phase 32 round 2) the server recorded, for one address. */
+export async function takedownNoticesFor(email: string): Promise<{ change: "hidden" | "restored"; what: string; title: string | null }[]> {
+  const lines = (await readFile(OTP_OUTBOX, "utf8").catch(() => "")).trim().split("\n").filter(Boolean);
+  return lines
+    .map((l) => JSON.parse(l) as { to: string; kind?: string; what: string; title: string | null })
+    .filter((m) => m.to === email && (m.kind === "content-hidden" || m.kind === "content-restored"))
+    .map((m) => ({ change: m.kind === "content-hidden" ? ("hidden" as const) : ("restored" as const), what: m.what, title: m.title }));
+}

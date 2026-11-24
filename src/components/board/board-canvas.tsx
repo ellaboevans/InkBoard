@@ -45,6 +45,8 @@ import type { BoardFilter } from "./board-view";
 import { LanguageFilter, LanguageFilterStatus } from "./language-filter";
 import { pluralCount } from "@/lib/plural";
 import { InstallSlot, InstallToolbarButton } from "@/components/install/install-nudge";
+import { GitHubIcon } from "@/components/brand/github-icon";
+import { GITHUB_REPO_URL } from "@/lib/site";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 
 /*
@@ -565,6 +567,17 @@ export function BoardCanvas({
               <span className="max-sm:sr-only">Editor sign in</span>
             </Link>
           </Button>
+          <Button asChild variant="outline" size="sm" className="bg-background/85 backdrop-blur max-sm:w-7 max-sm:px-0">
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="GitHub repository"
+            >
+              <GitHubIcon className="size-4" />
+              <span className="max-sm:sr-only">GitHub</span>
+            </a>
+          </Button>
           {/* Last, so the install card below can point its tail at it (docs/PLAN.md, Phase 15). */}
           <InstallToolbarButton />
         </div>
@@ -857,6 +870,17 @@ function AuthorsPanel({
             About
             <span className="sr-only"> InkBoard</span>
           </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="pointer-events-auto bg-background/85 backdrop-blur">
+          <a
+            href={GITHUB_REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="GitHub repository"
+          >
+            <GitHubIcon className="size-4" />
+            <span className="max-sm:sr-only">GitHub</span>
+          </a>
         </Button>
       </div>
       {featuredOpen && featured.length > 0 && (

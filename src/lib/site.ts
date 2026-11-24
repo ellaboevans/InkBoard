@@ -15,6 +15,8 @@ export const SITE_DESCRIPTION =
 export const SITE_OPERATOR = "Evans Elabo";
 /** Where privacy questions and requests go; shown only on our own pages, as a mailto link. */
 export const PRIVACY_CONTACT_EMAIL = "ellaboevans@gmail.com";
+/** Public source repository on GitHub. */
+export const GITHUB_REPO_URL = "https://github.com/ellaboevans/InkBoard";
 
 /** Where the About page's videos are hosted. The CSP's `media-src` allows this origin only. */
 export const VIDEO_HOST_ORIGIN = "https://pub-9d452c824f9f47fab650797037d4e05f.r2.dev";

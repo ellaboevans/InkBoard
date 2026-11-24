@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerabilities
+    url: https://github.com/ellaboevans/inkboard/security/policy
+    about: Please report security vulnerabilities privately.
+  - name: Discussions & Questions
+    url: https://github.com/ellaboevans/inkboard/discussions
+    about: Ask questions, share ideas, and connect with other contributors.

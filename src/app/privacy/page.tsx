@@ -7,7 +7,7 @@ import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { SiteLinks } from "@/components/site-links";
 import { Button } from "@/components/ui/button";
 import { PRIVACY_FACTS as F, PRIVACY_UPDATED } from "@/lib/privacy-facts";
-import { BASE_OPEN_GRAPH, PRIVACY_CONTACT_EMAIL, HOSTED_VIDEO, SITE_NAME, SITE_OPERATOR, VIDEO_HOST_NAME, VIDEO_HOST_ORIGIN } from "@/lib/site";
+import { BASE_OPEN_GRAPH, GITHUB_REPO_URL, PRIVACY_CONTACT_EMAIL, HOSTED_VIDEO, SITE_NAME, SITE_OPERATOR, VIDEO_HOST_NAME, VIDEO_HOST_ORIGIN } from "@/lib/site";
 
 /*
  * The Privacy page (docs/PLAN.md, Phase 19), written from the code: the
@@ -83,14 +83,19 @@ export default function PrivacyPage() {
             Updated <time dateTime={PRIVACY_UPDATED}>{updated}</time>
           </p>
           <p className="mt-6">
-            {SITE_NAME} is run by {SITE_OPERATOR}. This page says what {SITE_NAME} stores, why, and for how long. It’s
-            written from how the site actually works, and it changes whenever that does. For questions or requests about
-            your data, write to <Mail />.
+            {SITE_NAME} is open-source and run by {SITE_OPERATOR}. This page says what {SITE_NAME} stores, why, and for how long.
+            Because InkBoard is open-source, all database schemas, cookie lifespans, and automated retention cleanup routines can be
+            verified directly in our public source code on{" "}
+            <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4">
+              GitHub
+            </a>
+            . For questions or requests about your data, write to <Mail />.
           </p>
         </header>
 
         <Section id="short" heading="In short">
           <ul className={list}>
+            <li>Open source. All data storage, cookie behavior, and cleanup routines are publicly auditable.</li>
             <li>Reading needs no account, and nothing asks readers who they are.</li>
             <li>No ads. We don’t sell or share anyone’s data, and we don’t track you across other sites.</li>
             <li>We keep only what the site needs to work, delete what it no longer needs on a schedule, and say below how long each thing lasts.</li>

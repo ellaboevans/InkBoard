@@ -1,13 +1,14 @@
 import { ArrowLeftIcon, FeatherIcon, PenLineIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { GitHubIcon } from "@/components/brand/github-icon";
 import { WalkthroughVideo, WhatsNewVideo } from "@/components/about/walkthrough-video";
 import { OfflineIndicator } from "@/components/offline/offline-indicator";
 import { OfflineMarker } from "@/components/offline/offline-marker";
 import { SaveForOffline } from "@/components/offline/save-for-offline";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { absoluteUrl, BASE_OPEN_GRAPH, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "@/lib/site";
+import { absoluteUrl, BASE_OPEN_GRAPH, GITHUB_REPO_URL, SITE_NAME, SITE_OPERATOR, WALKTHROUGH_VIDEO, WHATS_NEW_VIDEO } from "@/lib/site";
 
 /*
  * What InkBoard is, in one link the owner can send anyone (docs/PLAN.md,
@@ -172,6 +173,20 @@ export default function AboutPage() {
           />
         </Section>
 
+        <Section id="open-source" heading="Open source & community">
+          <p className="leading-relaxed">
+            InkBoard is free and open-source software under the MIT License. Its complete codebase, development history, and issue tracker are publicly available. Anyone can explore how it works, run their own instance, or contribute to its development.
+          </p>
+          <div>
+            <Button asChild variant="outline" size="sm">
+              <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
+                <GitHubIcon className="size-4" />
+                View source on GitHub
+              </a>
+            </Button>
+          </div>
+        </Section>
+
         <section aria-labelledby="start" className="grid gap-5 rounded-2xl border bg-card p-6 sm:p-8">
           <h2 id="start" className="font-serif text-2xl sm:text-3xl">
             Come and read, come and write
@@ -193,15 +208,30 @@ export default function AboutPage() {
                 Start writing
               </Link>
             </Button>
+            <Button asChild variant="outline">
+              <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
+                <GitHubIcon className="size-4" />
+                Contribute on GitHub
+              </a>
+            </Button>
           </div>
         </section>
 
         <footer className="border-t pt-6">
           <p className="text-sm text-muted-foreground">
-            InkBoard is run by {SITE_OPERATOR}. What it stores, and why, is on the{" "}
+            InkBoard is open-source and run by {SITE_OPERATOR}. What it stores, and why, is on the{" "}
             <Link href="/privacy" className="text-foreground underline underline-offset-4">
               privacy page
             </Link>
+            . Source code is available on{" "}
+            <a
+              href={GITHUB_REPO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground underline underline-offset-4"
+            >
+              GitHub
+            </a>
             .
           </p>
         </footer>
